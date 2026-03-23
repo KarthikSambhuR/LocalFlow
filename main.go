@@ -1,114 +1,118 @@
 package main
 
-/*
-#cgo CFLAGS: -I./lib
-#cgo LDFLAGS: -L./lib -lwhisper -lggml -lggml-base -lggml-cpu -static -lstdc++ -lgomp -lpthread -lm
-#include "whisper.h"
-#include <stdlib.h>
-*/
-import "C"
 import (
-	"fmt"
-	"sync"
-	"unsafe"
+	"embed"
+	"net/http"
+	"os"
+	"strings"
+	"path/filepath"
 
-	"github.com/atotto/clipboard"
-	"github.com/gen2brain/malgo"
-	"github.com/go-vgo/robotgo"
-	hook "github.com/robotn/gohook"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
-var (
-	audioBuffer []float32
-	bufferMutex sync.Mutex
-)
+//go:embed all:frontend/dist
+var assets embed.FS
 
 func main() {
-	// 1. Initialize Whisper
-	modelPath := C.CString("models/ggml-small.en.bin")
-	defer C.free(unsafe.Pointer(modelPath))
-
-	params := C.whisper_context_default_params()
-	ctx := C.whisper_init_from_file_with_params(modelPath, params)
-	if ctx == nil {
-		fmt.Println("❌ Error: Could not load Whisper model! Check if models/ggml-tiny.en.bin exists.")
-		return
-	}
-	defer C.whisper_free(ctx)
-
-	// 2. Initialize Audio Context
-	mctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
-	if err != nil {
-		fmt.Println("❌ Audio Init Error:", err)
-		return
-	}
-	defer mctx.Uninit()
-
-	deviceConfig := malgo.DefaultDeviceConfig(malgo.Capture)
-	deviceConfig.Capture.Format = malgo.FormatF32
-	deviceConfig.Capture.Channels = 1
-	deviceConfig.SampleRate = 16000
-
-	var device *malgo.Device
-	isRecording := false
-
-	fmt.Println("🚀 LocalFlow Active!")
-	fmt.Println("Hold 'Caps Lock' to speak, release to transcribe...")
-
-	// 3. Start Global Hook
-	evChan := hook.Start()
-	defer hook.End()
-
-	for ev := range evChan {
-		// 20 is the Rawcode for Caps Lock. Use 62 for F4.
-		if ev.Rawcode == 20 {
-			if ev.Kind == hook.KeyDown && !isRecording {
-				isRecording = true
-				audioBuffer = []float32{} // Clear old data
-				fmt.Print("\r🔴 Recording...          ")
-
-				onRec := func(pSample2, pSample []byte, frameCount uint32) {
-					samples := (*[1 << 30]float32)(unsafe.Pointer(&pSample[0]))[:frameCount]
-					bufferMutex.Lock()
-					audioBuffer = append(audioBuffer, samples...)
-					bufferMutex.Unlock()
-				}
-
-				captureCallbacks := malgo.DeviceCallbacks{Data: onRec}
-				device, _ = malgo.InitDevice(mctx.Context, deviceConfig, captureCallbacks)
-				device.Start()
-
-			} else if ev.Kind == hook.KeyUp && isRecording {
-				isRecording = false
-				if device != nil {
-					device.Stop()
-					device.Uninit()
-				}
-				fmt.Print("\r⌛ Transcribing...       ")
-
-				// 4. Run Whisper Inference
-				wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
-
-				bufferMutex.Lock()
-				if len(audioBuffer) > 0 {
-					C.whisper_full(ctx, wParams, (*C.float)(unsafe.Pointer(&audioBuffer[0])), C.int(len(audioBuffer)))
-
-					// 5. Extract Result
-					numSegments := int(C.whisper_full_n_segments(ctx))
-					resultText := ""
-					for i := 0; i < numSegments; i++ {
-						resultText += C.GoString(C.whisper_full_get_segment_text(ctx, C.int(i)))
-					}
-
-					if resultText != "" {
-						fmt.Printf("\r✨ Result: %s\n", resultText)
-						clipboard.WriteAll(resultText)
-						robotgo.TypeStr(resultText) // Types into focused window
-					}
-				}
-				bufferMutex.Unlock()
-				fmt.Println("Ready for next input...")
-			}
+	// Check if this is being launched as a Settings or Home window
+	for _, arg := range os.Args[1:] {
+		if arg == "--settings" {
+			runSettingsWindow("settings")
+			return
+		}
+		if arg == "--home" {
+			runSettingsWindow("home")
+			return
 		}
 	}
+
+	// Default: run as the invisible pill overlay
+	runPillOverlay()
 }
+
+// runPillOverlay is the main transparent fullscreen ghost window for dictation.
+func runPillOverlay() {
+	app := NewApp()
+
+	err := wails.Run(&options.App{
+		Title:             "LocalFlow",
+		Width:             1920,
+		Height:            1080,
+		Frameless:         true,
+		AlwaysOnTop:       true,
+		HideWindowOnClose: true,
+		StartHidden:       true,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
+		OnStartup:        app.startup,
+		Bind: []interface{}{
+			app,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent:              true,
+			WindowIsTranslucent:               false,
+			DisableFramelessWindowDecorations: true,
+		},
+	})
+	if err != nil {
+		println("Pill Error:", err.Error())
+	}
+}
+
+// runSettingsWindow is a normal, framed, resizable desktop window for settings.
+func runSettingsWindow(route string) {
+	settingsApp := NewSettingsApp(route)
+
+	// audioHandler serves WAV files from the audio_cache directory via the
+	// Wails AssetServer (/audio/<filename>). This avoids a separate HTTP port
+	// and bypasses WebView2 network isolation that blocks cross-origin fetch().
+	audioHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/audio/") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		fileName := strings.TrimPrefix(r.URL.Path, "/audio/")
+		filePath := filepath.Join(audioCacheDir, filepath.Base(fileName))
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Write(data)
+	})
+
+	err := wails.Run(&options.App{
+		Title:             "LocalFlow",
+		Width:             860,
+		Height:            580,
+		MinWidth:          720,
+		MinHeight:         480,
+		HideWindowOnClose: false,
+		StartHidden:       false,
+		AssetServer: &assetserver.Options{
+			Assets:  assets,
+			Handler: audioHandler,
+		},
+		BackgroundColour: &options.RGBA{R: 15, G: 16, B: 18, A: 255},
+		OnStartup:        settingsApp.startup,
+		Bind: []interface{}{
+			settingsApp,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent:              false,
+			WindowIsTranslucent:               false,
+			DisableFramelessWindowDecorations: false,
+		},
+	})
+	if err != nil {
+		println("Settings Error:", err.Error())
+	}
+}
+

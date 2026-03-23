@@ -1,2 +1,8 @@
-whisper.cpp/
+build/bin
+frontend/node_modules
+frontend/dist
+.gitignore
 models/
+audio_cache/
+localflow.db
+localflow_config.json
