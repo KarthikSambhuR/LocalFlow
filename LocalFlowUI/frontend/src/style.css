@@ -1,0 +1,351 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-app: #0c0d0e;
+  --bg-sidebar: #131517;
+  --bg-card: #181a1d;
+  --bg-card-hover: #1f2226;
+  --text-primary: #ffffff;
+  --text-secondary: #9aa3af;
+  --text-muted: #4b5563;
+  --accent: #2563eb; /* Modern electric blue */
+  --accent-glow: rgba(37, 99, 235, 0.15);
+  --border: rgba(255, 255, 255, 0.04);
+  --sidebar-width: 240px;
+}
+
+[data-theme="light"] {
+  --bg-app: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #2563eb;
+  --accent-glow: rgba(37, 99, 235, 0.1);
+  --border: rgba(0, 0, 0, 0.05);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Outfit', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: transparent;
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════
+   DICTATION PILL (Floating Mesh)
+══════════════════════════════ */
+.module {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  width: 140px;
+  height: 52px;
+  background: #000000;
+  border: none;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.module.active, .module.processing {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.visualizer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bar {
+  width: 3px;
+  height: 4px;
+  background: #ffffff;
+  border-radius: 9999px;
+  transition: height 0.08s ease-out;
+}
+
+.processing-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.module.processing .processing-ring {
+  opacity: 1;
+  animation: spin 0.6s linear infinite;
+}
+
+.module.processing .visualizer { opacity: 0; }
+
+@keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+/* ══════════════════════════════
+   DASHBOARD FRAME (Modern Space)
+══════════════════════════════ */
+.settings-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--bg-app);
+  z-index: 100;
+}
+
+.settings-modal {
+  width: 100%; height: 100%;
+  display: flex;
+}
+
+/* Sidebar */
+.settings-sidebar {
+  width: var(--sidebar-width);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 32px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.sidebar-header {
+  font-size: 18px; font-weight: 700;
+  color: var(--text-primary);
+  padding: 0 12px 32px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.sidebar-header::before {
+  content: '';
+  width: 10px; height: 10px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 14px; font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.nav-item svg { stroke-width: 2px; }
+
+/* Content Grid */
+.settings-content {
+  flex: 1;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.content-header {
+  padding: 32px 48px;
+  font-weight: 700; font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.section {
+  flex: 1; padding: 0 48px 48px;
+  overflow-y: auto;
+  display: none;
+}
+
+.section.active {
+  display: block;
+}
+
+/* History: Card Masonry Grid */
+.history-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.history-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex; flex-direction: column;
+  gap: 16px;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.history-card:hover {
+  transform: translateY(-4px);
+  background: var(--bg-card-hover);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.card-top {
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+.card-meta {
+  font-size: 12px; font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.card-center {
+  flex: 1;
+}
+
+.card-transcript {
+  font-size: 15px; font-weight: 400; line-height: 1.6;
+  color: var(--text-primary);
+  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.card-controls {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: auto; padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Play button pill */
+.play-btn {
+  height: 36px; padding: 0 16px;
+  background: var(--accent);
+  color: #ffffff;
+  border-radius: 9999px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.play-btn:hover { background: #1d4ed8; transform: scale(1.02); }
+
+.play-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+.copy-btn-small {
+  margin-left: auto;
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.2s;
+}
+
+.copy-btn-small:hover {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Settings Groups */
+.setting-group { margin-bottom: 32px; }
+.setting-group label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 8px;
+}
+
+.setting-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+.brutal-select {
+  padding: 8px 16px;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 500; font-size: 14px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative; display: inline-block;
+  width: 44px; height: 24px; cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute; inset: 0;
+  background: var(--text-muted);
+  border-radius: 9999px;
+  transition: background 0.3s;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: white;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toggle-switch input:checked + .toggle-track { background: var(--accent); }
+.toggle-switch input:checked + .toggle-track::after { transform: translateX(20px); }
+
+/* Range Slider */
+.brutal-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 180px; height: 4px;
+  background: var(--border); border-radius: 9999px; outline: none;
+}
+.brutal-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid white;
+  cursor: pointer; transition: transform 0.15s;
+}
+.brutal-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+
+.badge {
+  background: var(--accent-glow);
+  color: var(--accent);
+  padding: 4px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 600;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center; padding: 100px 0;
+  color: var(--text-secondary);
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
