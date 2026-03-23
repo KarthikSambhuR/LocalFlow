@@ -11,19 +11,40 @@ const configPath = "localflow_config.json"
 type Config struct {
 	InputBoostEnabled bool    `json:"input_boost_enabled"`
 	InputBoostGain    float32 `json:"input_boost_gain"`
+	Keybind1Rawcode   uint16  `json:"keybind1_rawcode"`
+	Keybind2Rawcode   uint16  `json:"keybind2_rawcode"`
+	Keybind1Name      string  `json:"keybind1_name"`
+	Keybind2Name      string  `json:"keybind2_name"`
 }
 
 func loadConfig() Config {
+	defaultCfg := Config{
+		InputBoostEnabled: false, 
+		InputBoostGain:    1.0,
+		Keybind1Rawcode:   162, // LCtrl
+		Keybind2Rawcode:   91,  // LWin
+		Keybind1Name:      "Ctrl",
+		Keybind2Name:      "Win",
+	}
+	
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return Config{InputBoostEnabled: false, InputBoostGain: 1.0}
+		return defaultCfg
 	}
+	
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{InputBoostEnabled: false, InputBoostGain: 1.0}
+		return defaultCfg
 	}
+	
 	if cfg.InputBoostGain < 1.0 {
 		cfg.InputBoostGain = 1.0
+	}
+	if cfg.Keybind1Rawcode == 0 {
+		cfg.Keybind1Rawcode = 162
+	}
+	if cfg.Keybind2Rawcode == 0 {
+		cfg.Keybind2Rawcode = 91
 	}
 	return cfg
 }

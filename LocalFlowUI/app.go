@@ -9,6 +9,7 @@ package main
 import "C"
 import (
 	"context"
+	"fmt"
 	"math"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ type App struct {
 	whisperCtx  *C.struct_whisper_context
 	audioBuffer []float32
 	mutex       sync.Mutex
+	isMicReady  bool
 }
 
 func NewApp() *App {
@@ -67,45 +69,99 @@ func (a *App) listenToKeyboard() {
 		lockoutEnd   time.Time
 	)
 
-	// Audio Config
-	mctx, _ := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
+	// 7. Initialize Microphone persistently (don't init/uninit on every key press)
+	mctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
+	if err != nil {
+		fmt.Println("Error initializing malgo context:", err)
+	}
 	deviceConfig := malgo.DefaultDeviceConfig(malgo.Capture)
 	deviceConfig.Capture.Format = malgo.FormatF32
 	deviceConfig.Capture.Channels = 1
 	deviceConfig.SampleRate = 16000
+
 	var device *malgo.Device
+	
+	onRec := func(pSample2, pSample []byte, frameCount uint32) {
+		a.mutex.Lock()
+		active := isRecording // copy state safely
+		a.mutex.Unlock()
 
-	for ev := range evChan {
-		// Key Rawcodes for Windows:
-		// Left Ctrl: 162
-		// Left Windows: 91
-
-		if ev.Rawcode == 162 { // Left Ctrl
-			if ev.Kind == hook.KeyDown {
-				lCtrlPressed = true
-			} else if ev.Kind == hook.KeyUp {
-				lCtrlPressed = false
-			}
-		} else if ev.Rawcode == 91 { // Left Windows
-			if ev.Kind == hook.KeyDown {
-				lWinPressed = true
-			} else if ev.Kind == hook.KeyUp {
-				lWinPressed = false
-				// If the Windows key is released alone right after we finish recording,
-				// tap Ctrl one more time to catch it.
-				if time.Now().Before(lockoutEnd) {
-					go robotgo.KeyTap("ctrl")
-				}
-			}
+		if !active {
+			return // Drop trailing ghost samples after Stop()
 		}
 
-		// Check if the combination is active
-		shouldBeRecording := lCtrlPressed && lWinPressed
+		if !a.isMicReady {
+			a.isMicReady = true
+			runtime.EventsEmit(a.ctx, "recording-state", "listening")
+		}
+
+		samples := (*[1 << 30]float32)(unsafe.Pointer(&pSample[0]))[:frameCount]
+
+		// Calculate volume for the UI visualizer
+		var sum float32
+		for _, s := range samples {
+			sum += s * s
+		}
+		vol := float32(math.Sqrt(float64(sum / float32(len(samples)))))
+		runtime.EventsEmit(a.ctx, "volume-data", vol*100)
+
+		a.mutex.Lock()
+		a.audioBuffer = append(a.audioBuffer, samples...)
+		a.mutex.Unlock()
+	}
+
+	device, err = malgo.InitDevice(mctx.Context, deviceConfig, malgo.DeviceCallbacks{Data: onRec})
+	if err != nil {
+		fmt.Println("Error initializing audio device:", err)
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+	cfg := loadConfig()
+	key1Rawcode := cfg.Keybind1Rawcode
+	key2Rawcode := cfg.Keybind2Rawcode
+
+	for {
+		select {
+		case <-ticker.C:
+			// Periodically refresh keybind configuration from disk
+			cfg = loadConfig()
+			key1Rawcode = cfg.Keybind1Rawcode
+			key2Rawcode = cfg.Keybind2Rawcode
+
+		case ev := <-evChan:
+			if ev.Rawcode == key1Rawcode {
+				if ev.Kind == hook.KeyDown {
+					lCtrlPressed = true
+				} else if ev.Kind == hook.KeyUp {
+					lCtrlPressed = false
+					
+					// Kill Start Menu if the user remapped Win key to slot 1
+					if (key1Rawcode == 91 || key1Rawcode == 92) && time.Now().Before(lockoutEnd) {
+						lockoutEnd = time.Time{}
+						go robotgo.KeyTap("command")
+					}
+				}
+			} else if ev.Rawcode == key2Rawcode {
+				if ev.Kind == hook.KeyDown {
+					lWinPressed = true
+				} else if ev.Kind == hook.KeyUp {
+					lWinPressed = false
+					
+					// Kill Start Menu if the user remapped Win key to slot 2
+					if (key2Rawcode == 91 || key2Rawcode == 92) && time.Now().Before(lockoutEnd) {
+						lockoutEnd = time.Time{} // Clear timer to prevent recursive synthetic looping
+						go robotgo.KeyTap("command") // Taps LWin synthetically to instantly slam the menu shut
+					}
+				}
+			}
+
+			shouldBeRecording := lCtrlPressed && lWinPressed
 
 		if shouldBeRecording && !isRecording {
 			a.mutex.Lock()
 			isRecording = true
-			a.audioBuffer = []float32{}
+			a.isMicReady = false
+			a.audioBuffer = make([]float32, 0)
 			a.mutex.Unlock()
 
 			// Show the window WITHOUT stealing focus
@@ -114,38 +170,15 @@ func (a *App) listenToKeyboard() {
 			// Tell UI to show the INITIALIZING spinner
 			runtime.EventsEmit(a.ctx, "recording-state", "initializing")
 
-			isMicReady := false
-
-			onRec := func(pSample2, pSample []byte, frameCount uint32) {
-				if !isMicReady {
-					isMicReady = true
-					// Tell UI the mic is warm and actually streaming
-					runtime.EventsEmit(a.ctx, "recording-state", "listening")
-				}
-
-				samples := (*[1 << 30]float32)(unsafe.Pointer(&pSample[0]))[:frameCount]
-
-				// Calculate volume for the "bars" animation
-				var sum float32
-				for _, s := range samples {
-					sum += s * s
-				}
-				vol := float32(math.Sqrt(float64(sum / float32(len(samples)))))
-				runtime.EventsEmit(a.ctx, "volume-data", vol*100)
-
-				a.mutex.Lock()
-				a.audioBuffer = append(a.audioBuffer, samples...)
-				a.mutex.Unlock()
+			if device != nil {
+				device.Start()
 			}
 
-			// ONLY initialize and start the microphone when the hotkey is pressed
-			device, _ = malgo.InitDevice(mctx.Context, deviceConfig, malgo.DeviceCallbacks{Data: onRec})
-			device.Start()
-
 		} else if !shouldBeRecording && isRecording {
-			// TRICK: Stop Windows from opening the Start/Search menu
-			robotgo.KeyTap("ctrl")
-			lockoutEnd = time.Now().Add(500 * time.Millisecond)
+			
+			// If Ctrl is released first, start a 1 second lockout timer. 
+			// If Win is released during this 1s window, we counter-strike it dynamically.
+			lockoutEnd = time.Now().Add(1 * time.Second)
 
 			a.mutex.Lock()
 			isRecording = false
@@ -159,8 +192,9 @@ func (a *App) listenToKeyboard() {
 			go func(dev *malgo.Device) {
 				time.Sleep(400 * time.Millisecond)
 
-				dev.Stop()
-				dev.Uninit()
+				if dev != nil {
+					dev.Stop()
+				}
 
 				a.mutex.Lock()
 				// Add a tiny silence pad just in case even with the 400ms trail it's below Whisper minimums
@@ -171,8 +205,9 @@ func (a *App) listenToKeyboard() {
 				a.transcribe()
 			}(device)
 		}
-	}
-}
+		} // close select
+	} // close for
+} // close func
 
 func (a *App) transcribe() {
 	recordedAt := time.Now()

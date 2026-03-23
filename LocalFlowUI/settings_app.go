@@ -42,6 +42,15 @@ func (s *SettingsApp) SetInputBoost(enabled bool, gain float32) {
 	saveConfig(cfg)
 }
 
+func (s *SettingsApp) SetKeybinds(key1 uint16, name1 string, key2 uint16, name2 string) {
+	cfg := loadConfig()
+	cfg.Keybind1Rawcode = key1
+	cfg.Keybind1Name = name1
+	cfg.Keybind2Rawcode = key2
+	cfg.Keybind2Name = name2
+	saveConfig(cfg)
+}
+
 func (s *SettingsApp) GetPlatform() string {
 	return runtime.GOOS
 }

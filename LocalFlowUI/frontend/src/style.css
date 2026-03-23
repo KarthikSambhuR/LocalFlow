@@ -1,4 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/src/assets/fonts/outfit-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/src/assets/fonts/outfit-700.woff2') format('woff2');
+}
 
 :root {
   --bg-app: #0c0d0e;
@@ -273,17 +287,85 @@ body {
 /* Settings Groups */
 .setting-group { margin-bottom: 32px; }
 .setting-group label {
-  display: block; font-size: 11px; font-weight: 600;
+  display: block; font-size: 12px; font-weight: 600;
   color: var(--text-muted); text-transform: uppercase;
-  letter-spacing: 0.05em; margin-bottom: 8px;
+  letter-spacing: 0.05em; margin-bottom: 12px;
+  padding-left: 4px;
 }
 
 .setting-item {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 20px;
+  padding: 20px 24px;
   display: flex; justify-content: space-between; align-items: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 12px;
+}
+
+.setting-item:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(37, 99, 235, 0.2);
+  transform: translateY(-2px);
+}
+
+.setting-info {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.setting-title {
+  font-size: 15px; font-weight: 500;
+  color: var(--text-primary);
+}
+
+.setting-desc {
+  font-size: 13px; font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* KBD & Remapping Button */
+.kbd-btn {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 10px;
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.kbd-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+.kbd-btn.recording {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-glow);
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+}
+
+.kbd-btn kbd {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  padding: 4px 8px; border-radius: 6px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.1);
+}
+.kbd-plus {
+  color: var(--text-muted); font-weight: 600; font-size: 14px;
+}
+
+.badge.ghost {
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
 }
 
 .brutal-select {

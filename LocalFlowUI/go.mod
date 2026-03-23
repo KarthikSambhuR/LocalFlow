@@ -1,4 +1,4 @@
-module LocalFlowUI
+module LocalFlow
 
 go 1.25.0
 

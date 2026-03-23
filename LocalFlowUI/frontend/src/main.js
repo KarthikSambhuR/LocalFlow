@@ -1,3 +1,5 @@
+import './style.css';
+
 // ── Build the DOM ────────────────────────────────────────────────────────────
 const BAR_COUNT = 10;
 const root = document.getElementById('root');
@@ -58,30 +60,33 @@ settingsModal.innerHTML = `
       <div class="setting-group">
         <label>Audio Playback</label>
         <div class="setting-item">
-          <span>Playback Amplifier</span>
+          <div class="setting-info">
+            <span class="setting-title">Playback Amplifier</span>
+            <span class="setting-desc">Boost volume of history playback</span>
+          </div>
           <div style="display: flex; align-items: center; gap: 12px;">
             <input type="range" id="ampSlider" min="1" max="10" step="0.5" value="1" class="brutal-slider">
             <span id="ampValue" class="badge">1.0x</span>
           </div>
         </div>
-        <div class="setting-item" style="margin-top: 12px; flex-direction: column; align-items: flex-start; gap: 10px;">
-          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
-            <span>Boost Whisper Input</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="boostToggle">
-              <span class="toggle-track"></span>
-            </label>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Boost Whisper Input</span>
+            <span class="setting-desc">Apply amp gain heavily to the microphone feed prior to AI transcription</span>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5;">
-            When enabled, the amplifier gain above is applied to the recording before Whisper processes it — useful if your mic is quiet.
-            The saved audio file is <strong>not</strong> affected.
-          </p>
+          <label class="toggle-switch">
+            <input type="checkbox" id="boostToggle">
+            <span class="toggle-track"></span>
+          </label>
         </div>
       </div>
       <div class="setting-group">
         <label>Appearance</label>
         <div class="setting-item">
-          <span>Theme</span>
+          <div class="setting-info">
+            <span class="setting-title">Theme</span>
+            <span class="setting-desc">Toggle interface appearance</span>
+          </div>
           <select id="themeSelect" class="brutal-select">
             <option value="light">Light Mode</option>
             <option value="dark">Dark Mode</option>
@@ -91,15 +96,23 @@ settingsModal.innerHTML = `
       <div class="setting-group">
         <label>Trigger Keybind</label>
         <div class="setting-item">
-          <span>Active Combination</span>
-          <div class="kbd-combo"><kbd>Ctrl</kbd> + <kbd>Win</kbd></div>
+          <div class="setting-info">
+            <span class="setting-title">Active Combination</span>
+            <span class="setting-desc">Click the button to remap your hotkeys</span>
+          </div>
+          <button id="remapBtn" class="kbd-btn">
+            <kbd id="k1Label">Ctrl</kbd> <span class="kbd-plus">+</span> <kbd id="k2Label">Win</kbd>
+          </button>
         </div>
       </div>
       <div class="setting-group">
         <label>Storage & Cache</label>
         <div class="setting-item">
-          <span>Audio History</span>
-          <span>7 Days (Auto-cleanup)</span>
+          <div class="setting-info">
+            <span class="setting-title">Audio History</span>
+            <span class="setting-desc">Recordings automatically cleaned</span>
+          </div>
+          <span class="badge ghost">7 Days</span>
         </div>
       </div>
     </div>
@@ -107,7 +120,10 @@ settingsModal.innerHTML = `
       <div class="setting-group">
         <label>Whisper Configuration</label>
         <div class="setting-item">
-          <span>Current Model</span>
+          <div class="setting-info">
+            <span class="setting-title">Current Model</span>
+            <span class="setting-desc">Local quantised neural weights</span>
+          </div>
           <span class="badge">ggml-tiny.en.bin</span>
         </div>
       </div>
@@ -431,6 +447,84 @@ async function setupAmp() {
   }
 }
 
+async function setupKeybinds() {
+  const btn = document.getElementById('remapBtn');
+  const k1Label = document.getElementById('k1Label');
+  const k2Label = document.getElementById('k2Label');
+  if (!btn) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  let currentKey1Raw = cfg ? cfg.keybind1_rawcode : 162;
+  let currentKey2Raw = cfg ? cfg.keybind2_rawcode : 91;
+  k1Label.textContent = cfg ? cfg.keybind1_name : "Ctrl";
+  k2Label.textContent = cfg ? cfg.keybind2_name : "Win";
+
+  let isRecording = false;
+  let capturedKeys = [];
+
+  function getRawCode(e) {
+    if (e.keyCode === 17) return e.location === 2 ? 163 : 162; // Ctrl
+    if (e.keyCode === 16) return e.location === 2 ? 161 : 160; // Shift
+    if (e.keyCode === 18) return e.location === 2 ? 165 : 164; // Alt
+    if (e.keyCode === 91) return 91; // LWin
+    if (e.keyCode === 92) return 92; // RWin
+    return e.keyCode;
+  }
+
+  function getFriendlyName(e) {
+    let name = e.code.replace('Left', '').replace('Right', '').replace('Key', '').replace('Digit', '');
+    if (name === 'Meta') return 'Win';
+    if (name === 'Control') return 'Ctrl';
+    return name || String.fromCharCode(e.keyCode);
+  }
+
+  const handleKeydown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const raw = getRawCode(e);
+    const name = getFriendlyName(e);
+
+    // Prevent identical keys (must be a combination)
+    if (capturedKeys.length === 1 && capturedKeys[0].raw === raw) return;
+
+    capturedKeys.push({ raw, name });
+
+    if (capturedKeys.length === 1) {
+      k1Label.textContent = name;
+      k2Label.textContent = "...";
+    }
+
+    if (capturedKeys.length === 2) {
+      k2Label.textContent = name;
+      window.removeEventListener('keydown', handleKeydown, true);
+      btn.classList.remove('recording');
+      isRecording = false;
+
+      // Save to backend
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetKeybinds(
+          capturedKeys[0].raw, capturedKeys[0].name,
+          capturedKeys[1].raw, capturedKeys[1].name
+        );
+      }
+    }
+  };
+
+  btn.addEventListener('click', () => {
+    if (isRecording) return;
+    isRecording = true;
+    capturedKeys = [];
+    btn.classList.add('recording');
+    k1Label.textContent = "...";
+    k2Label.textContent = "...";
+    window.addEventListener('keydown', handleKeydown, true);
+  });
+}
+
 async function init() {
   setupTheme();
 
@@ -442,6 +536,7 @@ async function init() {
       const route = await window.go.main.SettingsApp.GetInitialRoute();
       switchSection(route || 'home');
       setupAmp(); // load config values into the settings UI
+      setupKeybinds();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();
