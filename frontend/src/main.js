@@ -1,4 +1,5 @@
 import './style.css';
+import logoImg from './assets/images/logo-universal.png';
 
 // ── Build the DOM ────────────────────────────────────────────────────────────
 const BAR_COUNT = 10;
@@ -35,18 +36,34 @@ settingsModal.className = 'settings-modal';
 
 settingsModal.innerHTML = `
   <div class="settings-sidebar">
-    <div class="sidebar-header">LocalFlow</div>
+    <div class="sidebar-brand">
+      <img class="brand-logo" src="${logoImg}" alt="LocalFlow Logo" />
+      <div>
+        <div class="sidebar-header">LocalFlow</div>
+        <div class="sidebar-subtitle">Your transcriber</div>
+      </div>
+    </div>
     <div class="nav-item" data-section="home">
       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Home
     </div>
-    <div class="nav-item" data-section="general">
+    <div class="nav-item" data-section="insights">
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>
+      Insights
+    </div>
+    <div class="nav-item" data-section="settings">
       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
-      General
+      Settings
     </div>
     <div class="nav-item" data-section="models">
       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
       Models
+    </div>
+    <div class="sidebar-footer">
+      <div class="shortcut-preview">
+        <span>Shortcut</span>
+        <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
+      </div>
     </div>
   </div>
   <div class="settings-content">
@@ -54,9 +71,18 @@ settingsModal.innerHTML = `
       <span class="section-title">Home</span>
     </div>
     <div class="section" id="sec-home">
-      <div class="history-list" id="historyList"></div>
+      <div class="home-layout">
+        <div class="home-stats-bar" id="homeRail"></div>
+        <main class="home-main">
+          <div class="section-kicker">Recent dictation</div>
+          <div class="history-list" id="historyList"></div>
+        </main>
+      </div>
     </div>
-    <div class="section" id="sec-general">
+    <div class="section" id="sec-insights">
+      <div class="insights-wrap" id="insightsRoot"></div>
+    </div>
+    <div class="section" id="sec-settings">
       <div class="setting-group">
         <label>Audio Playback</label>
         <div class="setting-item">
@@ -214,7 +240,7 @@ function switchSection(target) {
     if (isTarget) sectionTitle.textContent = i.textContent.trim();
   });
   sections.forEach(s => s.classList.toggle('active', s.id === `sec-${target}`));
-  if (target === 'home') loadHistory();
+  if (target === 'home' || target === 'insights') loadDashboard(target);
 }
 
 navItems.forEach(item => item.addEventListener('click', () => switchSection(item.getAttribute('data-section'))));
@@ -273,6 +299,339 @@ async function loadHistory() {
     };
     list.appendChild(card);
   });
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function countWords(text = '') {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned === '[BLANK_AUDIO]') return 0;
+  return cleaned.split(/\s+/).filter(Boolean).length;
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(value || 0);
+}
+
+function localDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatTooltipDate(dateStr) {
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const year = parts[0];
+  const monthIdx = parseInt(parts[1]) - 1;
+  const day = parseInt(parts[2]);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${day} ${months[monthIdx]} ${year}`;
+}
+
+function computeStats(records = []) {
+  const byDay = new Map();
+  let totalWords = 0;
+  let totalMs = 0;
+  let todayWords = 0;
+  const todayKey = localDateKey(new Date());
+
+  records.forEach(r => {
+    const words = countWords(r.transcription);
+    const date = new Date(r.timestamp);
+    const key = localDateKey(date);
+    totalWords += words;
+    totalMs += Number(r.duration_ms || 0);
+    byDay.set(key, (byDay.get(key) || 0) + words);
+    if (key === todayKey) todayWords += words;
+  });
+
+  let streak = 0;
+  const cursor = new Date();
+  while (byDay.get(localDateKey(cursor)) > 0) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  let longest = 0;
+  let running = 0;
+  Array.from(byDay.keys()).sort().forEach(key => {
+    if (byDay.get(key) > 0) {
+      running += 1;
+      longest = Math.max(longest, running);
+    } else {
+      running = 0;
+    }
+  });
+
+  const minutes = Math.max(totalMs / 60000, 0.01);
+  const wpm = totalWords > 0 ? Math.round(totalWords / minutes) : 0;
+  return { totalWords, totalMs, todayWords, wpm, streak, longest, byDay };
+}
+
+async function loadDashboard() {
+  const records = await window.go.main.SettingsApp.GetRecordings();
+  const safeRecords = records || [];
+  const stats = computeStats(safeRecords);
+  renderHome(safeRecords, stats);
+  renderInsights(stats);
+}
+
+function renderHome(records, stats) {
+  const list = document.getElementById('historyList');
+  const rail = document.getElementById('homeRail');
+  if (!list) return;
+  if (rail) rail.innerHTML = renderHomeRail(stats);
+
+  if (!records.length) {
+    list.innerHTML = '<div class="empty-state">No recordings yet. Say something.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  records.slice(0, 14).forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'history-card';
+    const date = new Date(r.timestamp);
+    const words = countWords(r.transcription);
+
+    row.innerHTML = `
+      <div class="card-top">
+        <span class="card-meta">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        <span class="badge ghost">${words} words</span>
+      </div>
+      <div class="card-center">
+        <div class="card-transcript">${escapeHtml(r.transcription) || '<i>No speech detected</i>'}</div>
+      </div>
+      <div class="card-controls">
+        <div class="play-btn">${PLAY_SVG}<span>Play</span></div>
+        <div class="copy-btn-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
+      </div>
+    `;
+
+    const playBtn = row.querySelector('.play-btn');
+    playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
+    row.querySelector('.copy-btn-small').onclick = () => window.runtime.ClipboardSetText(r.transcription);
+    list.appendChild(row);
+  });
+}
+
+function renderHomeRail(stats) {
+  return `
+    <div class="stat-card stat-stack">
+      <div><strong>${formatNumber(stats.totalWords)}</strong><span>total words</span></div>
+      <div><strong>${stats.wpm}</strong><span>wpm</span></div>
+      <div><strong>${stats.streak}</strong><span>day streak</span></div>
+    </div>
+  `;
+}
+
+let selectedYear = new Date().getFullYear();
+
+function renderInsights(stats) {
+  const rootNode = document.getElementById('insightsRoot');
+  if (!rootNode) return;
+
+  // Extract all available years from the record dates + current year
+  const availableYears = new Set();
+  availableYears.add(new Date().getFullYear());
+  stats.byDay.forEach((val, key) => {
+    const y = parseInt(key.split('-')[0]);
+    if (y) availableYears.add(y);
+  });
+  const sortedYears = Array.from(availableYears).sort((a, b) => b - a);
+
+  const customDropdownHtml = `
+    <div class="custom-dropdown" id="yearDropdown">
+      <button class="dropdown-trigger">
+        <span>${selectedYear}</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="dropdown-menu">
+        ${sortedYears.map(yr => `<div class="dropdown-item ${yr === selectedYear ? 'active' : ''}" data-value="${yr}">${yr}</div>`).join('')}
+      </div>
+    </div>
+  `;
+
+  rootNode.innerHTML = `
+    <div class="insight-header">
+      <h2>Usage History</h2>
+      ${customDropdownHtml}
+    </div>
+    
+    <div class="insight-grid">
+      <div class="metric-card wpm-card">
+        <div class="metric-number">${stats.wpm}</div>
+        <div class="metric-label">Words per minute</div>
+        <div class="gauge" style="--score:${Math.min(100, stats.wpm)}">
+          <div class="gauge-center">
+            <span>Top</span>
+            <strong>${Math.min(99, Math.max(1, Math.round(stats.wpm / 2)))}%</strong>
+          </div>
+        </div>
+      </div>
+      
+      <div class="metric-card wide">
+        <div class="metric-number">${formatNumber(stats.totalWords)}</div>
+        <div class="metric-label">Total words dictated</div>
+      </div>
+      
+      <div class="metric-card streak-card">
+        <div class="metric-head">
+          <h3>${stats.streak} day streak</h3>
+          <span>Longest streak | ${stats.longest || stats.streak} day</span>
+        </div>
+        ${renderStreakGrid(stats.byDay, selectedYear)}
+      </div>
+    </div>
+  `;
+
+  // Attach event handlers to the custom dropdown
+  const dropdown = rootNode.querySelector('#yearDropdown');
+  if (dropdown) {
+    const trigger = dropdown.querySelector('.dropdown-trigger');
+    const items = dropdown.querySelectorAll('.dropdown-item');
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('open');
+    });
+
+    items.forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedYear = parseInt(item.getAttribute('data-value'));
+        dropdown.classList.remove('open');
+        renderInsights(stats);
+      });
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', () => {
+      dropdown.classList.remove('open');
+    });
+  }
+
+  // Setup Custom Instant Tooltip for Calendar Cells
+  const wrapper = rootNode.querySelector('.calendar-wrapper');
+  if (wrapper) {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'custom-tooltip';
+    wrapper.appendChild(tooltip);
+
+    const grid = wrapper.querySelector('.calendar-grid');
+    
+    grid.addEventListener('mouseover', (e) => {
+      if (e.target.classList.contains('streak-cell')) {
+        const titleText = e.target.getAttribute('data-title');
+        if (titleText) {
+          tooltip.textContent = titleText;
+          tooltip.classList.add('visible');
+        }
+      }
+    });
+
+    grid.addEventListener('mousemove', (e) => {
+      if (e.target.classList.contains('streak-cell')) {
+        const rect = wrapper.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top - 40; // Position above cell
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
+      }
+    });
+
+    grid.addEventListener('mouseout', (e) => {
+      if (e.target.classList.contains('streak-cell')) {
+        tooltip.classList.remove('visible');
+      }
+    });
+    
+    grid.addEventListener('mouseleave', () => {
+      tooltip.classList.remove('visible');
+    });
+  }
+}
+
+function renderStreakGrid(byDay, year) {
+  const cells = [];
+  
+  // Find Sunday on or before Jan 1st of the specified year
+  const start = new Date(year, 0, 1);
+  const dayOfWeek = start.getDay(); // 0 = Sunday
+  start.setDate(start.getDate() - dayOfWeek); // Go back to start of the week
+
+  // Find Saturday on or after Dec 31st of the specified year
+  const end = new Date(year, 11, 31);
+  const endDayOfWeek = end.getDay();
+  end.setDate(end.getDate() + (6 - endDayOfWeek)); // Go forward to end of the week
+
+  // Generate all grid cells
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const key = localDateKey(d);
+    const words = byDay.get(key) || 0;
+    const level = words === 0 ? 0 : words < 25 ? 1 : words < 75 ? 2 : words < 150 ? 3 : 4;
+    const isCurrentYear = d.getFullYear() === year;
+    const opacityClass = isCurrentYear ? '' : 'out-of-year';
+    const formattedDate = formatTooltipDate(key);
+    cells.push(`<span class="streak-cell level-${level} ${opacityClass}" data-title="${formattedDate}: ${words} words"></span>`);
+  }
+
+  // Generate month headers
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  let monthHeaders = '';
+  const current = new Date(start);
+  let lastMonth = -1;
+  let colIdx = 0;
+  
+  while (current <= end) {
+    if (current.getDay() === 0) { // Sunday (new column)
+      const m = current.getMonth();
+      if (m !== lastMonth && current.getFullYear() === year) {
+        monthHeaders += `<span style="grid-column: ${colIdx + 1} / span 4">${months[m]}</span>`;
+        lastMonth = m;
+      }
+      colIdx++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  return `
+    <div class="calendar-wrapper">
+      <div class="calendar-months">${monthHeaders}</div>
+      <div class="calendar-body">
+        <div class="calendar-days">
+          <span>S</span>
+          <span>M</span>
+          <span>T</span>
+          <span>W</span>
+          <span>T</span>
+          <span>F</span>
+          <span>S</span>
+        </div>
+        <div class="calendar-grid" style="grid-template-rows: repeat(7, 1fr); grid-auto-flow: column;">
+          ${cells.join('')}
+        </div>
+      </div>
+      <div class="calendar-legend">
+        <span>Less</span>
+        <i class="level-0"></i>
+        <i class="level-1"></i>
+        <i class="level-2"></i>
+        <i class="level-3"></i>
+        <i class="level-4"></i>
+        <span>More</span>
+      </div>
+    </div>
+  `;
 }
 
 function setupWails() {
@@ -464,6 +823,8 @@ async function setupKeybinds() {
   const btn = document.getElementById('remapBtn');
   const k1Label = document.getElementById('k1Label');
   const k2Label = document.getElementById('k2Label');
+  const sideK1 = document.getElementById('sideK1');
+  const sideK2 = document.getElementById('sideK2');
   if (!btn) return;
 
   const cfg = window.go?.main?.SettingsApp
@@ -474,6 +835,8 @@ async function setupKeybinds() {
   let currentKey2Raw = cfg ? cfg.keybind2_rawcode : 91;
   k1Label.textContent = cfg ? cfg.keybind1_name : "Ctrl";
   k2Label.textContent = cfg ? cfg.keybind2_name : "Win";
+  if (sideK1) sideK1.textContent = k1Label.textContent;
+  if (sideK2) sideK2.textContent = k2Label.textContent;
 
   let isRecording = false;
   let capturedKeys = [];
@@ -513,6 +876,8 @@ async function setupKeybinds() {
 
     if (capturedKeys.length === 2) {
       k2Label.textContent = name;
+      if (sideK1) sideK1.textContent = capturedKeys[0].name;
+      if (sideK2) sideK2.textContent = name;
       window.removeEventListener('keydown', handleKeydown, true);
       btn.classList.remove('recording');
       isRecording = false;

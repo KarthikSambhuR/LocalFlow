@@ -4,8 +4,8 @@ import (
 	"embed"
 	"net/http"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -91,9 +91,9 @@ func runSettingsWindow(route string) {
 	err := wails.Run(&options.App{
 		Title:             "LocalFlow",
 		Width:             860,
-		Height:            580,
-		MinWidth:          720,
-		MinHeight:         480,
+		Height:            600,
+		MinWidth:          860,
+		MinHeight:         560,
 		HideWindowOnClose: false,
 		StartHidden:       false,
 		AssetServer: &assetserver.Options{
@@ -115,4 +115,3 @@ func runSettingsWindow(route string) {
 		println("Settings Error:", err.Error())
 	}
 }
-
