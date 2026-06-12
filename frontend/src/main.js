@@ -56,7 +56,7 @@ settingsModal.innerHTML = `
       Settings
     </div>
     <div class="nav-item" data-section="models">
-      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
       Models
     </div>
     <div class="sidebar-footer">
@@ -1252,7 +1252,7 @@ async function setupDataFolderSettings() {
 async function setupModelsSettings() {
   const modelList = document.getElementById('modelList');
   if (!modelList) return;
-  let modelsExpanded = true;
+  let modelsExpanded = false;
 
   const renderModels = async () => {
     if (!window.go?.main?.SettingsApp) return;
@@ -1267,7 +1267,7 @@ async function setupModelsSettings() {
       panel.className = `models-panel ${modelsExpanded ? 'open' : ''}`;
       panel.innerHTML = `
         <button class="models-panel-header" type="button" aria-expanded="${modelsExpanded}">
-          <span class="models-panel-chevron">${modelsExpanded ? 'v' : '>'}</span>
+          <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${modelsExpanded ? '90deg' : '0deg'});"><polyline points="9 18 15 12 9 6"/></svg>
           <span class="models-panel-title">Speech Recognition Models</span>
           <span class="models-panel-meta">${activeModel ? activeModel.name : 'No model selected'} / ${downloadedCount}/${models.length} downloaded</span>
         </button>
@@ -1302,12 +1302,12 @@ async function setupModelsSettings() {
                     <span class="model-status-pill ${statusClass}">${statusText}</span>
                   </div>
                   <div class="model-desc">${m.description}</div>
+                  <div class="model-row-specs">
+                    <span>${m.size_mb} MB</span>
+                    <span>${m.speed_label}</span>
+                    <span>${m.speed_description}</span>
+                  </div>
                   <div class="model-filename">${m.filename}</div>
-                </div>
-                <div class="model-row-specs">
-                  <span>${m.size_mb} MB</span>
-                  <span>${m.speed_label}</span>
-                  <span>${m.speed_description}</span>
                 </div>
                 <div class="model-row-actions">
                   ${actionHtml}
