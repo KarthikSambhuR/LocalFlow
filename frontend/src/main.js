@@ -257,6 +257,17 @@ confirmModalOverlay.innerHTML = `
 `;
 root.appendChild(confirmModalOverlay);
 
+// Onboarding overlay
+const onboardingOverlay = document.createElement('div');
+onboardingOverlay.className = 'onboarding-overlay';
+onboardingOverlay.id = 'onboardingOverlay';
+onboardingOverlay.innerHTML = `
+  <div class="onboarding-card" id="onboardingCard">
+    <!-- content injected dynamically -->
+  </div>
+`;
+root.appendChild(onboardingOverlay);
+
 // ── State & Animation ────────────────────────────────────────────────────────
 let isActive = false;
 let isProcessing = false;
@@ -534,10 +545,39 @@ function renderHome(records, stats) {
 
 function renderHomeRail(stats) {
   return `
-    <div class="stat-card stat-stack">
-      <div><strong>${formatNumber(stats.totalWords)}</strong><span>total words</span></div>
-      <div><strong>${stats.wpm}</strong><span>wpm</span></div>
-      <div><strong>${stats.streak}</strong><span>day streak</span></div>
+    <div class="home-stats-grid">
+      <div class="home-stat-card">
+        <div class="home-stat-header">
+          <span class="home-stat-label">Total Words</span>
+          <div class="home-stat-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+        </div>
+        <div class="home-stat-value">${formatNumber(stats.totalWords)}</div>
+        <div class="home-stat-footer">Words dictated in total</div>
+      </div>
+      
+      <div class="home-stat-card">
+        <div class="home-stat-header">
+          <span class="home-stat-label">Speaking Speed</span>
+          <div class="home-stat-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+        </div>
+        <div class="home-stat-value">${stats.wpm} <span style="font-size: 16px; font-weight: 700; color: var(--text-muted);">WPM</span></div>
+        <div class="home-stat-footer">Average talking velocity</div>
+      </div>
+      
+      <div class="home-stat-card">
+        <div class="home-stat-header">
+          <span class="home-stat-label">Day Streak</span>
+          <div class="home-stat-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          </div>
+        </div>
+        <div class="home-stat-value">${stats.streak} <span style="font-size: 16px; font-weight: 700; color: var(--text-muted);">${stats.streak === 1 ? 'Day' : 'Days'}</span></div>
+        <div class="home-stat-footer">Consecutive active days</div>
+      </div>
     </div>
   `;
 }
@@ -581,10 +621,22 @@ function renderInsights(stats) {
           <div class="metric-number">${stats.wpm}</div>
           <div class="metric-label">Words per minute</div>
         </div>
-        <div class="gauge" style="--score:${Math.min(100, stats.wpm)}">
+        <div class="gauge" style="--score:${stats.wpm > 0 ? Math.min(100, Math.round((stats.wpm / 200) * 100)) : 0}">
           <div class="gauge-center">
-            <span>Top</span>
-            <strong>${Math.min(99, Math.max(1, Math.round(stats.wpm / 2)))}%</strong>
+            ${(() => {
+              if (stats.wpm <= 0) return '<span>Rank</span><strong>—</strong>';
+              let rank = 99;
+              if (stats.wpm <= 80) {
+                rank = Math.round(99 - (stats.wpm / 80) * 19);
+              } else if (stats.wpm <= 140) {
+                rank = Math.round(80 - ((stats.wpm - 80) / 60) * 40);
+              } else if (stats.wpm <= 200) {
+                rank = Math.round(40 - ((stats.wpm - 140) / 60) * 39);
+              } else {
+                rank = 1;
+              }
+              return `<span>Top</span><strong>${rank}%</strong>`;
+            })()}
           </div>
         </div>
       </div>
@@ -759,7 +811,7 @@ function setupTheme() {
   if (!select) return;
 
   // Load saved theme
-  const savedTheme = localStorage.getItem('localflow_theme') || 'light';
+  const savedTheme = localStorage.getItem('localflow_theme') || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
   select.value = savedTheme;
 
@@ -1392,6 +1444,110 @@ async function setupModelsSettings() {
   await renderModels();
 }
 
+async function setupOnboarding() {
+  const overlay = document.getElementById('onboardingOverlay');
+  const card = document.getElementById('onboardingCard');
+  if (!overlay || !card) return;
+
+  if (!window.go?.main?.SettingsApp) return;
+
+  const isCompleted = await window.go.main.SettingsApp.IsSetupCompleted();
+  if (isCompleted) {
+    return;
+  }
+
+  // Show overlay
+  overlay.classList.add('active');
+
+  const showScreen1 = () => {
+    card.innerHTML = `
+      <h2 class="onboarding-title">Setting Up LocalFlow</h2>
+      <p class="onboarding-desc">We are downloading the default speech recognition model and local typography so the application can operate 100% offline with complete privacy.</p>
+      <div class="onboarding-progress-container">
+        <div class="onboarding-progress-bar-bg">
+          <div class="onboarding-progress-bar-fill" id="setupBar" style="width: 0%"></div>
+        </div>
+        <div class="onboarding-progress-status" id="setupStatus">Initializing...</div>
+      </div>
+    `;
+
+    // Start download
+    window.go.main.SettingsApp.DownloadEssentialAssets();
+
+    window.runtime.EventsOn('setup-progress', (percent, statusText) => {
+      const bar = document.getElementById('setupBar');
+      const status = document.getElementById('setupStatus');
+      if (bar) bar.style.width = `${percent}%`;
+      if (status) status.textContent = statusText;
+    });
+
+    window.runtime.EventsOn('setup-error', (errMsg) => {
+      const status = document.getElementById('setupStatus');
+      if (status) {
+        status.style.color = '#ef4444';
+        status.textContent = `Error: ${errMsg}`;
+      }
+    });
+
+    window.runtime.EventsOn('setup-done', () => {
+      setTimeout(showScreen2, 800);
+    });
+  };
+
+  const showScreen2 = () => {
+    card.innerHTML = `
+      <h2 class="onboarding-title">Welcome to LocalFlow</h2>
+      <p class="onboarding-desc">Your transcripts and recordings stay securely on your device. Let's start by getting to know you. What should we call you?</p>
+      <div class="onboarding-input-container">
+        <input type="text" id="usernameInput" class="onboarding-input" placeholder="Your Name" />
+      </div>
+      <button id="nextBtn" class="onboarding-btn" disabled>Continue</button>
+    `;
+
+    const input = document.getElementById('usernameInput');
+    const btn = document.getElementById('nextBtn');
+
+    input.focus();
+    input.oninput = () => {
+      btn.disabled = input.value.trim().length === 0;
+    };
+
+    btn.onclick = async () => {
+      const name = input.value.trim();
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      await window.go.main.SettingsApp.SetProfileName(name);
+      showScreen3();
+    };
+  };
+
+  const showScreen3 = async () => {
+    // Load config keybind names dynamically
+    const cfg = await window.go.main.SettingsApp.GetConfig();
+    const k1 = cfg.keybind1_name || 'Ctrl';
+    const k2 = cfg.keybind2_name || 'Win';
+
+    card.innerHTML = `
+      <h2 class="onboarding-title">All Ready!</h2>
+      <p class="onboarding-desc">Press and hold this shortcut combination while speaking, then release to instantly dictate directly into any active input.</p>
+      <div class="onboarding-keybind-demo">
+        <kbd>${k1}</kbd> <span>+</span> <kbd>${k2}</kbd>
+      </div>
+      <button id="finishBtn" class="onboarding-btn">Get Started</button>
+    `;
+
+    const btn = document.getElementById('finishBtn');
+    btn.onclick = () => {
+      overlay.classList.remove('active');
+      // Reload dashboard in case stats/history are present
+      loadDashboard();
+    };
+  };
+
+  // Start with Screen 1
+  showScreen1();
+}
+
 async function setupMicrophoneSettings() {
   const micDropdown = document.getElementById('micDropdown');
   const micLabel = document.getElementById('micLabel');
@@ -1465,6 +1621,7 @@ async function init() {
       setupDataFolderSettings();
       setupModelsSettings();
       setupMicrophoneSettings();
+      setupOnboarding();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();

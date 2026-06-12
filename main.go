@@ -24,6 +24,11 @@ var (
 var assets embed.FS
 
 func main() {
+	// Initialize database to check setup status
+	_ = initDB()
+	setupCompleted := GetProfileValue("setup_completed") == "true"
+	closeDB()
+
 	// Check if this is being launched as a Settings or Home window
 	checkMutex := true
 	for _, arg := range os.Args[1:] {
@@ -38,6 +43,12 @@ func main() {
 		if strings.Contains(arg, "wails") || strings.HasPrefix(arg, "-") {
 			checkMutex = false
 		}
+	}
+
+	if !setupCompleted {
+		// Launch settings/home window to perform onboarding
+		runSettingsWindow("home")
+		return
 	}
 
 	// Default: run as the invisible pill overlay
@@ -88,24 +99,43 @@ func runPillOverlay(checkMutex bool) {
 func runSettingsWindow(route string) {
 	settingsApp := NewSettingsApp(route)
 
-	// audioHandler serves WAV files from the audio_cache directory via the
-	// Wails AssetServer (/audio/<filename>). This avoids a separate HTTP port
-	// and bypasses WebView2 network isolation that blocks cross-origin fetch().
-	audioHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/audio/") {
-			w.WriteHeader(http.StatusNotFound)
+	// assetHandler serves WAV files and custom TrueType font files from the local storage
+	// directory via the Wails AssetServer. This avoids WebView2 CORS blocks.
+	assetHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/audio/") {
+			fileName := strings.TrimPrefix(r.URL.Path, "/audio/")
+			filePath := filepath.Join(audioCacheDir, filepath.Base(fileName))
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "audio/wav")
+			w.Header().Set("Cache-Control", "no-store")
+			w.Write(data)
 			return
 		}
-		fileName := strings.TrimPrefix(r.URL.Path, "/audio/")
-		filePath := filepath.Join(audioCacheDir, filepath.Base(fileName))
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
+
+		if strings.HasPrefix(r.URL.Path, "/fonts/") {
+			fileName := strings.TrimPrefix(r.URL.Path, "/fonts/")
+			cfg := loadConfig()
+			dataDir := getBaseAppDir()
+			if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
+				dataDir = cfg.DataFolder
+			}
+			filePath := filepath.Join(dataDir, "fonts", filepath.Base(fileName))
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "font/ttf")
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			w.Write(data)
 			return
 		}
-		w.Header().Set("Content-Type", "audio/wav")
-		w.Header().Set("Cache-Control", "no-store")
-		w.Write(data)
+
+		w.WriteHeader(http.StatusNotFound)
 	})
 
 	err := wails.Run(&options.App{
@@ -118,7 +148,7 @@ func runSettingsWindow(route string) {
 		StartHidden:       false,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
-			Handler: audioHandler,
+			Handler: assetHandler,
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 16, B: 18, A: 255},
 		OnStartup:        settingsApp.startup,

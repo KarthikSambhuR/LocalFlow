@@ -582,3 +582,138 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 
 	return nil
 }
+
+func (s *SettingsApp) IsSetupCompleted() bool {
+	return GetProfileValue("setup_completed") == "true"
+}
+
+func (s *SettingsApp) GetProfileName() string {
+	return GetProfileValue("username")
+}
+
+func (s *SettingsApp) SetProfileName(name string) {
+	_ = SetProfileValue("username", name)
+	_ = SetProfileValue("setup_completed", "true")
+}
+
+func (s *SettingsApp) DownloadEssentialAssets() {
+	go func() {
+		cfg := loadConfig()
+		dataDir := getBaseAppDir()
+		if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
+			dataDir = cfg.DataFolder
+		}
+
+		fontsDir := filepath.Join(dataDir, "fonts")
+		modelsDir := filepath.Join(dataDir, "models")
+		_ = os.MkdirAll(fontsDir, 0755)
+		_ = os.MkdirAll(modelsDir, 0755)
+
+		// 1. Download Urbanist Variable Font
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 0, "Downloading Urbanist font...")
+		urbanistURL := "https://github.com/google/fonts/raw/main/ofl/urbanist/Urbanist%5Bwght%5D.ttf"
+		urbanistPath := filepath.Join(fontsDir, "Urbanist[wght].ttf")
+		if err := downloadFileDirect(urbanistURL, urbanistPath); err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download Urbanist font: %v", err))
+			return
+		}
+
+		// 2. Download Outfit Variable Font
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 10, "Downloading Outfit font...")
+		outfitURL := "https://github.com/google/fonts/raw/main/ofl/outfit/Outfit%5Bwght%5D.ttf"
+		outfitPath := filepath.Join(fontsDir, "Outfit[wght].ttf")
+		if err := downloadFileDirect(outfitURL, outfitPath); err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download Outfit font: %v", err))
+			return
+		}
+
+		// 3. Download Whisper Tiny Model
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 20, "Downloading default Whisper Tiny model (75 MB)...")
+
+		var tinyModel *WhisperModelInfo
+		for i := range AvailableModels {
+			if AvailableModels[i].ID == "tiny" {
+				tinyModel = &AvailableModels[i]
+				break
+			}
+		}
+		if tinyModel == nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", "Model info not found")
+			return
+		}
+
+		tmpModelPath := filepath.Join(modelsDir, tinyModel.Filename+".tmp")
+		finalModelPath := filepath.Join(modelsDir, tinyModel.Filename)
+
+		resp, err := http.Get(tinyModel.URL)
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download model: %v", err))
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download model: HTTP %d", resp.StatusCode))
+			return
+		}
+
+		out, err := os.Create(tmpModelPath)
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to create file: %v", err))
+			return
+		}
+		defer func() {
+			out.Close()
+			_ = os.Remove(tmpModelPath)
+		}()
+
+		counter := &WriteCounter{
+			ContentLen: uint64(resp.ContentLength),
+			OnProgress: func(percent int) {
+				overallPercent := 20 + int(float64(percent)*0.8)
+				wailsRuntime.EventsEmit(s.ctx, "setup-progress", overallPercent, fmt.Sprintf("Downloading Whisper Tiny model... %d%%", percent))
+			},
+		}
+
+		_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Download stream interrupted: %v", err))
+			return
+		}
+		out.Close()
+
+		err = os.Rename(tmpModelPath, finalModelPath)
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to finalize model file: %v", err))
+			return
+		}
+
+		// Automatically set the downloaded Tiny model as the active model in the config
+		cfg.ActiveModel = tinyModel.Filename
+		_ = saveConfig(cfg)
+
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 100, "Downloads complete!")
+		wailsRuntime.EventsEmit(s.ctx, "setup-done")
+	}()
+}
+
+func downloadFileDirect(url string, filepath string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
+}

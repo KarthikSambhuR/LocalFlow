@@ -129,6 +129,16 @@ func initDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS profile (
+			key   TEXT PRIMARY KEY,
+			value TEXT
+		);
+	`)
+	if err != nil {
+		return err
+	}
+
 	// Perform background migration for legacy records that have empty/0 word_count but non-empty transcription
 	go migrateLegacyWordCounts()
 
@@ -292,4 +302,24 @@ func closeDB() {
 	if db != nil {
 		db.Close()
 	}
+}
+
+func GetProfileValue(key string) string {
+	if db == nil {
+		return ""
+	}
+	var val string
+	err := db.QueryRow("SELECT value FROM profile WHERE key = ?", key).Scan(&val)
+	if err != nil {
+		return ""
+	}
+	return val
+}
+
+func SetProfileValue(key string, val string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	_, err := db.Exec("INSERT INTO profile (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, val)
+	return err
 }
