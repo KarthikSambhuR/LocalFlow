@@ -155,11 +155,6 @@ func (a *App) listenToKeyboard() {
 	if err != nil {
 		fmt.Println("Error initializing audio device:", err)
 	}
-	if device != nil {
-		if err := device.Start(); err != nil {
-			fmt.Println("Error starting audio device:", err)
-		}
-	}
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -237,6 +232,12 @@ func (a *App) listenToKeyboard() {
 				// Tell UI to show the INITIALIZING spinner
 				runtime.EventsEmit(a.ctx, "recording-state", "initializing")
 
+				if device != nil {
+					if err := device.Start(); err != nil {
+						fmt.Println("Error starting audio device:", err)
+					}
+				}
+
 			} else if !shouldBeRecording && isRecording {
 				a.mutex.Lock()
 				isRecording = false
@@ -249,6 +250,12 @@ func (a *App) listenToKeyboard() {
 				// Keep accepting samples briefly after key release to capture trailing speech.
 				go func() {
 					time.Sleep(400 * time.Millisecond)
+
+					if device != nil {
+						if err := device.Stop(); err != nil {
+							fmt.Println("Error stopping audio device:", err)
+						}
+					}
 
 					a.mutex.Lock()
 					// Add a tiny silence pad just in case even with the 400ms trail it's below Whisper minimums
