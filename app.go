@@ -70,6 +70,11 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	cfg := loadConfig()
+	if cfg.KeybindCaptureActive {
+		cfg.KeybindCaptureActive = false
+		saveConfig(cfg)
+	}
 
 	// 1. Apply click-through + no-focus-steal window styles
 	go applyOverlayStyles()
@@ -98,13 +103,14 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) listenToKeyboard() {
 	var (
-		isRecording    = false
-		lCtrlPressed   = false
-		lWinPressed    = false
-		acceptingUntil time.Time
-		keyMutex       sync.RWMutex
-		key1Rawcode    uint16
-		key2Rawcode    uint16
+		isRecording          = false
+		lCtrlPressed         = false
+		lWinPressed          = false
+		acceptingUntil       time.Time
+		keyMutex             sync.RWMutex
+		key1Rawcode          uint16
+		key2Rawcode          uint16
+		keybindCaptureActive bool
 	)
 
 	// 7. Initialize Microphone persistently (don't init/uninit on every key press)
@@ -162,8 +168,20 @@ func (a *App) listenToKeyboard() {
 	cfg := loadConfig()
 	key1Rawcode = cfg.Keybind1Rawcode
 	key2Rawcode = cfg.Keybind2Rawcode
+	keybindCaptureActive = cfg.KeybindCaptureActive
 
-	evChan := startSuppressingKeyboardHook(isWinRawcode)
+	evChan := startSuppressingKeyboardHook(func() (uint16, uint16) {
+		cfg := loadConfig()
+		keyMutex.Lock()
+		key1Rawcode = cfg.Keybind1Rawcode
+		key2Rawcode = cfg.Keybind2Rawcode
+		keybindCaptureActive = cfg.KeybindCaptureActive
+		keyMutex.Unlock()
+		if cfg.KeybindCaptureActive {
+			return 0, 0
+		}
+		return cfg.Keybind1Rawcode, cfg.Keybind2Rawcode
+	})
 
 	for {
 		select {
@@ -173,9 +191,17 @@ func (a *App) listenToKeyboard() {
 			keyMutex.Lock()
 			key1Rawcode = cfg.Keybind1Rawcode
 			key2Rawcode = cfg.Keybind2Rawcode
+			keybindCaptureActive = cfg.KeybindCaptureActive
 			keyMutex.Unlock()
 
 		case ev := <-evChan:
+			cfg = loadConfig()
+			keyMutex.Lock()
+			key1Rawcode = cfg.Keybind1Rawcode
+			key2Rawcode = cfg.Keybind2Rawcode
+			keybindCaptureActive = cfg.KeybindCaptureActive
+			keyMutex.Unlock()
+
 			if ev.cancel {
 				a.mutex.Lock()
 				wasRecording := isRecording
@@ -201,7 +227,15 @@ func (a *App) listenToKeyboard() {
 			keyMutex.RLock()
 			currentKey1Rawcode := key1Rawcode
 			currentKey2Rawcode := key2Rawcode
+			currentKeybindCaptureActive := keybindCaptureActive
 			keyMutex.RUnlock()
+			if currentKeybindCaptureActive {
+				lCtrlPressed = false
+				lWinPressed = false
+				a.setShortcutKeysDown(false)
+				continue
+			}
+
 			if ev.rawcode == currentKey1Rawcode {
 				if ev.down {
 					lCtrlPressed = true
@@ -271,11 +305,12 @@ func (a *App) listenToKeyboard() {
 	} // close for
 } // close func
 
-func startSuppressingKeyboardHook(shouldSuppressWin func(uint16) bool) <-chan keyEvent {
+func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyEvent {
 	events := make(chan keyEvent, 32)
-	var ctrlDown bool
+	pressed := make(map[uint16]bool)
 	var winDown bool
 	var winOwned bool
+	var winOwnedRawcode uint16
 	var winReplayed bool
 	var localFlowGesture bool
 	var thirdKeySeen bool
@@ -297,28 +332,37 @@ func startSuppressingKeyboardHook(shouldSuppressWin func(uint16) bool) <-chan ke
 			isUp := wParam == wmKeyUp || wParam == wmSysKeyUp
 
 			if isDown || isUp {
+				key1Rawcode, key2Rawcode := getHotkey()
+				hotkeyUsesThisWin := isWinRawcode(rawcode) && (isSameHotkeyKey(rawcode, key1Rawcode) || isSameHotkeyKey(rawcode, key2Rawcode))
+				isHotkeyKey := isSameHotkeyKey(rawcode, key1Rawcode) || isSameHotkeyKey(rawcode, key2Rawcode)
+				otherHotkeyDown := isOtherHotkeyDown(pressed, rawcode, key1Rawcode, key2Rawcode)
+
 				select {
 				case events <- keyEvent{rawcode: rawcode, down: isDown}:
 				default:
 				}
 
-				if rawcode == vkLControl || rawcode == vkRControl {
-					ctrlDown = isDown
-					if isDown && winDown && winOwned {
-						localFlowGesture = true
-					}
+				if isDown {
+					pressed[rawcode] = true
+				} else {
+					delete(pressed, rawcode)
 				}
 
-				if rawcode == vkLWin || rawcode == vkRWin {
+				if isDown && winDown && winOwned && isHotkeyKey && !isWinRawcode(rawcode) {
+					localFlowGesture = true
+				}
+
+				if hotkeyUsesThisWin {
 					if isDown {
 						if winDown && winOwned {
-							localFlowGesture = localFlowGesture || ctrlDown
+							localFlowGesture = localFlowGesture || otherHotkeyDown
 							return 1
 						}
 						winDown = true
-						winOwned = shouldSuppressWin(rawcode)
+						winOwned = hotkeyUsesThisWin
+						winOwnedRawcode = rawcode
 						winReplayed = false
-						localFlowGesture = localFlowGesture || ctrlDown
+						localFlowGesture = localFlowGesture || otherHotkeyDown
 						thirdKeySeen = false
 						if winOwned {
 							return 1
@@ -337,6 +381,7 @@ func startSuppressingKeyboardHook(shouldSuppressWin func(uint16) bool) <-chan ke
 							}
 
 							winOwned = false
+							winOwnedRawcode = 0
 							winReplayed = false
 							localFlowGesture = false
 							thirdKeySeen = false
@@ -348,10 +393,19 @@ func startSuppressingKeyboardHook(shouldSuppressWin func(uint16) bool) <-chan ke
 					return ret
 				}
 
-				if isDown && winDown && winOwned && !isCtrlRawcode(rawcode) {
+				if isWinRawcode(rawcode) {
+					if isDown {
+						winDown = true
+					}
+					if isUp {
+						winDown = false
+					}
+				}
+
+				if isDown && winDown && winOwned && !isHotkeyKey {
 					thirdKeySeen = true
 					if !winReplayed {
-						synthKey(vkLWin, true)
+						synthKey(winOwnedRawcode, true)
 						winReplayed = true
 					}
 					select {
@@ -411,6 +465,28 @@ func isCtrlRawcode(rawcode uint16) bool {
 
 func isWinRawcode(rawcode uint16) bool {
 	return rawcode == vkLWin || rawcode == vkRWin
+}
+
+func isSameHotkeyKey(rawcode uint16, configured uint16) bool {
+	return rawcode == configured
+}
+
+func isOtherHotkeyDown(pressed map[uint16]bool, rawcode uint16, key1Rawcode uint16, key2Rawcode uint16) bool {
+	if isSameHotkeyKey(rawcode, key1Rawcode) {
+		return pressed[key2Rawcode]
+	}
+	if isSameHotkeyKey(rawcode, key2Rawcode) {
+		return pressed[key1Rawcode]
+	}
+	if isWinRawcode(rawcode) {
+		if isWinRawcode(key1Rawcode) {
+			return pressed[key2Rawcode]
+		}
+		if isWinRawcode(key2Rawcode) {
+			return pressed[key1Rawcode]
+		}
+	}
+	return false
 }
 
 func synthKey(rawcode uint16, down bool) {

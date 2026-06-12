@@ -494,7 +494,7 @@ async function setupKeybinds() {
     return name || String.fromCharCode(e.keyCode);
   }
 
-  const handleKeydown = (e) => {
+  const handleKeydown = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     
@@ -519,7 +519,7 @@ async function setupKeybinds() {
 
       // Save to backend
       if (window.go?.main?.SettingsApp) {
-        window.go.main.SettingsApp.SetKeybinds(
+        await window.go.main.SettingsApp.SetKeybinds(
           capturedKeys[0].raw, capturedKeys[0].name,
           capturedKeys[1].raw, capturedKeys[1].name
         );
@@ -527,10 +527,13 @@ async function setupKeybinds() {
     }
   };
 
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
     if (isRecording) return;
     isRecording = true;
     capturedKeys = [];
+    if (window.go?.main?.SettingsApp) {
+      await window.go.main.SettingsApp.SetKeybindCaptureActive(true);
+    }
     btn.classList.add('recording');
     k1Label.textContent = "...";
     k2Label.textContent = "...";

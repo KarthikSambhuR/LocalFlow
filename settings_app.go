@@ -48,6 +48,13 @@ func (s *SettingsApp) SetKeybinds(key1 uint16, name1 string, key2 uint16, name2 
 	cfg.Keybind1Name = name1
 	cfg.Keybind2Rawcode = key2
 	cfg.Keybind2Name = name2
+	cfg.KeybindCaptureActive = false
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetKeybindCaptureActive(active bool) {
+	cfg := loadConfig()
+	cfg.KeybindCaptureActive = active
 	saveConfig(cfg)
 }
 
