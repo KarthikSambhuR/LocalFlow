@@ -69,8 +69,8 @@ kbd,
   bottom: 80px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  width: 140px;
-  height: 52px;
+  width: 96px;
+  height: 36px;
   background: #000000;
   border: none;
   border-radius: 9999px;
@@ -108,7 +108,7 @@ kbd,
   transform: translate(-50%, -50%);
   width: 24px;
   height: 24px;
-  border: 2px solid rgba(255,255,255,0.2);
+  border: 4px solid rgba(255, 255, 255, 0.15);
   border-top-color: #ffffff;
   border-radius: 50%;
   opacity: 0;

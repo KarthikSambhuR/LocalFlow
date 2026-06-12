@@ -2,7 +2,7 @@ import './style.css';
 import logoImg from './assets/images/logo-universal.png';
 
 // ── Build the DOM ────────────────────────────────────────────────────────────
-const BAR_COUNT = 10;
+const BAR_COUNT = 9;
 const root = document.getElementById('root');
 
 // Neo-brutalist / Wispr Flow module container
@@ -277,12 +277,12 @@ function showProcessing() {
 }
 
 function setVolume(vol) {
-  const scaled = Math.min(vol * 16, 100);
+  const scaled = Math.min(vol * 9.0, 22);
   const mid = (BAR_COUNT - 1) / 2;
   for (let i = 0; i < BAR_COUNT; i++) {
     const dist = Math.abs(i - mid) / mid;
     const weight = Math.exp(-2.5 * dist * dist);
-    targets[i] = Math.max(3, scaled * 1.2 * weight + (Math.random() - 0.5) * 4);
+    targets[i] = Math.max(4, Math.min(22, scaled * weight + (Math.random() - 0.5) * 2));
   }
 }
 
