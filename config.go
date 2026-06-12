@@ -15,6 +15,7 @@ type Config struct {
 	Keybind2Rawcode   uint16  `json:"keybind2_rawcode"`
 	Keybind1Name      string  `json:"keybind1_name"`
 	Keybind2Name      string  `json:"keybind2_name"`
+	StartOnStartup    bool    `json:"start_on_startup"`
 }
 
 func loadConfig() Config {

@@ -51,6 +51,13 @@ func (s *SettingsApp) SetKeybinds(key1 uint16, name1 string, key2 uint16, name2 
 	saveConfig(cfg)
 }
 
+func (s *SettingsApp) SetStartOnStartup(enabled bool) {
+	cfg := loadConfig()
+	cfg.StartOnStartup = enabled
+	saveConfig(cfg)
+	setAutoStart(enabled)
+}
+
 func (s *SettingsApp) GetPlatform() string {
 	return runtime.GOOS
 }

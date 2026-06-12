@@ -13,22 +13,55 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
 	"github.com/atotto/clipboard"
 	"github.com/gen2brain/malgo"
 	"github.com/go-vgo/robotgo"
-	hook "github.com/robotn/gohook"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+const (
+	wmKeyDown    = 0x0100
+	wmKeyUp      = 0x0101
+	wmSysKeyDown = 0x0104
+	wmSysKeyUp   = 0x0105
+
+	llkhfInjected  = 0x00000010
+	keyeventfKeyup = 0x0002
+
+	vkLControl = 0xA2
+	vkRControl = 0xA3
+	vkLWin     = 0x5B
+	vkRWin     = 0x5C
+
+	whKeyboardLL = 13
+)
+
+type keyEvent struct {
+	rawcode uint16
+	down    bool
+	cancel  bool
+}
+
+type kbdLLHookStruct struct {
+	vkCode      uint32
+	scanCode    uint32
+	flags       uint32
+	time        uint32
+	dwExtraInfo uintptr
+}
+
 type App struct {
-	ctx         context.Context
-	whisperCtx  *C.struct_whisper_context
-	audioBuffer []float32
-	mutex       sync.Mutex
-	isMicReady  bool
+	ctx              context.Context
+	whisperCtx       *C.struct_whisper_context
+	audioBuffer      []float32
+	mutex            sync.Mutex
+	keyStateMutex    sync.RWMutex
+	shortcutKeysDown bool
+	isMicReady       bool
 }
 
 func NewApp() *App {
@@ -52,6 +85,9 @@ func (a *App) startup(ctx context.Context) {
 	defer C.free(unsafe.Pointer(modelPath))
 	params := C.whisper_context_default_params()
 	a.whisperCtx = C.whisper_init_from_file_with_params(modelPath, params)
+	if a.whisperCtx == nil {
+		fmt.Println("Error initializing Whisper model from models/ggml-tiny.en.bin")
+	}
 
 	// 5. Setup System Tray
 	a.setupTray()
@@ -61,12 +97,14 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) listenToKeyboard() {
-	evChan := hook.Start()
 	var (
-		isRecording  = false
-		lCtrlPressed = false
-		lWinPressed  = false
-		lockoutEnd   time.Time
+		isRecording    = false
+		lCtrlPressed   = false
+		lWinPressed    = false
+		acceptingUntil time.Time
+		keyMutex       sync.RWMutex
+		key1Rawcode    uint16
+		key2Rawcode    uint16
 	)
 
 	// 7. Initialize Microphone persistently (don't init/uninit on every key press)
@@ -80,14 +118,17 @@ func (a *App) listenToKeyboard() {
 	deviceConfig.SampleRate = 16000
 
 	var device *malgo.Device
-	
+
 	onRec := func(pSample2, pSample []byte, frameCount uint32) {
 		a.mutex.Lock()
-		active := isRecording // copy state safely
+		active := isRecording || time.Now().Before(acceptingUntil)
 		a.mutex.Unlock()
 
 		if !active {
-			return // Drop trailing ghost samples after Stop()
+			return
+		}
+		if len(pSample) == 0 || frameCount == 0 {
+			return
 		}
 
 		if !a.isMicReady {
@@ -114,102 +155,292 @@ func (a *App) listenToKeyboard() {
 	if err != nil {
 		fmt.Println("Error initializing audio device:", err)
 	}
+	if device != nil {
+		if err := device.Start(); err != nil {
+			fmt.Println("Error starting audio device:", err)
+		}
+	}
 
 	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	cfg := loadConfig()
-	key1Rawcode := cfg.Keybind1Rawcode
-	key2Rawcode := cfg.Keybind2Rawcode
+	key1Rawcode = cfg.Keybind1Rawcode
+	key2Rawcode = cfg.Keybind2Rawcode
+
+	evChan := startSuppressingKeyboardHook(isWinRawcode)
 
 	for {
 		select {
 		case <-ticker.C:
 			// Periodically refresh keybind configuration from disk
 			cfg = loadConfig()
+			keyMutex.Lock()
 			key1Rawcode = cfg.Keybind1Rawcode
 			key2Rawcode = cfg.Keybind2Rawcode
+			keyMutex.Unlock()
 
 		case ev := <-evChan:
-			if ev.Rawcode == key1Rawcode {
-				if ev.Kind == hook.KeyDown {
-					lCtrlPressed = true
-				} else if ev.Kind == hook.KeyUp {
-					lCtrlPressed = false
-					
-					// Kill Start Menu if the user remapped Win key to slot 1
-					if (key1Rawcode == 91 || key1Rawcode == 92) && time.Now().Before(lockoutEnd) {
-						lockoutEnd = time.Time{}
-						go robotgo.KeyTap("command")
-					}
-				}
-			} else if ev.Rawcode == key2Rawcode {
-				if ev.Kind == hook.KeyDown {
-					lWinPressed = true
-				} else if ev.Kind == hook.KeyUp {
-					lWinPressed = false
-					
-					// Kill Start Menu if the user remapped Win key to slot 2
-					if (key2Rawcode == 91 || key2Rawcode == 92) && time.Now().Before(lockoutEnd) {
-						lockoutEnd = time.Time{} // Clear timer to prevent recursive synthetic looping
-						go robotgo.KeyTap("command") // Taps LWin synthetically to instantly slam the menu shut
-					}
-				}
-			}
-
-			shouldBeRecording := lCtrlPressed && lWinPressed
-
-		if shouldBeRecording && !isRecording {
-			a.mutex.Lock()
-			isRecording = true
-			a.isMicReady = false
-			a.audioBuffer = make([]float32, 0)
-			a.mutex.Unlock()
-
-			// Show the window WITHOUT stealing focus
-			go showWindowNoActivate()
-			
-			// Tell UI to show the INITIALIZING spinner
-			runtime.EventsEmit(a.ctx, "recording-state", "initializing")
-
-			if device != nil {
-				device.Start()
-			}
-
-		} else if !shouldBeRecording && isRecording {
-			
-			// If Ctrl is released first, start a 1 second lockout timer. 
-			// If Win is released during this 1s window, we counter-strike it dynamically.
-			lockoutEnd = time.Now().Add(1 * time.Second)
-
-			a.mutex.Lock()
-			isRecording = false
-			a.mutex.Unlock()
-
-			// Tell UI to shrink and show processing spinner
-			runtime.EventsEmit(a.ctx, "recording-state", "processing")
-
-			// Let the microphone keep recording natively for 400ms
-			// in the background to capture the trailing parts of speech
-			go func(dev *malgo.Device) {
-				time.Sleep(400 * time.Millisecond)
-
-				if dev != nil {
-					dev.Stop()
-				}
-
+			if ev.cancel {
 				a.mutex.Lock()
-				// Add a tiny silence pad just in case even with the 400ms trail it's below Whisper minimums
-				padding := make([]float32, 1600)
-				a.audioBuffer = append(a.audioBuffer, padding...)
+				wasRecording := isRecording
+				isRecording = false
+				acceptingUntil = time.Time{}
+				a.audioBuffer = nil
 				a.mutex.Unlock()
 
-				a.transcribe()
-			}(device)
-		}
+				lCtrlPressed = false
+				lWinPressed = false
+				a.setShortcutKeysDown(false)
+
+				if wasRecording {
+					runtime.EventsEmit(a.ctx, "recording-done")
+					go func() {
+						time.Sleep(650 * time.Millisecond)
+						runtime.WindowHide(a.ctx)
+					}()
+				}
+				continue
+			}
+
+			keyMutex.RLock()
+			currentKey1Rawcode := key1Rawcode
+			currentKey2Rawcode := key2Rawcode
+			keyMutex.RUnlock()
+			if ev.rawcode == currentKey1Rawcode {
+				if ev.down {
+					lCtrlPressed = true
+				} else {
+					lCtrlPressed = false
+				}
+			} else if ev.rawcode == currentKey2Rawcode {
+				if ev.down {
+					lWinPressed = true
+				} else {
+					lWinPressed = false
+				}
+			}
+
+			a.setShortcutKeysDown(lCtrlPressed || lWinPressed)
+			shouldBeRecording := lCtrlPressed && lWinPressed
+
+			if shouldBeRecording && !isRecording {
+				a.mutex.Lock()
+				isRecording = true
+				a.isMicReady = false
+				a.audioBuffer = make([]float32, 0)
+				a.mutex.Unlock()
+
+				// Show the window WITHOUT stealing focus
+				go showWindowNoActivate()
+
+				// Tell UI to show the INITIALIZING spinner
+				runtime.EventsEmit(a.ctx, "recording-state", "initializing")
+
+			} else if !shouldBeRecording && isRecording {
+				a.mutex.Lock()
+				isRecording = false
+				acceptingUntil = time.Now().Add(400 * time.Millisecond)
+				a.mutex.Unlock()
+
+				// Tell UI to shrink and show processing spinner
+				runtime.EventsEmit(a.ctx, "recording-state", "processing")
+
+				// Keep accepting samples briefly after key release to capture trailing speech.
+				go func() {
+					time.Sleep(400 * time.Millisecond)
+
+					a.mutex.Lock()
+					// Add a tiny silence pad just in case even with the 400ms trail it's below Whisper minimums
+					padding := make([]float32, 1600)
+					a.audioBuffer = append(a.audioBuffer, padding...)
+					acceptingUntil = time.Time{}
+					a.mutex.Unlock()
+
+					a.transcribe()
+				}()
+			}
 		} // close select
 	} // close for
 } // close func
 
-func (a *App) transcribe() {
+func startSuppressingKeyboardHook(shouldSuppressWin func(uint16) bool) <-chan keyEvent {
+	events := make(chan keyEvent, 32)
+	var ctrlDown bool
+	var winDown bool
+	var winOwned bool
+	var winReplayed bool
+	var localFlowGesture bool
+	var thirdKeySeen bool
+
+	procCallNextHookEx := user32.NewProc("CallNextHookEx")
+	procSetWindowsHookExW := user32.NewProc("SetWindowsHookExW")
+	procGetMessageW := user32.NewProc("GetMessageW")
+
+	hookProc := syscall.NewCallback(func(nCode int, wParam uintptr, lParam uintptr) uintptr {
+		if nCode >= 0 {
+			info := (*kbdLLHookStruct)(unsafe.Pointer(lParam))
+			if info.flags&llkhfInjected != 0 {
+				ret, _, _ := procCallNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
+				return ret
+			}
+
+			rawcode := normalizeRawcode(info.vkCode)
+			isDown := wParam == wmKeyDown || wParam == wmSysKeyDown
+			isUp := wParam == wmKeyUp || wParam == wmSysKeyUp
+
+			if isDown || isUp {
+				select {
+				case events <- keyEvent{rawcode: rawcode, down: isDown}:
+				default:
+				}
+
+				if rawcode == vkLControl || rawcode == vkRControl {
+					ctrlDown = isDown
+					if isDown && winDown && winOwned {
+						localFlowGesture = true
+					}
+				}
+
+				if rawcode == vkLWin || rawcode == vkRWin {
+					if isDown {
+						if winDown && winOwned {
+							localFlowGesture = localFlowGesture || ctrlDown
+							return 1
+						}
+						winDown = true
+						winOwned = shouldSuppressWin(rawcode)
+						winReplayed = false
+						localFlowGesture = localFlowGesture || ctrlDown
+						thirdKeySeen = false
+						if winOwned {
+							return 1
+						}
+					}
+					if isUp {
+						winDown = false
+						if winOwned {
+							if thirdKeySeen {
+								if winReplayed {
+									synthKey(rawcode, false)
+								}
+							} else if !localFlowGesture {
+								synthKey(rawcode, true)
+								synthKey(rawcode, false)
+							}
+
+							winOwned = false
+							winReplayed = false
+							localFlowGesture = false
+							thirdKeySeen = false
+							return 1
+						}
+					}
+
+					ret, _, _ := procCallNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
+					return ret
+				}
+
+				if isDown && winDown && winOwned && !isCtrlRawcode(rawcode) {
+					thirdKeySeen = true
+					if !winReplayed {
+						synthKey(vkLWin, true)
+						winReplayed = true
+					}
+					select {
+					case events <- keyEvent{cancel: true}:
+					default:
+					}
+				}
+			}
+		}
+
+		ret, _, _ := procCallNextHookEx.Call(0, uintptr(nCode), wParam, lParam)
+		return ret
+	})
+
+	go func() {
+		hook, _, err := procSetWindowsHookExW.Call(whKeyboardLL, hookProc, 0, 0)
+		if hook == 0 {
+			fmt.Println("Error installing keyboard hook:", err)
+			return
+		}
+
+		var msg struct {
+			hwnd    uintptr
+			message uint32
+			wParam  uintptr
+			lParam  uintptr
+			time    uint32
+			pt      struct{ x, y int32 }
+		}
+		for {
+			ret, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
+			if int32(ret) <= 0 {
+				return
+			}
+		}
+	}()
+
+	return events
+}
+
+func normalizeRawcode(vkCode uint32) uint16 {
+	switch vkCode {
+	case 0x11:
+		return vkLControl
+	case 0x5B:
+		return vkLWin
+	case 0x5C:
+		return vkRWin
+	default:
+		return uint16(vkCode)
+	}
+}
+
+func isCtrlRawcode(rawcode uint16) bool {
+	return rawcode == vkLControl || rawcode == vkRControl
+}
+
+func isWinRawcode(rawcode uint16) bool {
+	return rawcode == vkLWin || rawcode == vkRWin
+}
+
+func synthKey(rawcode uint16, down bool) {
+	flags := uintptr(0)
+	if !down {
+		flags = keyeventfKeyup
+	}
+	procKeybdEvent := user32.NewProc("keybd_event")
+	procKeybdEvent.Call(uintptr(rawcode), 0, flags, 0)
+}
+
+func (a *App) setShortcutKeysDown(down bool) {
+	a.keyStateMutex.Lock()
+	a.shortcutKeysDown = down
+	a.keyStateMutex.Unlock()
+}
+
+func (a *App) waitForShortcutRelease(timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		a.keyStateMutex.RLock()
+		down := a.shortcutKeysDown
+		a.keyStateMutex.RUnlock()
+		if !down {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	fmt.Println("Timed out waiting for shortcut keys to release before paste")
+}
+
+func releasePasteModifiers() {
+	robotgo.KeyToggle("command", "up")
+	robotgo.KeyToggle("ctrl", "up")
+}
+
+func (a *App) transcribeOld() {
 	recordedAt := time.Now()
 
 	a.mutex.Lock()
@@ -293,4 +524,97 @@ func (a *App) transcribe() {
 		time.Sleep(650 * time.Millisecond)
 		runtime.WindowHide(a.ctx)
 	}
+}
+
+func (a *App) transcribe() {
+	recordedAt := time.Now()
+
+	a.mutex.Lock()
+	if len(a.audioBuffer) == 0 {
+		a.mutex.Unlock()
+
+		fmt.Println("No audio captured for transcription")
+		runtime.EventsEmit(a.ctx, "recording-done")
+		time.Sleep(650 * time.Millisecond)
+		runtime.WindowHide(a.ctx)
+		return
+	}
+
+	// Snapshot buffer for cache saving. The raw WAV stays unaffected by input boost.
+	cacheCopy := make([]float32, len(a.audioBuffer))
+	copy(cacheCopy, a.audioBuffer)
+	a.mutex.Unlock()
+
+	// Duration in milliseconds: samples / sample_rate * 1000.
+	durationMs := int64(len(cacheCopy)) * 1000 / 16000
+
+	whisperBuf := cacheCopy
+	cfg := loadConfig()
+	if cfg.InputBoostEnabled && cfg.InputBoostGain > 1.0 {
+		boosted := make([]float32, len(cacheCopy))
+		for i, s := range cacheCopy {
+			s *= cfg.InputBoostGain
+			if s > 1.0 {
+				s = 1.0
+			} else if s < -1.0 {
+				s = -1.0
+			}
+			boosted[i] = s
+		}
+		whisperBuf = boosted
+	}
+
+	result := ""
+	whisperFailed := false
+
+	if a.whisperCtx == nil {
+		fmt.Println("Whisper context is nil; transcription skipped")
+		whisperFailed = true
+	} else {
+		wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+		if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {
+			fmt.Println("Whisper transcription failed with code:", int(code), "samples:", len(whisperBuf), "duration_ms:", durationMs)
+			whisperFailed = true
+		} else {
+			numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
+			for i := 0; i < numSegments; i++ {
+				result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
+			}
+		}
+	}
+
+	result = strings.TrimSpace(result)
+	isBlank := result == "" ||
+		result == "[BLANK_AUDIO]" ||
+		result == "(blank audio)" ||
+		result == "[silence]" ||
+		result == "(silence)"
+
+	if isBlank {
+		fmt.Println("Blank transcription; samples:", len(cacheCopy), "duration_ms:", durationMs, "whisper_failed:", whisperFailed)
+	}
+
+	go func(buf []float32, ts time.Time, durMs int64, text string) {
+		filename, err := saveAudioToCache(buf)
+		if err != nil {
+			fmt.Println("Error saving audio cache:", err)
+			return
+		}
+		saveRecording(filename, ts, durMs, text)
+	}(cacheCopy, recordedAt, durationMs, result)
+
+	if !isBlank && !whisperFailed {
+		if err := clipboard.WriteAll(result); err != nil {
+			fmt.Println("Error writing transcription to clipboard:", err)
+		} else {
+			a.waitForShortcutRelease(2 * time.Second)
+			releasePasteModifiers()
+			time.Sleep(350 * time.Millisecond)
+			robotgo.KeyTap("v", "ctrl")
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "recording-done")
+	time.Sleep(650 * time.Millisecond)
+	runtime.WindowHide(a.ctx)
 }

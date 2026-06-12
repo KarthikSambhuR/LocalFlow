@@ -81,6 +81,19 @@ settingsModal.innerHTML = `
         </div>
       </div>
       <div class="setting-group">
+        <label>Startup</label>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Start LocalFlow on system startup</span>
+            <span class="setting-desc">Automatically launch application when you log in</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="startupToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+      <div class="setting-group">
         <label>Appearance</label>
         <div class="setting-item">
           <div class="setting-info">
@@ -525,6 +538,24 @@ async function setupKeybinds() {
   });
 }
 
+async function setupStartupSettings() {
+  const toggle = document.getElementById('startupToggle');
+  if (!toggle) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  const initEnabled = cfg ? cfg.start_on_startup : false;
+  toggle.checked = initEnabled;
+
+  toggle.addEventListener('change', () => {
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetStartOnStartup(toggle.checked);
+    }
+  });
+}
+
 async function init() {
   setupTheme();
 
@@ -537,6 +568,7 @@ async function init() {
       switchSection(route || 'home');
       setupAmp(); // load config values into the settings UI
       setupKeybinds();
+      setupStartupSettings();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();
