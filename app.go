@@ -119,10 +119,29 @@ func (a *App) listenToKeyboard() {
 	if err != nil {
 		fmt.Println("Error initializing malgo context:", err)
 	}
+	cfg := loadConfig()
+	activeMicName := cfg.ActiveMicrophone
+
+	var selectedID unsafe.Pointer
+	if activeMicName != "" && activeMicName != "Default" {
+		devices, err := mctx.Devices(malgo.Capture)
+		if err == nil {
+			for _, info := range devices {
+				if info.Name() == activeMicName {
+					selectedID = info.ID.Pointer()
+					break
+				}
+			}
+		}
+	}
+
 	deviceConfig := malgo.DefaultDeviceConfig(malgo.Capture)
 	deviceConfig.Capture.Format = malgo.FormatF32
 	deviceConfig.Capture.Channels = 1
 	deviceConfig.SampleRate = 16000
+	if selectedID != nil {
+		deviceConfig.Capture.DeviceID = selectedID
+	}
 
 	var device *malgo.Device
 
@@ -166,7 +185,7 @@ func (a *App) listenToKeyboard() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	cfg := loadConfig()
+	cfg = loadConfig()
 	key1Rawcode = cfg.Keybind1Rawcode
 	key2Rawcode = cfg.Keybind2Rawcode
 	keybindCaptureActive = cfg.KeybindCaptureActive
@@ -194,6 +213,39 @@ func (a *App) listenToKeyboard() {
 			key2Rawcode = cfg.Keybind2Rawcode
 			keybindCaptureActive = cfg.KeybindCaptureActive
 			keyMutex.Unlock()
+
+			if cfg.ActiveMicrophone != activeMicName {
+				activeMicName = cfg.ActiveMicrophone
+				if device != nil {
+					device.Uninit()
+				}
+
+				var selectedID unsafe.Pointer
+				if activeMicName != "" && activeMicName != "Default" {
+					devices, err := mctx.Devices(malgo.Capture)
+					if err == nil {
+						for _, info := range devices {
+							if info.Name() == activeMicName {
+								selectedID = info.ID.Pointer()
+								break
+							}
+						}
+					}
+				}
+
+				deviceConfig = malgo.DefaultDeviceConfig(malgo.Capture)
+				deviceConfig.Capture.Format = malgo.FormatF32
+				deviceConfig.Capture.Channels = 1
+				deviceConfig.SampleRate = 16000
+				if selectedID != nil {
+					deviceConfig.Capture.DeviceID = selectedID
+				}
+
+				device, err = malgo.InitDevice(mctx.Context, deviceConfig, malgo.DeviceCallbacks{Data: onRec})
+				if err != nil {
+					fmt.Println("Error reinitializing audio device:", err)
+				}
+			}
 
 		case ev := <-evChan:
 			cfg = loadConfig()

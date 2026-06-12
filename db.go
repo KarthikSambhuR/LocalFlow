@@ -10,12 +10,24 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const dbPath = "localflow.db"
+var dbPath = "localflow.db"
 
 var db *sql.DB
 
 // initDB opens the SQLite database, creates the recordings and analytics tables, and performs migrations.
 func initDB() error {
+	cfg := loadConfig()
+	dataDir := "."
+	if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
+		dataDir = cfg.DataFolder
+	}
+	dbPath = filepath.Join(dataDir, "localflow.db")
+	audioCacheDir = filepath.Join(dataDir, "audio_cache")
+
+	if dataDir != "." {
+		_ = os.MkdirAll(dataDir, 0755)
+	}
+
 	var err error
 	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {

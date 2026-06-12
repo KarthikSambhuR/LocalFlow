@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/gen2brain/malgo"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // SettingsApp is a lightweight app struct for the settings window.
@@ -46,6 +49,29 @@ func (s *SettingsApp) PurgeNow() {
 	if db != nil {
 		_, _ = db.Exec("DELETE FROM recordings")
 	}
+}
+
+func (s *SettingsApp) GetMicrophones() []string {
+	mctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
+	if err != nil {
+		return []string{"Default"}
+	}
+	defer mctx.Free()
+	devices, err := mctx.Devices(malgo.Capture)
+	if err != nil {
+		return []string{"Default"}
+	}
+	out := []string{"Default"}
+	for _, info := range devices {
+		out = append(out, info.Name())
+	}
+	return out
+}
+
+func (s *SettingsApp) SetMicrophone(name string) {
+	cfg := loadConfig()
+	cfg.ActiveMicrophone = name
+	saveConfig(cfg)
 }
 
 func (s *SettingsApp) GetInitialRoute() string {
@@ -98,4 +124,69 @@ func (s *SettingsApp) SetStartOnStartup(enabled bool) {
 
 func (s *SettingsApp) GetPlatform() string {
 	return runtime.GOOS
+}
+
+func (s *SettingsApp) SelectDataFolder() (string, error) {
+	return wailsRuntime.OpenDirectoryDialog(s.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "Select LocalFlow Data Folder",
+	})
+}
+
+func (s *SettingsApp) SetDataFolder(path string) error {
+	cfg := loadConfig()
+	if cfg.DataFolder == path {
+		return nil
+	}
+
+	// Create the new folder if it doesn't exist
+	err := os.MkdirAll(path, 0755)
+	if err != nil {
+		return err
+	}
+
+	oldDataDir := "."
+	if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
+		oldDataDir = cfg.DataFolder
+	}
+
+	oldDbPath := filepath.Join(oldDataDir, "localflow.db")
+	newDbPath := filepath.Join(path, "localflow.db")
+
+	// 1. Close current database connection
+	closeDB()
+
+	// 2. Copy SQLite database file if it exists at old location
+	if _, err := os.Stat(oldDbPath); err == nil {
+		dbData, err := os.ReadFile(oldDbPath)
+		if err == nil {
+			_ = os.WriteFile(newDbPath, dbData, 0644)
+		}
+	}
+
+	// 3. Copy WAV files from old audio_cache to new audio_cache
+	oldAudioDir := filepath.Join(oldDataDir, "audio_cache")
+	newAudioDir := filepath.Join(path, "audio_cache")
+	_ = os.MkdirAll(newAudioDir, 0755)
+
+	entries, err := os.ReadDir(oldAudioDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".wav" {
+				oldFile := filepath.Join(oldAudioDir, entry.Name())
+				newFile := filepath.Join(newAudioDir, entry.Name())
+				fileData, err := os.ReadFile(oldFile)
+				if err == nil {
+					_ = os.WriteFile(newFile, fileData, 0644)
+					_ = os.Remove(oldFile)
+				}
+			}
+		}
+	}
+
+	// Update config
+	cfg.DataFolder = path
+	saveConfig(cfg)
+
+	// 4. Re-open / initialize database at new path
+	return initDB()
 }

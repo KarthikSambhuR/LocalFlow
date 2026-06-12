@@ -19,6 +19,8 @@ type Config struct {
 	KeybindCaptureActive       bool    `json:"keybind_capture_active"`
 	AudioRetentionDays         int     `json:"audio_retention_days"`
 	TranscriptionRetentionDays int     `json:"transcription_retention_days"`
+	ActiveMicrophone           string  `json:"active_microphone"`
+	DataFolder                 string  `json:"data_folder"`
 }
 
 func loadConfig() Config {
@@ -31,6 +33,8 @@ func loadConfig() Config {
 		Keybind2Name:               "Win",
 		AudioRetentionDays:         7,
 		TranscriptionRetentionDays: 30,
+		ActiveMicrophone:           "Default",
+		DataFolder:                 "Default",
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -57,6 +61,12 @@ func loadConfig() Config {
 	}
 	if cfg.TranscriptionRetentionDays == 0 {
 		cfg.TranscriptionRetentionDays = 30
+	}
+	if cfg.ActiveMicrophone == "" {
+		cfg.ActiveMicrophone = "Default"
+	}
+	if cfg.DataFolder == "" {
+		cfg.DataFolder = "Default"
 	}
 	return cfg
 }

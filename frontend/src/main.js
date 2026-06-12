@@ -84,7 +84,7 @@ settingsModal.innerHTML = `
     </div>
     <div class="section" id="sec-settings">
       <div class="setting-group">
-        <label>Audio Playback</label>
+        <label>Audio Settings</label>
         <div class="setting-item">
           <div class="setting-info">
             <span class="setting-title">Playback Amplifier</span>
@@ -104,6 +104,21 @@ settingsModal.innerHTML = `
             <input type="checkbox" id="boostToggle">
             <span class="toggle-track"></span>
           </label>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Input Microphone</span>
+            <span class="setting-desc">Choose which audio device dictates to AI transcription</span>
+          </div>
+          <div class="custom-dropdown" id="micDropdown">
+            <button class="dropdown-trigger">
+              <span id="micLabel">Default</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu" id="micDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
+              <div class="dropdown-item active" data-value="Default">Default</div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="setting-group">
@@ -184,6 +199,20 @@ settingsModal.innerHTML = `
               <div class="dropdown-item" data-value="180">180 Days</div>
               <div class="dropdown-item" data-value="-1">Forever</div>
             </div>
+          </div>
+        </div>
+        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="setting-info">
+              <span class="setting-title">Data Storage Directory</span>
+              <span class="setting-desc">Folder where database, cache, and all audio files are saved</span>
+            </div>
+            <button id="selectFolderBtn" class="kbd-btn" style="padding: 6px 12px; font-weight: 500;">
+              Change Folder
+            </button>
+          </div>
+          <div id="dataFolderDesc" style="font-family: monospace; font-size: 11px; background: var(--bg-sidebar); border: 1px dashed var(--border); padding: 8px 12px; border-radius: 6px; color: var(--text-secondary); word-break: break-all; margin-top: 4px;">
+            Default
           </div>
         </div>
         <div class="setting-item">
@@ -1164,6 +1193,123 @@ async function setupStorageSettings() {
   });
 }
 
+async function setupDataFolderSettings() {
+  const selectBtn = document.getElementById('selectFolderBtn');
+  const folderDesc = document.getElementById('dataFolderDesc');
+  if (!selectBtn || !folderDesc) return;
+
+  const updatePathDisplay = async () => {
+    const cfg = window.go?.main?.SettingsApp
+      ? await window.go.main.SettingsApp.GetConfig()
+      : null;
+    if (cfg && cfg.data_folder) {
+      folderDesc.textContent = cfg.data_folder;
+    } else {
+      folderDesc.textContent = 'Default';
+    }
+  };
+
+  // Initial load
+  await updatePathDisplay();
+
+  selectBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!window.go?.main?.SettingsApp) return;
+
+    try {
+      const selectedPath = await window.go.main.SettingsApp.SelectDataFolder();
+      if (!selectedPath) {
+        // User cancelled dialog
+        return;
+      }
+
+      // Show migrating loader state
+      selectBtn.disabled = true;
+      const originalText = selectBtn.textContent;
+      selectBtn.textContent = 'Migrating...';
+      folderDesc.textContent = `Migrating files to: ${selectedPath}...`;
+
+      await window.go.main.SettingsApp.SetDataFolder(selectedPath);
+
+      selectBtn.textContent = 'Done!';
+      await updatePathDisplay();
+      
+      // Reload dashboard stats and history from the new database path
+      await loadDashboard();
+
+      setTimeout(() => {
+        selectBtn.textContent = 'Change Folder';
+        selectBtn.disabled = false;
+      }, 1500);
+
+    } catch (err) {
+      console.error('Migration failed:', err);
+      selectBtn.textContent = 'Error';
+      await updatePathDisplay();
+      setTimeout(() => {
+        selectBtn.textContent = 'Change Folder';
+        selectBtn.disabled = false;
+      }, 1500);
+    }
+  });
+}
+
+async function setupMicrophoneSettings() {
+  const micDropdown = document.getElementById('micDropdown');
+  const micLabel = document.getElementById('micLabel');
+  const micMenu = document.getElementById('micDropdownMenu');
+  if (!micDropdown || !micLabel || !micMenu) return;
+
+  const trigger = micDropdown.querySelector('.dropdown-trigger');
+
+  const mics = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetMicrophones()
+    : ["Default"];
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  let currentMic = cfg ? cfg.active_microphone : "Default";
+
+  const renderMics = () => {
+    micMenu.innerHTML = mics.map(m => `
+      <div class="dropdown-item ${m === currentMic ? 'active' : ''}" data-value="${m}">${m}</div>
+    `).join('');
+
+    const items = micMenu.querySelectorAll('.dropdown-item');
+    items.forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        currentMic = item.getAttribute('data-value');
+        micLabel.textContent = currentMic;
+        micDropdown.classList.remove('open');
+        renderMics();
+
+        if (window.go?.main?.SettingsApp) {
+          await window.go.main.SettingsApp.SetMicrophone(currentMic);
+        }
+      });
+    });
+  };
+
+  micLabel.textContent = currentMic;
+  renderMics();
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    micDropdown.classList.toggle('open');
+    const audioDropdown = document.getElementById('audioRetentionDropdown');
+    const transDropdown = document.getElementById('transcriptionRetentionDropdown');
+    if (audioDropdown) audioDropdown.classList.remove('open');
+    if (transDropdown) transDropdown.classList.remove('open');
+  });
+
+  document.addEventListener('click', () => {
+    micDropdown.classList.remove('open');
+  });
+}
+
 async function init() {
   setupTheme();
 
@@ -1178,6 +1324,8 @@ async function init() {
       setupKeybinds();
       setupStartupSettings();
       setupStorageSettings();
+      setupDataFolderSettings();
+      setupMicrophoneSettings();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();

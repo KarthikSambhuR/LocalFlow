@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const (
+var (
 	audioCacheDir = "audio_cache"
 	cacheMaxAge   = 7 * 24 * time.Hour // 1 week
 )
