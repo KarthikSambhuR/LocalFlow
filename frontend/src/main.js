@@ -228,13 +228,9 @@ settingsModal.innerHTML = `
     </div>
     <div class="section" id="sec-models">
       <div class="setting-group">
-        <label>Whisper Configuration</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Current Model</span>
-            <span class="setting-desc">Local quantised neural weights</span>
-          </div>
-          <span class="badge">ggml-tiny.en.bin</span>
+        <label>Speech Recognition Models</label>
+        <div class="model-list" id="modelList">
+          <!-- Populated dynamically -->
         </div>
       </div>
     </div>
@@ -1241,7 +1237,6 @@ async function setupDataFolderSettings() {
         selectBtn.textContent = 'Change Folder';
         selectBtn.disabled = false;
       }, 1500);
-
     } catch (err) {
       console.error('Migration failed:', err);
       selectBtn.textContent = 'Error';
@@ -1252,6 +1247,149 @@ async function setupDataFolderSettings() {
       }, 1500);
     }
   });
+}
+
+async function setupModelsSettings() {
+  const modelList = document.getElementById('modelList');
+  if (!modelList) return;
+  let modelsExpanded = true;
+
+  const renderModels = async () => {
+    if (!window.go?.main?.SettingsApp) return;
+    try {
+      const models = await window.go.main.SettingsApp.GetModelsList();
+      modelList.innerHTML = '';
+      modelList.className = 'model-list model-list-expanded';
+
+      const activeModel = models.find(m => m.is_active) || models[0];
+      const downloadedCount = models.filter(m => m.is_downloaded).length;
+      const panel = document.createElement('div');
+      panel.className = `models-panel ${modelsExpanded ? 'open' : ''}`;
+      panel.innerHTML = `
+        <button class="models-panel-header" type="button" aria-expanded="${modelsExpanded}">
+          <span class="models-panel-chevron">${modelsExpanded ? 'v' : '>'}</span>
+          <span class="models-panel-title">Speech Recognition Models</span>
+          <span class="models-panel-meta">${activeModel ? activeModel.name : 'No model selected'} / ${downloadedCount}/${models.length} downloaded</span>
+        </button>
+        <div class="models-panel-body">
+          ${models.map(m => {
+            const statusText = m.is_active ? 'Active' : m.is_downloaded ? 'Downloaded' : 'Available';
+            const statusClass = m.is_active ? 'active' : m.is_downloaded ? 'downloaded' : 'available';
+            let actionHtml = '';
+            if (m.is_downloading) {
+              actionHtml = `
+                <div class="model-progress-container">
+                  <div class="model-progress-bar-bg">
+                    <div class="model-progress-bar-fill" id="bar-${m.id}" style="width: ${m.download_progress}%"></div>
+                  </div>
+                  <div class="model-progress-text" id="text-${m.id}">Downloading... ${m.download_progress}%</div>
+                </div>
+              `;
+            } else if (m.is_downloaded) {
+              actionHtml = `
+                ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" data-filename="${m.filename}">Activate</button>`}
+                ${downloadedCount > 1 ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
+              `;
+            } else {
+              actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${m.id}">Download</button>`;
+            }
+
+            return `
+              <div class="model-row">
+                <div class="model-row-main">
+                  <div class="model-name-line">
+                    <span class="model-name">${m.name}</span>
+                    <span class="model-status-pill ${statusClass}">${statusText}</span>
+                  </div>
+                  <div class="model-desc">${m.description}</div>
+                  <div class="model-filename">${m.filename}</div>
+                </div>
+                <div class="model-row-specs">
+                  <span>${m.size_mb} MB</span>
+                  <span>${m.speed_label}</span>
+                  <span>${m.speed_description}</span>
+                </div>
+                <div class="model-row-actions">
+                  ${actionHtml}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      const header = panel.querySelector('.models-panel-header');
+      header.onclick = () => {
+        modelsExpanded = !modelsExpanded;
+        renderModels();
+      };
+
+      panel.querySelectorAll('.download-btn').forEach((downloadBtn) => {
+        downloadBtn.onclick = async (event) => {
+          event.stopPropagation();
+          downloadBtn.disabled = true;
+          downloadBtn.textContent = 'Starting...';
+          await window.go.main.SettingsApp.DownloadModel(downloadBtn.dataset.id);
+          renderModels();
+        };
+      });
+
+      panel.querySelectorAll('.activate-btn').forEach((activateBtn) => {
+        activateBtn.onclick = async (event) => {
+          event.stopPropagation();
+          activateBtn.disabled = true;
+          activateBtn.textContent = 'Activating...';
+          try {
+            await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.filename);
+          } catch (err) {
+            alert(err);
+          }
+          renderModels();
+        };
+      });
+
+      panel.querySelectorAll('.delete-btn').forEach((deleteBtn) => {
+        deleteBtn.onclick = async (event) => {
+          event.stopPropagation();
+          const model = models.find(m => m.filename === deleteBtn.dataset.filename);
+          if (confirm(`Are you sure you want to delete ${model?.name || 'this model'}?`)) {
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = 'Deleting...';
+            try {
+              await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
+            } catch (err) {
+              alert(err);
+            }
+            renderModels();
+          }
+        };
+      });
+
+      modelList.appendChild(panel);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  window.runtime.EventsOn('model-download-progress', (id, percent) => {
+    const fill = document.getElementById(`bar-${id}`);
+    const txt = document.getElementById(`text-${id}`);
+    if (fill && txt) {
+      fill.style.width = `${percent}%`;
+      txt.textContent = `Downloading... ${percent}%`;
+    }
+  });
+
+  window.runtime.EventsOn('model-download-done', (id) => {
+    renderModels();
+  });
+
+  window.runtime.EventsOn('model-download-error', (id, errMsg) => {
+    alert(`Download failed for model ${id}: ${errMsg}`);
+    renderModels();
+  });
+
+  await renderModels();
 }
 
 async function setupMicrophoneSettings() {
@@ -1325,6 +1463,7 @@ async function init() {
       setupStartupSettings();
       setupStorageSettings();
       setupDataFolderSettings();
+      setupModelsSettings();
       setupMicrophoneSettings();
     } else {
       settingsOverlay.style.display = 'none';

@@ -11,6 +11,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,6 +64,7 @@ type App struct {
 	keyStateMutex    sync.RWMutex
 	shortcutKeysDown bool
 	isMicReady       bool
+	loadedModelPath  string
 }
 
 func NewApp() *App {
@@ -87,13 +90,7 @@ func (a *App) startup(ctx context.Context) {
 	initDB()
 
 	// 4. Initialize Whisper
-	modelPath := C.CString("models/ggml-tiny.en.bin")
-	defer C.free(unsafe.Pointer(modelPath))
-	params := C.whisper_context_default_params()
-	a.whisperCtx = C.whisper_init_from_file_with_params(modelPath, params)
-	if a.whisperCtx == nil {
-		fmt.Println("Error initializing Whisper model from models/ggml-tiny.en.bin")
-	}
+	a.ensureActiveModel()
 
 	// 5. Setup System Tray
 	a.setupTray()
@@ -245,6 +242,13 @@ func (a *App) listenToKeyboard() {
 				if err != nil {
 					fmt.Println("Error reinitializing audio device:", err)
 				}
+			}
+
+			a.mutex.Lock()
+			recordingNow := isRecording
+			a.mutex.Unlock()
+			if !recordingNow {
+				a.ensureActiveModel()
 			}
 
 		case ev := <-evChan:
@@ -662,8 +666,105 @@ func (a *App) transcribeOld() {
 	}
 }
 
+func (a *App) getModelsDir() string {
+	cfg := loadConfig()
+	dataDir := getDataDir(cfg)
+	dir := filepath.Join(dataDir, "models")
+	_ = os.MkdirAll(dir, 0755)
+	return dir
+}
+
+func (a *App) ensureActiveModel() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	cfg := loadConfig()
+	activeModel := cfg.ActiveModel
+	if activeModel == "" {
+		activeModel = "ggml-tiny.en.bin"
+	}
+
+	modelsDir := a.getModelsDir()
+	targetPath := filepath.Join(modelsDir, activeModel)
+
+	legacyActivePath := filepath.Join("models", activeModel)
+	if !fileExists(targetPath) && fileExists(legacyActivePath) {
+		if err := copyFile(legacyActivePath, targetPath); err == nil {
+			_ = os.Remove(legacyActivePath)
+		}
+	}
+
+	// If the active model file does not exist, fall back to another downloaded model.
+	if _, err := os.Stat(targetPath); err != nil {
+		found := false
+		entries, _ := os.ReadDir(modelsDir)
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".bin" {
+				targetPath = filepath.Join(modelsDir, entry.Name())
+				activeModel = entry.Name()
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Migrate one legacy model into the active data folder if needed.
+			fallbackDir := "models"
+			entries, _ = os.ReadDir(fallbackDir)
+			for _, entry := range entries {
+				if !entry.IsDir() && filepath.Ext(entry.Name()) == ".bin" {
+					legacyPath := filepath.Join(fallbackDir, entry.Name())
+					targetPath = filepath.Join(modelsDir, entry.Name())
+					if err := copyFile(legacyPath, targetPath); err == nil {
+						_ = os.Remove(legacyPath)
+					} else {
+						fmt.Printf("Failed to migrate legacy model %s: %v\n", legacyPath, err)
+						continue
+					}
+					activeModel = entry.Name()
+					found = true
+					break
+				}
+			}
+		}
+
+		if found {
+			// Update config to match the fallback active model
+			cfg.ActiveModel = activeModel
+			_ = saveConfig(cfg)
+		} else {
+			fmt.Println("No Whisper model file found anywhere!")
+			return
+		}
+	}
+
+	if a.loadedModelPath == targetPath && a.whisperCtx != nil {
+		return
+	}
+
+	fmt.Printf("Loading Whisper model: %s...\n", targetPath)
+	if a.whisperCtx != nil {
+		C.whisper_free(a.whisperCtx)
+		a.whisperCtx = nil
+		a.loadedModelPath = ""
+	}
+
+	modelPathC := C.CString(targetPath)
+	defer C.free(unsafe.Pointer(modelPathC))
+	params := C.whisper_context_default_params()
+	a.whisperCtx = C.whisper_init_from_file_with_params(modelPathC, params)
+	if a.whisperCtx == nil {
+		fmt.Printf("Error initializing Whisper model from %s\n", targetPath)
+	} else {
+		a.loadedModelPath = targetPath
+		fmt.Printf("Successfully loaded Whisper model: %s\n", targetPath)
+	}
+}
+
 func (a *App) transcribe() {
 	recordedAt := time.Now()
+
+	a.ensureActiveModel()
 
 	a.mutex.Lock()
 	if len(a.audioBuffer) == 0 {

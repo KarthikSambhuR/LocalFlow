@@ -3,9 +3,22 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 )
 
-const configPath = "localflow_config.json"
+func getBaseAppDir() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "."
+	}
+	appDir := filepath.Join(dir, "LocalFlow")
+	_ = os.MkdirAll(appDir, 0755)
+	return appDir
+}
+
+func getConfigPath() string {
+	return filepath.Join(getBaseAppDir(), "localflow_config.json")
+}
 
 // Config holds user-configurable settings shared between the pill and home processes via disk.
 type Config struct {
@@ -21,6 +34,7 @@ type Config struct {
 	TranscriptionRetentionDays int     `json:"transcription_retention_days"`
 	ActiveMicrophone           string  `json:"active_microphone"`
 	DataFolder                 string  `json:"data_folder"`
+	ActiveModel                string  `json:"active_model"`
 }
 
 func loadConfig() Config {
@@ -35,9 +49,22 @@ func loadConfig() Config {
 		TranscriptionRetentionDays: 30,
 		ActiveMicrophone:           "Default",
 		DataFolder:                 "Default",
+		ActiveModel:                "ggml-tiny.en.bin",
 	}
 
-	data, err := os.ReadFile(configPath)
+	// Migrate legacy config file if present in current directory but not in AppDir
+	legacyPath := "localflow_config.json"
+	newPath := getConfigPath()
+	if _, err := os.Stat(newPath); err != nil {
+		if _, errLegacy := os.Stat(legacyPath); errLegacy == nil {
+			if data, errRead := os.ReadFile(legacyPath); errRead == nil {
+				_ = os.WriteFile(newPath, data, 0644)
+				_ = os.Remove(legacyPath)
+			}
+		}
+	}
+
+	data, err := os.ReadFile(newPath)
 	if err != nil {
 		return defaultCfg
 	}
@@ -68,6 +95,9 @@ func loadConfig() Config {
 	if cfg.DataFolder == "" {
 		cfg.DataFolder = "Default"
 	}
+	if cfg.ActiveModel == "" {
+		cfg.ActiveModel = "ggml-tiny.en.bin"
+	}
 	return cfg
 }
 
@@ -76,5 +106,5 @@ func saveConfig(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configPath, data, 0644)
+	return os.WriteFile(getConfigPath(), data, 0644)
 }

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -13,11 +15,17 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
+var (
+	kernel32    = syscall.NewLazyDLL("kernel32.dll")
+	createMutex = kernel32.NewProc("CreateMutexW")
+)
+
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
 	// Check if this is being launched as a Settings or Home window
+	checkMutex := true
 	for _, arg := range os.Args[1:] {
 		if arg == "--settings" {
 			runSettingsWindow("settings")
@@ -27,14 +35,26 @@ func main() {
 			runSettingsWindow("home")
 			return
 		}
+		if strings.Contains(arg, "wails") || strings.HasPrefix(arg, "-") {
+			checkMutex = false
+		}
 	}
 
 	// Default: run as the invisible pill overlay
-	runPillOverlay()
+	runPillOverlay(checkMutex)
 }
 
 // runPillOverlay is the main transparent fullscreen ghost window for dictation.
-func runPillOverlay() {
+func runPillOverlay(checkMutex bool) {
+	if checkMutex {
+		name, _ := syscall.UTF16PtrFromString("LocalFlowPillMutex")
+		_, _, mutexErr := createMutex.Call(0, 1, uintptr(unsafe.Pointer(name)))
+		if mutexErr != nil && mutexErr.(syscall.Errno) == 183 { // ERROR_ALREADY_EXISTS
+			println("LocalFlow Pill Overlay is already running.")
+			return
+		}
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{

@@ -17,16 +17,83 @@ var db *sql.DB
 // initDB opens the SQLite database, creates the recordings and analytics tables, and performs migrations.
 func initDB() error {
 	cfg := loadConfig()
-	dataDir := "."
+	dataDir := getBaseAppDir()
 	if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
 		dataDir = cfg.DataFolder
 	}
+
+	// 1. Migrate legacy database file if present in current directory but not in new dataDir
+	legacyDb := "localflow.db"
+	newDb := filepath.Join(dataDir, "localflow.db")
+	if dataDir != "." {
+		if _, err := os.Stat(newDb); err != nil {
+			if _, errLegacy := os.Stat(legacyDb); errLegacy == nil {
+				dbData, errRead := os.ReadFile(legacyDb)
+				if errRead == nil {
+					_ = os.MkdirAll(dataDir, 0755)
+					if errWrite := os.WriteFile(newDb, dbData, 0644); errWrite == nil {
+						_ = os.Remove(legacyDb)
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Migrate legacy audio_cache if present in current directory but not in dataDir
+	legacyAudio := "audio_cache"
+	newAudio := filepath.Join(dataDir, "audio_cache")
+	if dataDir != "." {
+		if _, err := os.Stat(newAudio); err != nil {
+			if _, errLegacy := os.Stat(legacyAudio); errLegacy == nil {
+				_ = os.MkdirAll(newAudio, 0755)
+				entries, errRead := os.ReadDir(legacyAudio)
+				if errRead == nil {
+					for _, entry := range entries {
+						if !entry.IsDir() {
+							oldF := filepath.Join(legacyAudio, entry.Name())
+							newF := filepath.Join(newAudio, entry.Name())
+							if data, errF := os.ReadFile(oldF); errF == nil {
+								if errW := os.WriteFile(newF, data, 0644); errW == nil {
+									_ = os.Remove(oldF)
+								}
+							}
+						}
+					}
+					_ = os.Remove(legacyAudio)
+				}
+			}
+		}
+	}
+
+	// 3. Migrate legacy models folder if present in current directory but not in dataDir
+	legacyModels := "models"
+	newModels := filepath.Join(dataDir, "models")
+	if dataDir != "." {
+		if _, err := os.Stat(newModels); err != nil {
+			if _, errLegacy := os.Stat(legacyModels); errLegacy == nil {
+				_ = os.MkdirAll(newModels, 0755)
+				entries, errRead := os.ReadDir(legacyModels)
+				if errRead == nil {
+					for _, entry := range entries {
+						if !entry.IsDir() && filepath.Ext(entry.Name()) == ".bin" {
+							oldF := filepath.Join(legacyModels, entry.Name())
+							newF := filepath.Join(newModels, entry.Name())
+							if data, errF := os.ReadFile(oldF); errF == nil {
+								if errW := os.WriteFile(newF, data, 0644); errW == nil {
+									_ = os.Remove(oldF)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	dbPath = filepath.Join(dataDir, "localflow.db")
 	audioCacheDir = filepath.Join(dataDir, "audio_cache")
 
-	if dataDir != "." {
-		_ = os.MkdirAll(dataDir, 0755)
-	}
+	_ = os.MkdirAll(dataDir, 0755)
 
 	var err error
 	db, err = sql.Open("sqlite", dbPath)

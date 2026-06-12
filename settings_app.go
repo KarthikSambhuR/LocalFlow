@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/gen2brain/malgo"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -144,10 +148,7 @@ func (s *SettingsApp) SetDataFolder(path string) error {
 		return err
 	}
 
-	oldDataDir := "."
-	if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
-		oldDataDir = cfg.DataFolder
-	}
+	oldDataDir := getDataDir(cfg)
 
 	oldDbPath := filepath.Join(oldDataDir, "localflow.db")
 	newDbPath := filepath.Join(path, "localflow.db")
@@ -183,10 +184,401 @@ func (s *SettingsApp) SetDataFolder(path string) error {
 		}
 	}
 
+	// 3.5. Move model files from the previous data folder and legacy project folder.
+	newModelsDir := filepath.Join(path, "models")
+	_ = os.MkdirAll(newModelsDir, 0755)
+	moveModelFiles(filepath.Join(oldDataDir, "models"), newModelsDir)
+	if oldDataDir != "." {
+		moveModelFiles("models", newModelsDir)
+	}
+
 	// Update config
 	cfg.DataFolder = path
 	saveConfig(cfg)
 
 	// 4. Re-open / initialize database at new path
 	return initDB()
+}
+
+func getDataDir(cfg Config) string {
+	if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
+		return cfg.DataFolder
+	}
+	return getBaseAppDir()
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func copyFile(src string, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
+}
+
+func moveModelFiles(srcDir string, dstDir string) {
+	if srcDir == dstDir {
+		return
+	}
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".bin" {
+			continue
+		}
+		src := filepath.Join(srcDir, entry.Name())
+		dst := filepath.Join(dstDir, entry.Name())
+		if fileExists(dst) {
+			_ = os.Remove(src)
+			continue
+		}
+		if err := copyFile(src, dst); err == nil {
+			_ = os.Remove(src)
+		}
+	}
+}
+
+type WhisperModelInfo struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Filename         string `json:"filename"`
+	URL              string `json:"url"`
+	SizeMB           int    `json:"size_mb"`
+	SpeedLabel       string `json:"speed_label"`
+	SpeedDescription string `json:"speed_description"`
+	Description      string `json:"description"`
+}
+
+var AvailableModels = []WhisperModelInfo{
+	{
+		ID:               "tiny",
+		Name:             "Tiny (English)",
+		Filename:         "ggml-tiny.en.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin",
+		SizeMB:           75,
+		SpeedLabel:       "Super fast",
+		SpeedDescription: "~10-15x realtime",
+		Description:      "Fastest startup and lowest memory usage.",
+	},
+	{
+		ID:               "base",
+		Name:             "Base (English)",
+		Filename:         "ggml-base.en.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin",
+		SizeMB:           142,
+		SpeedLabel:       "Fast",
+		SpeedDescription: "~6-10x realtime",
+		Description:      "Good default for quick dictation.",
+	},
+	{
+		ID:               "small",
+		Name:             "Small (English)",
+		Filename:         "ggml-small.en.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin",
+		SizeMB:           465,
+		SpeedLabel:       "Balanced",
+		SpeedDescription: "~2-4x realtime",
+		Description:      "Better accuracy with a noticeable speed cost.",
+	},
+	{
+		ID:               "medium",
+		Name:             "Medium (English)",
+		Filename:         "ggml-medium.en.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin",
+		SizeMB:           1530,
+		SpeedLabel:       "Accurate",
+		SpeedDescription: "~1x realtime",
+		Description:      "High accuracy with heavier CPU and memory usage.",
+	},
+	{
+		ID:               "large-turbo",
+		Name:             "Large v3 Turbo",
+		Filename:         "ggml-large-v3-turbo.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+		SizeMB:           1624,
+		SpeedLabel:       "High accuracy",
+		SpeedDescription: "~1-2x realtime",
+		Description:      "Best quality option with optimized inference speed.",
+	},
+}
+
+type ModelStatus struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Filename         string `json:"filename"`
+	SizeMB           int    `json:"size_mb"`
+	SpeedLabel       string `json:"speed_label"`
+	SpeedDescription string `json:"speed_description"`
+	Description      string `json:"description"`
+	IsDownloaded     bool   `json:"is_downloaded"`
+	IsActive         bool   `json:"is_active"`
+	IsDownloading    bool   `json:"is_downloading"`
+	DownloadProgress int    `json:"download_progress"`
+}
+
+var (
+	downloadLock     sync.Mutex
+	downloadProgress = make(map[string]int) // modelID -> percent
+)
+
+func (s *SettingsApp) GetModelsList() []ModelStatus {
+	cfg := loadConfig()
+	activeFilename := cfg.ActiveModel
+	if activeFilename == "" {
+		activeFilename = "ggml-tiny.en.bin"
+	}
+
+	modelsDir := s.getModelsDir()
+	_ = os.MkdirAll(modelsDir, 0755)
+
+	downloadLock.Lock()
+	defer downloadLock.Unlock()
+
+	var out []ModelStatus
+	for _, m := range AvailableModels {
+		pathInCustom := filepath.Join(modelsDir, m.Filename)
+		pathInLocal := filepath.Join("models", m.Filename)
+
+		isDownloaded := false
+		if _, err := os.Stat(pathInCustom); err == nil {
+			isDownloaded = true
+		} else if _, err := os.Stat(pathInLocal); err == nil {
+			isDownloaded = true
+		}
+
+		progress, isDownloading := downloadProgress[m.ID]
+
+		out = append(out, ModelStatus{
+			ID:               m.ID,
+			Name:             m.Name,
+			Filename:         m.Filename,
+			SizeMB:           m.SizeMB,
+			SpeedLabel:       m.SpeedLabel,
+			SpeedDescription: m.SpeedDescription,
+			Description:      m.Description,
+			IsDownloaded:     isDownloaded,
+			IsActive:         m.Filename == activeFilename,
+			IsDownloading:    isDownloading,
+			DownloadProgress: progress,
+		})
+	}
+	return out
+}
+
+func (s *SettingsApp) getModelsDir() string {
+	cfg := loadConfig()
+	return filepath.Join(getDataDir(cfg), "models")
+}
+
+func (s *SettingsApp) ensureModelInDataFolder(filename string) error {
+	modelsDir := s.getModelsDir()
+	targetPath := filepath.Join(modelsDir, filename)
+	if fileExists(targetPath) {
+		return nil
+	}
+
+	legacyPath := filepath.Join("models", filename)
+	if fileExists(legacyPath) {
+		if err := copyFile(legacyPath, targetPath); err != nil {
+			return err
+		}
+		_ = os.Remove(legacyPath)
+		return nil
+	}
+
+	return fmt.Errorf("model file %s is not downloaded", filename)
+}
+
+// WriteCounter counts the number of bytes written to it and publishes progress.
+type WriteCounter struct {
+	Total      uint64
+	ContentLen uint64
+	OnProgress func(percent int)
+}
+
+func (wc *WriteCounter) Write(p []byte) (int, error) {
+	n := len(p)
+	wc.Total += uint64(n)
+	if wc.ContentLen > 0 {
+		percent := int((float64(wc.Total) / float64(wc.ContentLen)) * 100)
+		if percent > 100 {
+			percent = 100
+		}
+		wc.OnProgress(percent)
+	}
+	return n, nil
+}
+
+func (s *SettingsApp) DownloadModel(id string) {
+	downloadLock.Lock()
+	if _, exists := downloadProgress[id]; exists {
+		downloadLock.Unlock()
+		return
+	}
+	downloadProgress[id] = 0
+	downloadLock.Unlock()
+
+	var targetModel *WhisperModelInfo
+	for i := range AvailableModels {
+		if AvailableModels[i].ID == id {
+			targetModel = &AvailableModels[i]
+			break
+		}
+	}
+	if targetModel == nil {
+		downloadLock.Lock()
+		delete(downloadProgress, id)
+		downloadLock.Unlock()
+		return
+	}
+
+	go func() {
+		defer func() {
+			downloadLock.Lock()
+			delete(downloadProgress, id)
+			downloadLock.Unlock()
+		}()
+
+		modelsDir := s.getModelsDir()
+		_ = os.MkdirAll(modelsDir, 0755)
+
+		tmpPath := filepath.Join(modelsDir, targetModel.Filename+".tmp")
+		finalPath := filepath.Join(modelsDir, targetModel.Filename)
+
+		resp, err := http.Get(targetModel.URL)
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, fmt.Sprintf("HTTP %d", resp.StatusCode))
+			return
+		}
+
+		out, err := os.Create(tmpPath)
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+			return
+		}
+		defer func() {
+			out.Close()
+			_ = os.Remove(tmpPath)
+		}()
+
+		counter := &WriteCounter{
+			ContentLen: uint64(resp.ContentLength),
+			OnProgress: func(percent int) {
+				downloadLock.Lock()
+				downloadProgress[id] = percent
+				downloadLock.Unlock()
+				wailsRuntime.EventsEmit(s.ctx, "model-download-progress", id, percent)
+			},
+		}
+
+		_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+			return
+		}
+
+		out.Close()
+
+		err = os.Rename(tmpPath, finalPath)
+		if err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+			return
+		}
+
+		wailsRuntime.EventsEmit(s.ctx, "model-download-done", id)
+	}()
+}
+
+func (s *SettingsApp) SetActiveModel(filename string) error {
+	valid := false
+	for _, m := range AvailableModels {
+		if m.Filename == filename {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("unknown model: %s", filename)
+	}
+
+	if err := s.ensureModelInDataFolder(filename); err != nil {
+		return err
+	}
+
+	cfg := loadConfig()
+	cfg.ActiveModel = filename
+	return saveConfig(cfg)
+}
+
+func (s *SettingsApp) DeleteModel(filename string) error {
+	modelsDir := s.getModelsDir()
+
+	downloadedList := []string{}
+	for _, m := range AvailableModels {
+		pathInCustom := filepath.Join(modelsDir, m.Filename)
+		pathInLocal := filepath.Join("models", m.Filename)
+
+		if _, err := os.Stat(pathInCustom); err == nil {
+			downloadedList = append(downloadedList, pathInCustom)
+		} else if _, err := os.Stat(pathInLocal); err == nil {
+			downloadedList = append(downloadedList, pathInLocal)
+		}
+	}
+
+	if len(downloadedList) <= 1 {
+		return fmt.Errorf("cannot delete the only model left on disk; download another model first")
+	}
+
+	var pathToDelete string
+	pathInCustom := filepath.Join(modelsDir, filename)
+	pathInLocal := filepath.Join("models", filename)
+
+	if _, err := os.Stat(pathInCustom); err == nil {
+		pathToDelete = pathInCustom
+	} else if _, err := os.Stat(pathInLocal); err == nil {
+		pathToDelete = pathInLocal
+	} else {
+		return fmt.Errorf("model file not found on disk")
+	}
+
+	err := os.Remove(pathToDelete)
+	if err != nil {
+		return err
+	}
+
+	cfg := loadConfig()
+	if cfg.ActiveModel == filename {
+		for _, m := range AvailableModels {
+			if m.Filename == filename {
+				continue
+			}
+			pC := filepath.Join(modelsDir, m.Filename)
+			pL := filepath.Join("models", m.Filename)
+			if _, err := os.Stat(pC); err == nil {
+				cfg.ActiveModel = m.Filename
+				break
+			} else if _, err := os.Stat(pL); err == nil {
+				cfg.ActiveModel = m.Filename
+				break
+			}
+		}
+		_ = saveConfig(cfg)
+	}
+
+	return nil
 }
