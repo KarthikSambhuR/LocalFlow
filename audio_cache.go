@@ -13,16 +13,20 @@ const (
 	cacheMaxAge   = 7 * 24 * time.Hour // 1 week
 )
 
-// pruneAudioCache deletes WAV files in audio_cache/ that are older than 1 week.
+// pruneAudioCache deletes WAV files in audio_cache/ that are older than the specified retention days.
+// If retentionDays <= 0, no pruning is performed.
 // Called ONLY at startup — never mid-session.
-func pruneAudioCache() {
+func pruneAudioCache(retentionDays int) {
+	if retentionDays <= 0 {
+		return
+	}
 	entries, err := os.ReadDir(audioCacheDir)
 	if err != nil {
 		// Directory doesn't exist yet — nothing to prune
 		return
 	}
 
-	cutoff := time.Now().Add(-cacheMaxAge)
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue

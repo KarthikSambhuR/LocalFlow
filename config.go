@@ -9,24 +9,28 @@ const configPath = "localflow_config.json"
 
 // Config holds user-configurable settings shared between the pill and home processes via disk.
 type Config struct {
-	InputBoostEnabled    bool    `json:"input_boost_enabled"`
-	InputBoostGain       float32 `json:"input_boost_gain"`
-	Keybind1Rawcode      uint16  `json:"keybind1_rawcode"`
-	Keybind2Rawcode      uint16  `json:"keybind2_rawcode"`
-	Keybind1Name         string  `json:"keybind1_name"`
-	Keybind2Name         string  `json:"keybind2_name"`
-	StartOnStartup       bool    `json:"start_on_startup"`
-	KeybindCaptureActive bool    `json:"keybind_capture_active"`
+	InputBoostEnabled          bool    `json:"input_boost_enabled"`
+	InputBoostGain             float32 `json:"input_boost_gain"`
+	Keybind1Rawcode            uint16  `json:"keybind1_rawcode"`
+	Keybind2Rawcode            uint16  `json:"keybind2_rawcode"`
+	Keybind1Name               string  `json:"keybind1_name"`
+	Keybind2Name               string  `json:"keybind2_name"`
+	StartOnStartup             bool    `json:"start_on_startup"`
+	KeybindCaptureActive       bool    `json:"keybind_capture_active"`
+	AudioRetentionDays         int     `json:"audio_retention_days"`
+	TranscriptionRetentionDays int     `json:"transcription_retention_days"`
 }
 
 func loadConfig() Config {
 	defaultCfg := Config{
-		InputBoostEnabled: false,
-		InputBoostGain:    1.0,
-		Keybind1Rawcode:   162, // LCtrl
-		Keybind2Rawcode:   91,  // LWin
-		Keybind1Name:      "Ctrl",
-		Keybind2Name:      "Win",
+		InputBoostEnabled:          false,
+		InputBoostGain:             1.0,
+		Keybind1Rawcode:            162, // LCtrl
+		Keybind2Rawcode:            91,  // LWin
+		Keybind1Name:               "Ctrl",
+		Keybind2Name:               "Win",
+		AudioRetentionDays:         7,
+		TranscriptionRetentionDays: 30,
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -47,6 +51,12 @@ func loadConfig() Config {
 	}
 	if cfg.Keybind2Rawcode == 0 {
 		cfg.Keybind2Rawcode = 91
+	}
+	if cfg.AudioRetentionDays == 0 {
+		cfg.AudioRetentionDays = 7
+	}
+	if cfg.TranscriptionRetentionDays == 0 {
+		cfg.TranscriptionRetentionDays = 30
 	}
 	return cfg
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 )
 
@@ -18,8 +20,32 @@ func NewSettingsApp(route string) *SettingsApp {
 func (s *SettingsApp) startup(ctx context.Context) {
 	s.ctx = ctx
 	initDB()
-	// Note: audio is served by the Wails AssetServer handler in main.go (/audio/<file>)
-	// No separate HTTP server needed.
+	cfg := loadConfig()
+	pruneAudioCache(cfg.AudioRetentionDays)
+	pruneRecordings(cfg.TranscriptionRetentionDays)
+}
+
+func (s *SettingsApp) SetRetention(audioDays int, transcriptionDays int) {
+	cfg := loadConfig()
+	cfg.AudioRetentionDays = audioDays
+	cfg.TranscriptionRetentionDays = transcriptionDays
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) PurgeNow() {
+	// 1. Delete all WAV files in the audio cache directory
+	entries, err := os.ReadDir(audioCacheDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".wav" {
+				_ = os.Remove(filepath.Join(audioCacheDir, entry.Name()))
+			}
+		}
+	}
+	// 2. Clear all rows from recordings table
+	if db != nil {
+		_, _ = db.Exec("DELETE FROM recordings")
+	}
 }
 
 func (s *SettingsApp) GetInitialRoute() string {
@@ -29,6 +55,11 @@ func (s *SettingsApp) GetInitialRoute() string {
 func (s *SettingsApp) GetRecordings() []Recording {
 	recs, _ := GetRecordings()
 	return recs
+}
+
+func (s *SettingsApp) GetAnalytics() []Analytics {
+	an, _ := GetAnalytics()
+	return an
 }
 
 func (s *SettingsApp) GetConfig() Config {

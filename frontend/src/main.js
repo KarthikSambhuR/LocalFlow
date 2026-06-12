@@ -148,10 +148,52 @@ settingsModal.innerHTML = `
         <label>Storage & Cache</label>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Audio History</span>
-            <span class="setting-desc">Recordings automatically cleaned</span>
+            <span class="setting-title">Audio Files Lifespan</span>
+            <span class="setting-desc">How long audio recordings (.wav) are kept on disk</span>
           </div>
-          <span class="badge ghost">7 Days</span>
+          <div class="custom-dropdown" id="audioRetentionDropdown">
+            <button class="dropdown-trigger">
+              <span id="audioRetentionLabel">7 Days</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu">
+              <div class="dropdown-item" data-value="1">1 Day</div>
+              <div class="dropdown-item" data-value="3">3 Days</div>
+              <div class="dropdown-item" data-value="7">7 Days</div>
+              <div class="dropdown-item" data-value="14">14 Days</div>
+              <div class="dropdown-item" data-value="30">30 Days</div>
+              <div class="dropdown-item" data-value="-1">Forever</div>
+            </div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Transcription Lifespan</span>
+            <span class="setting-desc">How long dictation text is kept (analytics are kept forever)</span>
+          </div>
+          <div class="custom-dropdown" id="transcriptionRetentionDropdown">
+            <button class="dropdown-trigger">
+              <span id="transcriptionRetentionLabel">30 Days</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu">
+              <div class="dropdown-item" data-value="7">7 Days</div>
+              <div class="dropdown-item" data-value="14">14 Days</div>
+              <div class="dropdown-item" data-value="30">30 Days</div>
+              <div class="dropdown-item" data-value="90">90 Days</div>
+              <div class="dropdown-item" data-value="180">180 Days</div>
+              <div class="dropdown-item" data-value="-1">Forever</div>
+            </div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Manual Cleanup</span>
+            <span class="setting-desc">Prune expired files and texts immediately</span>
+          </div>
+          <button id="purgeNowBtn" class="kbd-btn" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.4); color: #ef4444;">
+            Clean Cache Now
+          </button>
         </div>
       </div>
     </div>
@@ -173,6 +215,22 @@ settingsModal.innerHTML = `
 settingsOverlay.appendChild(settingsModal);
 root.appendChild(settingsOverlay);
 root.appendChild(moduleNode);
+
+// Custom confirm modal for cleanups
+const confirmModalOverlay = document.createElement('div');
+confirmModalOverlay.className = 'custom-modal-overlay';
+confirmModalOverlay.id = 'confirmModal';
+confirmModalOverlay.innerHTML = `
+  <div class="custom-modal">
+    <h3>Clear All Cache?</h3>
+    <p>This will permanently delete all raw audio files and transcription texts. Your historical stats will be preserved.</p>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" id="confirmModalCancel">Cancel</button>
+      <button class="modal-btn confirm" id="confirmModalConfirm">Clear Everything</button>
+    </div>
+  </div>
+`;
+root.appendChild(confirmModalOverlay);
 
 // ── State & Animation ────────────────────────────────────────────────────────
 let isActive = false;
@@ -345,7 +403,7 @@ function computeStats(records = []) {
   const todayKey = localDateKey(new Date());
 
   records.forEach(r => {
-    const words = countWords(r.transcription);
+    const words = r.word_count || countWords(r.transcription);
     const date = new Date(r.timestamp);
     const key = localDateKey(date);
     totalWords += words;
@@ -380,7 +438,9 @@ function computeStats(records = []) {
 async function loadDashboard() {
   const records = await window.go.main.SettingsApp.GetRecordings();
   const safeRecords = records || [];
-  const stats = computeStats(safeRecords);
+  const analytics = await window.go.main.SettingsApp.GetAnalytics();
+  const safeAnalytics = analytics || [];
+  const stats = computeStats(safeAnalytics);
   renderHome(safeRecords, stats);
   renderInsights(stats);
 }
@@ -392,7 +452,19 @@ function renderHome(records, stats) {
   if (rail) rail.innerHTML = renderHomeRail(stats);
 
   if (!records.length) {
-    list.innerHTML = '<div class="empty-state">No recordings yet. Say something.</div>';
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+        <h4>Silence is Golden</h4>
+        <p>Your dictation history is clear. Press <kbd>Ctrl</kbd> + <kbd>Win</kbd> and speak to capture your first transcription.</p>
+      </div>
+    `;
     return;
   }
 
@@ -401,7 +473,16 @@ function renderHome(records, stats) {
     const row = document.createElement('div');
     row.className = 'history-card';
     const date = new Date(r.timestamp);
-    const words = countWords(r.transcription);
+    const words = r.word_count || countWords(r.transcription);
+    
+    let displayText = escapeHtml(r.transcription);
+    if (!displayText) {
+      if (r.word_count > 0) {
+        displayText = '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>';
+      } else {
+        displayText = '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
+      }
+    }
 
     row.innerHTML = `
       <div class="card-top">
@@ -409,17 +490,19 @@ function renderHome(records, stats) {
         <span class="badge ghost">${words} words</span>
       </div>
       <div class="card-center">
-        <div class="card-transcript">${escapeHtml(r.transcription) || '<i>No speech detected</i>'}</div>
+        <div class="card-transcript">${displayText}</div>
       </div>
       <div class="card-controls">
         <div class="play-btn">${PLAY_SVG}<span>Play</span></div>
-        <div class="copy-btn-small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
+        <div class="copy-btn-small" style="${!r.transcription ? 'opacity: 0.3; pointer-events: none;' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
       </div>
     `;
 
     const playBtn = row.querySelector('.play-btn');
     playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
-    row.querySelector('.copy-btn-small').onclick = () => window.runtime.ClipboardSetText(r.transcription);
+    if (r.transcription) {
+      row.querySelector('.copy-btn-small').onclick = () => window.runtime.ClipboardSetText(r.transcription);
+    }
     list.appendChild(row);
   });
 }
@@ -469,8 +552,10 @@ function renderInsights(stats) {
     
     <div class="insight-grid">
       <div class="metric-card wpm-card">
-        <div class="metric-number">${stats.wpm}</div>
-        <div class="metric-label">Words per minute</div>
+        <div class="wpm-text">
+          <div class="metric-number">${stats.wpm}</div>
+          <div class="metric-label">Words per minute</div>
+        </div>
         <div class="gauge" style="--score:${Math.min(100, stats.wpm)}">
           <div class="gauge-center">
             <span>Top</span>
@@ -762,18 +847,23 @@ async function playRecord(url, playBtn) {
 
     currentSource = source;
     currentPlayBtn = playBtn;
-    playBtn.innerHTML = PAUSE_SVG;
+    playBtn.innerHTML = PAUSE_SVG + '<span>Pause</span>';
 
     source.onended = () => {
       if (currentSource === source) {
         currentSource = null;
         currentPlayBtn = null;
-        playBtn.innerHTML = PLAY_SVG;
+        playBtn.innerHTML = PLAY_SVG + '<span>Play</span>';
       }
     };
   } catch(err) {
     console.error('Playback failed:', err);
-    playBtn.innerHTML = PLAY_SVG;
+    playBtn.style.color = '#ef4444';
+    playBtn.innerHTML = PLAY_SVG + '<span>Expired</span>';
+    setTimeout(() => {
+      playBtn.style.color = '';
+      playBtn.innerHTML = PLAY_SVG + '<span>Play</span>';
+    }, 2000);
   }
 }
 
@@ -924,6 +1014,156 @@ async function setupStartupSettings() {
   });
 }
 
+async function setupStorageSettings() {
+  const audioDropdown = document.getElementById('audioRetentionDropdown');
+  const transDropdown = document.getElementById('transcriptionRetentionDropdown');
+  const purgeBtn = document.getElementById('purgeNowBtn');
+  if (!audioDropdown || !transDropdown || !purgeBtn) return;
+
+  const audioTrigger = audioDropdown.querySelector('.dropdown-trigger');
+  const audioLabel = document.getElementById('audioRetentionLabel');
+  const audioItems = audioDropdown.querySelectorAll('.dropdown-item');
+
+  const transTrigger = transDropdown.querySelector('.dropdown-trigger');
+  const transLabel = document.getElementById('transcriptionRetentionLabel');
+  const transItems = transDropdown.querySelectorAll('.dropdown-item');
+
+  let currentAudioVal = 7;
+  let currentTransVal = 30;
+
+  const getLabelText = (val) => {
+    val = parseInt(val, 10);
+    if (val === -1 || val === 99999 || val <= 0) return 'Forever';
+    return val === 1 ? '1 Day' : `${val} Days`;
+  };
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  if (cfg) {
+    currentAudioVal = cfg.audio_retention_days;
+    currentTransVal = cfg.transcription_retention_days;
+    
+    audioLabel.textContent = getLabelText(currentAudioVal);
+    audioItems.forEach(item => {
+      const active = parseInt(item.getAttribute('data-value'), 10) === currentAudioVal;
+      item.classList.toggle('active', active);
+    });
+
+    transLabel.textContent = getLabelText(currentTransVal);
+    transItems.forEach(item => {
+      const active = parseInt(item.getAttribute('data-value'), 10) === currentTransVal;
+      item.classList.toggle('active', active);
+    });
+  }
+
+  const persist = () => {
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetRetention(
+        currentAudioVal,
+        currentTransVal
+      );
+    }
+  };
+
+  // Audio dropdown trigger
+  audioTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    audioDropdown.classList.toggle('open');
+    transDropdown.classList.remove('open');
+  });
+
+  audioItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentAudioVal = parseInt(item.getAttribute('data-value'), 10);
+      audioLabel.textContent = getLabelText(currentAudioVal);
+      audioItems.forEach(i => i.classList.toggle('active', i === item));
+      audioDropdown.classList.remove('open');
+      persist();
+    });
+  });
+
+  // Transcription dropdown trigger
+  transTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    transDropdown.classList.toggle('open');
+    audioDropdown.classList.remove('open');
+  });
+
+  transItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentTransVal = parseInt(item.getAttribute('data-value'), 10);
+      transLabel.textContent = getLabelText(currentTransVal);
+      transItems.forEach(i => i.classList.toggle('active', i === item));
+      transDropdown.classList.remove('open');
+      persist();
+    });
+  });
+
+  // Close dropdowns on click outside
+  document.addEventListener('click', () => {
+    audioDropdown.classList.remove('open');
+    transDropdown.classList.remove('open');
+  });
+
+  const modal = document.getElementById('confirmModal');
+  const modalConfirm = document.getElementById('confirmModalConfirm');
+  const modalCancel = document.getElementById('confirmModalCancel');
+
+  let onConfirmCallback = null;
+
+  const showConfirmModal = (onConfirm) => {
+    onConfirmCallback = onConfirm;
+    modal.classList.add('active');
+  };
+
+  const hideConfirmModal = () => {
+    modal.classList.remove('active');
+    onConfirmCallback = null;
+  };
+
+  modalCancel.onclick = (e) => {
+    e.stopPropagation();
+    hideConfirmModal();
+  };
+
+  modalConfirm.onclick = (e) => {
+    e.stopPropagation();
+    if (onConfirmCallback) onConfirmCallback();
+    hideConfirmModal();
+  };
+
+  purgeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showConfirmModal(async () => {
+      if (window.go?.main?.SettingsApp) {
+        purgeBtn.disabled = true;
+        const originalText = purgeBtn.textContent;
+        purgeBtn.textContent = 'Cleaning...';
+        try {
+          await window.go.main.SettingsApp.PurgeNow();
+          await loadDashboard();
+          purgeBtn.textContent = 'Done!';
+          setTimeout(() => {
+            purgeBtn.textContent = 'Clean Cache Now';
+            purgeBtn.disabled = false;
+          }, 1500);
+        } catch (err) {
+          console.error(err);
+          purgeBtn.textContent = 'Error';
+          setTimeout(() => {
+            purgeBtn.textContent = 'Clean Cache Now';
+            purgeBtn.disabled = false;
+          }, 1500);
+        }
+      }
+    });
+  });
+}
+
 async function init() {
   setupTheme();
 
@@ -937,6 +1177,7 @@ async function init() {
       setupAmp(); // load config values into the settings UI
       setupKeybinds();
       setupStartupSettings();
+      setupStorageSettings();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();

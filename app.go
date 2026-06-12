@@ -79,8 +79,9 @@ func (a *App) startup(ctx context.Context) {
 	// 1. Apply click-through + no-focus-steal window styles
 	go applyOverlayStyles()
 
-	// 2. Prune audio cache (delete recordings older than 1 week) — only at startup
-	pruneAudioCache()
+	// 2. Prune audio cache and transcriptions — only at startup
+	pruneAudioCache(cfg.AudioRetentionDays)
+	pruneRecordings(cfg.TranscriptionRetentionDays)
 
 	// 3. Open / create local SQLite database
 	initDB()
