@@ -38,4 +38,3 @@ func (a *App) onTrayReady() {
 		}
 	}()
 }
-
