@@ -35,38 +35,56 @@ const settingsModal = document.createElement('div');
 settingsModal.className = 'settings-modal';
 
 settingsModal.innerHTML = `
-  <div class="settings-sidebar">
-    <div class="sidebar-brand">
-      <img class="brand-logo" src="${logoImg}" alt="LocalFlow Logo" />
-      <div>
-        <div class="sidebar-header">LocalFlow</div>
-        <div class="sidebar-subtitle">Your transcriber</div>
-      </div>
+  <div class="window-titlebar" id="windowTitlebar">
+    <div class="titlebar-brand">
+      <img class="titlebar-logo" src="${logoImg}" alt="" />
+      <span>LocalFlow</span>
     </div>
-    <div class="nav-item" data-section="home">
-      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      Home
-    </div>
-    <div class="nav-item" data-section="insights">
-      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>
-      Insights
-    </div>
-    <div class="nav-item" data-section="settings">
-      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
-      Settings
-    </div>
-    <div class="nav-item" data-section="models">
-      <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
-      Models
-    </div>
-    <div class="sidebar-footer">
-      <div class="shortcut-preview">
-        <span>Shortcut</span>
-        <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
-      </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-button" type="button" id="windowMinimizeBtn" aria-label="Minimize">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
+      <button class="titlebar-button" type="button" id="windowMaximizeBtn" aria-label="Maximize">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+      </button>
+      <button class="titlebar-button titlebar-close" type="button" id="windowCloseBtn" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>
+      </button>
     </div>
   </div>
-  <div class="settings-content">
+  <div class="settings-shell">
+    <div class="settings-sidebar">
+      <div class="sidebar-brand">
+        <img class="brand-logo" src="${logoImg}" alt="LocalFlow Logo" />
+        <div>
+          <div class="sidebar-header">LocalFlow</div>
+          <div class="sidebar-subtitle">Your transcriber</div>
+        </div>
+      </div>
+      <div class="nav-item" data-section="home">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Home
+      </div>
+      <div class="nav-item" data-section="insights">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>
+        Insights
+      </div>
+      <div class="nav-item" data-section="settings">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        Settings
+      </div>
+      <div class="nav-item" data-section="models">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
+        Models
+      </div>
+      <div class="sidebar-footer">
+        <div class="shortcut-preview">
+          <span>Shortcut</span>
+          <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-content">
     <div class="content-header">
       <span class="section-title">Home</span>
     </div>
@@ -233,6 +251,7 @@ settingsModal.innerHTML = `
           <!-- Populated dynamically -->
         </div>
       </div>
+    </div>
     </div>
   </div>
 `;
@@ -685,9 +704,12 @@ function renderInsights(stats) {
   // Setup Custom Instant Tooltip for Calendar Cells
   const wrapper = rootNode.querySelector('.calendar-wrapper');
   if (wrapper) {
-    const tooltip = document.createElement('div');
-    tooltip.className = 'custom-tooltip';
-    wrapper.appendChild(tooltip);
+    let tooltip = document.querySelector('.custom-tooltip');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.className = 'custom-tooltip';
+      document.body.appendChild(tooltip);
+    }
 
     const grid = wrapper.querySelector('.calendar-grid');
     
@@ -703,11 +725,8 @@ function renderInsights(stats) {
 
     grid.addEventListener('mousemove', (e) => {
       if (e.target.classList.contains('streak-cell')) {
-        const rect = wrapper.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top - 40; // Position above cell
-        tooltip.style.left = `${x}px`;
-        tooltip.style.top = `${y}px`;
+        tooltip.style.left = `${e.clientX}px`;
+        tooltip.style.top = `${e.clientY - 30}px`;
       }
     });
 
@@ -1604,12 +1623,30 @@ async function setupMicrophoneSettings() {
   });
 }
 
+function setupWindowTitlebar() {
+  const titlebar = document.getElementById('windowTitlebar');
+  const minimizeBtn = document.getElementById('windowMinimizeBtn');
+  const maximizeBtn = document.getElementById('windowMaximizeBtn');
+  const closeBtn = document.getElementById('windowCloseBtn');
+  if (!titlebar || !window.runtime) return;
+
+  minimizeBtn?.addEventListener('click', () => window.runtime.WindowMinimise());
+  maximizeBtn?.addEventListener('click', () => window.runtime.WindowToggleMaximise());
+  closeBtn?.addEventListener('click', () => window.runtime.Quit());
+
+  titlebar.addEventListener('dblclick', (event) => {
+    if (event.target.closest('.titlebar-controls')) return;
+    window.runtime.WindowToggleMaximise();
+  });
+}
+
 async function init() {
   setupTheme();
 
   if (window.runtime) {
     const isSettings = window.go && window.go.main && window.go.main.SettingsApp;
     if (isSettings) {
+      setupWindowTitlebar();
       moduleNode.style.display = 'none';
       settingsOverlay.classList.add('active');
       const route = await window.go.main.SettingsApp.GetInitialRoute();

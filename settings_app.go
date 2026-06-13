@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/gen2brain/malgo"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -30,6 +31,17 @@ func (s *SettingsApp) startup(ctx context.Context) {
 	cfg := loadConfig()
 	pruneAudioCache(cfg.AudioRetentionDays)
 	pruneRecordings(cfg.TranscriptionRetentionDays)
+
+	// Restore the window to the size/state it was in when the user last closed it.
+	go func() {
+		// Give the WebView a moment to fully initialize before issuing window calls.
+		time.Sleep(150 * time.Millisecond)
+		if cfg.WindowMaximized {
+			wailsRuntime.WindowMaximise(s.ctx)
+		} else {
+			wailsRuntime.WindowSetSize(s.ctx, cfg.WindowWidth, cfg.WindowHeight)
+		}
+	}()
 }
 
 func (s *SettingsApp) SetRetention(audioDays int, transcriptionDays int) {

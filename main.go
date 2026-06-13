@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 var (
@@ -99,6 +101,9 @@ func runPillOverlay(checkMutex bool) {
 func runSettingsWindow(route string) {
 	settingsApp := NewSettingsApp(route)
 
+	// Load saved window geometry so we can pass it as the initial size.
+	cfg := loadConfig()
+
 	// assetHandler serves WAV files and custom TrueType font files from the local storage
 	// directory via the Wails AssetServer. This avoids WebView2 CORS blocks.
 	assetHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,10 +145,11 @@ func runSettingsWindow(route string) {
 
 	err := wails.Run(&options.App{
 		Title:             "LocalFlow",
-		Width:             860,
-		Height:            600,
+		Width:             cfg.WindowWidth,
+		Height:            cfg.WindowHeight,
 		MinWidth:          860,
 		MinHeight:         560,
+		Frameless:         true,
 		HideWindowOnClose: false,
 		StartHidden:       false,
 		AssetServer: &assetserver.Options{
@@ -152,6 +158,24 @@ func runSettingsWindow(route string) {
 		},
 		BackgroundColour: &options.RGBA{R: 15, G: 16, B: 18, A: 255},
 		OnStartup:        settingsApp.startup,
+		OnBeforeClose: func(ctx context.Context) bool {
+			// Capture current window state and persist it so the next launch
+			// opens at the same size / maximized state.
+			isMaximized := wailsRuntime.WindowIsMaximised(ctx)
+			saveCfg := loadConfig()
+			saveCfg.WindowMaximized = isMaximized
+			if !isMaximized {
+				w, h := wailsRuntime.WindowGetSize(ctx)
+				if w >= 860 {
+					saveCfg.WindowWidth = w
+				}
+				if h >= 560 {
+					saveCfg.WindowHeight = h
+				}
+			}
+			_ = saveConfig(saveCfg)
+			return false // false = allow the window to close
+		},
 		Bind: []interface{}{
 			settingsApp,
 		},
@@ -165,3 +189,4 @@ func runSettingsWindow(route string) {
 		println("Settings Error:", err.Error())
 	}
 }
+

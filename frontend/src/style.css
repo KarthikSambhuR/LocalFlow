@@ -150,11 +150,93 @@ kbd,
 .settings-modal {
   width: 100%; height: 100%;
   display: flex;
+  flex-direction: column;
+}
+
+.window-titlebar {
+  height: 38px;
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  user-select: none;
+  --wails-draggable: drag;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 14px;
+  min-width: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.titlebar-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.titlebar-controls {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  --wails-draggable: no-drag;
+}
+
+.titlebar-button {
+  width: 46px;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.titlebar-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.titlebar-button:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.titlebar-close:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.settings-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
 }
 
 /* Sidebar */
 .settings-sidebar {
   width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  min-height: 0;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   padding: 36px 20px;
@@ -347,6 +429,8 @@ kbd,
 /* Content Area */
 .settings-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -795,7 +879,7 @@ kbd,
 
 /* Custom Tooltip Styling */
 .custom-tooltip {
-  position: absolute;
+  position: fixed;
   background: #090909;
   border: 1.5px solid var(--border-active);
   color: var(--text-primary);

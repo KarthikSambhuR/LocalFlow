@@ -35,6 +35,11 @@ type Config struct {
 	ActiveMicrophone           string  `json:"active_microphone"`
 	DataFolder                 string  `json:"data_folder"`
 	ActiveModel                string  `json:"active_model"`
+
+	// Window geometry — persisted so the home/settings window reopens at the same size.
+	WindowWidth     int  `json:"window_width"`
+	WindowHeight    int  `json:"window_height"`
+	WindowMaximized bool `json:"window_maximized"`
 }
 
 func loadConfig() Config {
@@ -50,6 +55,9 @@ func loadConfig() Config {
 		ActiveMicrophone:           "Default",
 		DataFolder:                 "Default",
 		ActiveModel:                "ggml-tiny.en.bin",
+		WindowWidth:                1100,
+		WindowHeight:               720,
+		WindowMaximized:            false,
 	}
 
 	// Migrate legacy config file if present in current directory but not in AppDir
@@ -97,6 +105,12 @@ func loadConfig() Config {
 	}
 	if cfg.ActiveModel == "" {
 		cfg.ActiveModel = "ggml-tiny.en.bin"
+	}
+	if cfg.WindowWidth < 860 {
+		cfg.WindowWidth = 1100
+	}
+	if cfg.WindowHeight < 560 {
+		cfg.WindowHeight = 720
 	}
 	return cfg
 }
