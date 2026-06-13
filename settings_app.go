@@ -287,6 +287,7 @@ type WhisperModelInfo struct {
 	SpeedLabel       string `json:"speed_label"`
 	SpeedDescription string `json:"speed_description"`
 	Description      string `json:"description"`
+	Language         string `json:"language"`
 }
 
 var AvailableModels = []WhisperModelInfo{
@@ -299,6 +300,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedLabel:       "Super fast",
 		SpeedDescription: "~10-15x realtime",
 		Description:      "Fastest startup and lowest memory usage.",
+		Language:         "english",
 	},
 	{
 		ID:               "base",
@@ -309,6 +311,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedLabel:       "Fast",
 		SpeedDescription: "~6-10x realtime",
 		Description:      "Good default for quick dictation.",
+		Language:         "english",
 	},
 	{
 		ID:               "small",
@@ -319,6 +322,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedLabel:       "Balanced",
 		SpeedDescription: "~2-4x realtime",
 		Description:      "Better accuracy with a noticeable speed cost.",
+		Language:         "english",
 	},
 	{
 		ID:               "medium",
@@ -329,6 +333,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedLabel:       "Accurate",
 		SpeedDescription: "~1x realtime",
 		Description:      "High accuracy with heavier CPU and memory usage.",
+		Language:         "english",
 	},
 	{
 		ID:               "large-turbo",
@@ -339,6 +344,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedLabel:       "High accuracy",
 		SpeedDescription: "~1-2x realtime",
 		Description:      "Best quality option with optimized inference speed.",
+		Language:         "english",
 	},
 }
 
@@ -354,6 +360,7 @@ type ModelStatus struct {
 	IsActive         bool   `json:"is_active"`
 	IsDownloading    bool   `json:"is_downloading"`
 	DownloadProgress int    `json:"download_progress"`
+	Language         string `json:"language"`
 }
 
 var (
@@ -400,6 +407,7 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			IsActive:         m.Filename == activeFilename,
 			IsDownloading:    isDownloading,
 			DownloadProgress: progress,
+			Language:         m.Language,
 		})
 	}
 	return out

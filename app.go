@@ -751,30 +751,6 @@ func (a *App) ensureActiveModel() {
 		return
 	}
 
-	// Configure Vulkan GPU selection environment variable
-	if engine == "vulkan" {
-		if cfg.SelectedGPU == "Default" {
-			os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
-		} else {
-			gpus := GetGPUDevicesList()
-			gpuIndex := -1
-			for i, name := range gpus {
-				if name == cfg.SelectedGPU {
-					gpuIndex = i
-					break
-				}
-			}
-			if gpuIndex >= 0 {
-				os.Setenv("GGML_VK_VISIBLE_DEVICES", fmt.Sprintf("%d", gpuIndex))
-			} else {
-				os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
-			}
-		}
-	} else {
-		// Set to empty to disable Vulkan initialization and force CPU fallback
-		os.Setenv("GGML_VK_VISIBLE_DEVICES", "")
-	}
-
 	fmt.Printf("Loading Whisper model: %s with %s engine (GPU: %s)...\n", targetPath, engine, cfg.SelectedGPU)
 	if a.whisperCtx != nil {
 		C.whisper_free(a.whisperCtx)
@@ -858,6 +834,14 @@ func (a *App) transcribe() {
 		whisperFailed = true
 	} else {
 		wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+		wParams.translate = C.bool(false)
+
+		modelLang := "en"
+
+		langC := C.CString(modelLang)
+		defer C.free(unsafe.Pointer(langC))
+		wParams.language = langC
+
 		if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {
 			fmt.Println("Whisper transcription failed with code:", int(code), "samples:", len(whisperBuf), "duration_ms:", durationMs)
 			whisperFailed = true
@@ -907,11 +891,14 @@ func (a *App) transcribe() {
 
 func GetGPUDevicesList() []string {
 	count := int(C.ggml_backend_vk_get_device_count())
+	fmt.Printf("GetGPUDevicesList: count=%d\n", count)
 	var list []string
 	for i := 0; i < count; i++ {
 		var desc [256]C.char
 		C.ggml_backend_vk_get_device_description(C.int(i), &desc[0], 256)
-		list = append(list, C.GoString(&desc[0]))
+		gpuName := C.GoString(&desc[0])
+		fmt.Printf("GPU %d: %s\n", i, gpuName)
+		list = append(list, gpuName)
 	}
 	return list
 }
