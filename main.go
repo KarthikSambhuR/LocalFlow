@@ -26,6 +26,9 @@ var (
 var assets embed.FS
 
 func main() {
+	// Unset any inherited visible devices so we can enumerate all GPUs
+	os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
+
 	// Initialize database to check setup status
 	_ = initDB()
 	setupCompleted := GetProfileValue("setup_completed") == "true"

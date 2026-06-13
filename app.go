@@ -2,9 +2,12 @@ package main
 
 /*
 #cgo CFLAGS: -I./lib
-#cgo LDFLAGS: -L./lib -lwhisper -lggml -lggml-base -lggml-cpu -static -lstdc++ -lgomp -lpthread -lm
+#cgo LDFLAGS: -L./lib/dll -lwhisper -lggml -lggml-base -lggml-cpu -lggml-vulkan -lstdc++ -lgomp -lpthread -lm
 #include "whisper.h"
 #include <stdlib.h>
+
+int ggml_backend_vk_get_device_count(void);
+void ggml_backend_vk_get_device_description(int device, char * description, size_t description_size);
 */
 import "C"
 import (
@@ -65,6 +68,8 @@ type App struct {
 	shortcutKeysDown bool
 	isMicReady       bool
 	loadedModelPath  string
+	loadedEngine     string
+	loadedGPU        string
 }
 
 func NewApp() *App {
@@ -683,6 +688,10 @@ func (a *App) ensureActiveModel() {
 	if activeModel == "" {
 		activeModel = "ggml-tiny.en.bin"
 	}
+	engine := cfg.ProcessingEngine
+	if engine != "vulkan" {
+		engine = "cpu"
+	}
 
 	modelsDir := a.getModelsDir()
 	targetPath := filepath.Join(modelsDir, activeModel)
@@ -738,26 +747,66 @@ func (a *App) ensureActiveModel() {
 		}
 	}
 
-	if a.loadedModelPath == targetPath && a.whisperCtx != nil {
+	if a.loadedModelPath == targetPath && a.loadedEngine == engine && a.loadedGPU == cfg.SelectedGPU && a.whisperCtx != nil {
 		return
 	}
 
-	fmt.Printf("Loading Whisper model: %s...\n", targetPath)
+	// Configure Vulkan GPU selection environment variable
+	if engine == "vulkan" {
+		if cfg.SelectedGPU == "Default" {
+			os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
+		} else {
+			gpus := GetGPUDevicesList()
+			gpuIndex := -1
+			for i, name := range gpus {
+				if name == cfg.SelectedGPU {
+					gpuIndex = i
+					break
+				}
+			}
+			if gpuIndex >= 0 {
+				os.Setenv("GGML_VK_VISIBLE_DEVICES", fmt.Sprintf("%d", gpuIndex))
+			} else {
+				os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
+			}
+		}
+	} else {
+		// Set to empty to disable Vulkan initialization and force CPU fallback
+		os.Setenv("GGML_VK_VISIBLE_DEVICES", "")
+	}
+
+	fmt.Printf("Loading Whisper model: %s with %s engine (GPU: %s)...\n", targetPath, engine, cfg.SelectedGPU)
 	if a.whisperCtx != nil {
 		C.whisper_free(a.whisperCtx)
 		a.whisperCtx = nil
 		a.loadedModelPath = ""
+		a.loadedEngine = ""
+		a.loadedGPU = ""
 	}
 
 	modelPathC := C.CString(targetPath)
 	defer C.free(unsafe.Pointer(modelPathC))
 	params := C.whisper_context_default_params()
+	params.use_gpu = C.bool(engine == "vulkan")
+	gpuIndex := 0
+	if engine == "vulkan" && cfg.SelectedGPU != "Default" {
+		gpus := GetGPUDevicesList()
+		for i, name := range gpus {
+			if name == cfg.SelectedGPU {
+				gpuIndex = i
+				break
+			}
+		}
+	}
+	params.gpu_device = C.int(gpuIndex)
 	a.whisperCtx = C.whisper_init_from_file_with_params(modelPathC, params)
 	if a.whisperCtx == nil {
-		fmt.Printf("Error initializing Whisper model from %s\n", targetPath)
+		fmt.Printf("Error initializing Whisper model from %s with %s engine\n", targetPath, engine)
 	} else {
 		a.loadedModelPath = targetPath
-		fmt.Printf("Successfully loaded Whisper model: %s\n", targetPath)
+		a.loadedEngine = engine
+		a.loadedGPU = cfg.SelectedGPU
+		fmt.Printf("Successfully loaded Whisper model: %s with %s engine (GPU: %s)\n", targetPath, engine, cfg.SelectedGPU)
 	}
 }
 
@@ -854,4 +903,15 @@ func (a *App) transcribe() {
 	runtime.EventsEmit(a.ctx, "recording-done")
 	time.Sleep(650 * time.Millisecond)
 	runtime.WindowHide(a.ctx)
+}
+
+func GetGPUDevicesList() []string {
+	count := int(C.ggml_backend_vk_get_device_count())
+	var list []string
+	for i := 0; i < count; i++ {
+		var desc [256]C.char
+		C.ggml_backend_vk_get_device_description(C.int(i), &desc[0], 256)
+		list = append(list, C.GoString(&desc[0]))
+	}
+	return list
 }

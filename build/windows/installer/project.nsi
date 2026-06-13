@@ -87,6 +87,11 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+    File "..\..\..\lib\dll\whisper.dll"
+    File "..\..\..\lib\dll\ggml.dll"
+    File "..\..\..\lib\dll\ggml-base.dll"
+    File "..\..\..\lib\dll\ggml-cpu.dll"
+    File "..\..\..\lib\dll\ggml-vulkan.dll"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

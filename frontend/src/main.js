@@ -125,6 +125,31 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
+            <span class="setting-title">Processing Engine</span>
+            <span class="setting-desc">Use Vulkan acceleration when your GPU and drivers support it</span>
+          </div>
+          <div class="engine-toggle" role="group" aria-label="Processing engine">
+            <button type="button" class="engine-option active" id="engineCpuBtn" data-engine="cpu">CPU</button>
+            <button type="button" class="engine-option" id="engineVulkanBtn" data-engine="vulkan">Vulkan</button>
+          </div>
+        </div>
+        <div class="setting-item" id="gpuSelectionItem" style="display: none;">
+          <div class="setting-info">
+            <span class="setting-title">Graphics Device</span>
+            <span class="setting-desc">Select which GPU device to accelerate transcription</span>
+          </div>
+          <div class="custom-dropdown" id="gpuDropdown">
+            <button class="dropdown-trigger">
+              <span id="gpuLabel">Default</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu" id="gpuDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
+              <div class="dropdown-item active" data-value="Default">Default</div>
+            </div>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-info">
             <span class="setting-title">Input Microphone</span>
             <span class="setting-desc">Choose which audio device dictates to AI transcription</span>
           </div>
@@ -1005,6 +1030,94 @@ async function setupAmp() {
   }
 }
 
+async function setupProcessingEngine() {
+  const buttons = Array.from(document.querySelectorAll('.engine-option'));
+  const gpuContainer = document.getElementById('gpuSelectionItem');
+  if (!buttons.length) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  let currentEngine = cfg?.processing_engine === 'vulkan' ? 'vulkan' : 'cpu';
+
+  const render = () => {
+    buttons.forEach((btn) => {
+      const active = btn.dataset.engine === currentEngine;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (gpuContainer) {
+      gpuContainer.style.display = currentEngine === 'vulkan' ? 'flex' : 'none';
+    }
+  };
+
+  render();
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const nextEngine = btn.dataset.engine === 'vulkan' ? 'vulkan' : 'cpu';
+      if (nextEngine === currentEngine) return;
+      currentEngine = nextEngine;
+      render();
+      if (window.go?.main?.SettingsApp) {
+        await window.go.main.SettingsApp.SetProcessingEngine(currentEngine);
+      }
+    });
+  });
+}
+
+async function setupGPUSelector() {
+  const container = document.getElementById('gpuSelectionItem');
+  const dropdown = document.getElementById('gpuDropdown');
+  const label = document.getElementById('gpuLabel');
+  const menu = document.getElementById('gpuDropdownMenu');
+  if (!container || !dropdown || !label || !menu) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  const selectedGpu = cfg?.selected_gpu || 'Default';
+  label.textContent = selectedGpu;
+
+  const trigger = dropdown.querySelector('.dropdown-trigger');
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  };
+
+  document.addEventListener('click', () => {
+    dropdown.classList.remove('open');
+  });
+
+  if (window.go?.main?.SettingsApp) {
+    const gpus = await window.go.main.SettingsApp.GetGPUDevices();
+    menu.innerHTML = `<div class="dropdown-item ${selectedGpu === 'Default' ? 'active' : ''}" data-value="Default">Default</div>`;
+
+    gpus.forEach((gpu) => {
+      const active = gpu === selectedGpu;
+      const item = document.createElement('div');
+      item.className = `dropdown-item ${active ? 'active' : ''}`;
+      item.dataset.value = gpu;
+      item.textContent = gpu;
+      menu.appendChild(item);
+    });
+
+    const items = menu.querySelectorAll('.dropdown-item');
+    items.forEach((item) => {
+      item.onclick = async (e) => {
+        e.stopPropagation();
+        const val = item.dataset.value;
+        label.textContent = val;
+        items.forEach(i => i.classList.toggle('active', i.dataset.value === val));
+        dropdown.classList.remove('open');
+        await window.go.main.SettingsApp.SetSelectedGPU(val);
+      };
+    });
+  }
+}
+
 async function setupKeybinds() {
   const btn = document.getElementById('remapBtn');
   const k1Label = document.getElementById('k1Label');
@@ -1652,6 +1765,8 @@ async function init() {
       const route = await window.go.main.SettingsApp.GetInitialRoute();
       switchSection(route || 'home');
       setupAmp(); // load config values into the settings UI
+      setupProcessingEngine();
+      setupGPUSelector();
       setupKeybinds();
       setupStartupSettings();
       setupStorageSettings();

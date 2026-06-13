@@ -115,6 +115,25 @@ func (s *SettingsApp) SetInputBoost(enabled bool, gain float32) {
 	saveConfig(cfg)
 }
 
+func (s *SettingsApp) SetProcessingEngine(engine string) {
+	cfg := loadConfig()
+	if engine != "vulkan" {
+		engine = "cpu"
+	}
+	cfg.ProcessingEngine = engine
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) GetGPUDevices() []string {
+	return GetGPUDevicesList()
+}
+
+func (s *SettingsApp) SetSelectedGPU(gpuName string) {
+	cfg := loadConfig()
+	cfg.SelectedGPU = gpuName
+	saveConfig(cfg)
+}
+
 func (s *SettingsApp) SetKeybinds(key1 uint16, name1 string, key2 uint16, name2 string) {
 	cfg := loadConfig()
 	cfg.Keybind1Rawcode = key1

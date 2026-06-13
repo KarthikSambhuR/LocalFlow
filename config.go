@@ -35,6 +35,8 @@ type Config struct {
 	ActiveMicrophone           string  `json:"active_microphone"`
 	DataFolder                 string  `json:"data_folder"`
 	ActiveModel                string  `json:"active_model"`
+	ProcessingEngine           string  `json:"processing_engine"`
+	SelectedGPU                string  `json:"selected_gpu"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -55,6 +57,8 @@ func loadConfig() Config {
 		ActiveMicrophone:           "Default",
 		DataFolder:                 "Default",
 		ActiveModel:                "ggml-tiny.en.bin",
+		ProcessingEngine:           "cpu",
+		SelectedGPU:                "Default",
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
@@ -105,6 +109,12 @@ func loadConfig() Config {
 	}
 	if cfg.ActiveModel == "" {
 		cfg.ActiveModel = "ggml-tiny.en.bin"
+	}
+	if cfg.ProcessingEngine != "vulkan" {
+		cfg.ProcessingEngine = "cpu"
+	}
+	if cfg.SelectedGPU == "" {
+		cfg.SelectedGPU = "Default"
 	}
 	if cfg.WindowWidth < 860 {
 		cfg.WindowWidth = 1100
