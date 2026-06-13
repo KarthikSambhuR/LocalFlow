@@ -7,5 +7,4 @@ audio_cache/
 localflow.db
 localflow_config.json
 dll_builder/
-lib/dll/
 run_dev.bat
