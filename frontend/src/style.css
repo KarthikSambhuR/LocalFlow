@@ -1,17 +1,16 @@
 @font-face {
-  font-family: 'Urbanist';
-  src: url('/fonts/Urbanist[wght].ttf') format('truetype');
-  font-weight: 100 900;
+  font-family: 'Poppins';
+  src: url('/fonts/Poppins-Regular.ttf') format('truetype');
+  font-weight: 100 600;
   font-style: normal;
 }
 
 @font-face {
-  font-family: 'Outfit';
-  src: url('/fonts/Outfit[wght].ttf') format('truetype');
-  font-weight: 100 900;
+  font-family: 'Poppins';
+  src: url('/fonts/Poppins-Bold.ttf') format('truetype');
+  font-weight: 700 900;
   font-style: normal;
 }
-
 :root {
   /* Color Palette (090909 Black, EEFEFF Azure Mist, AAFFD4 Aquamarine) */
   --bg-app: #090909;            /* Pure Black */
@@ -51,7 +50,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Urbanist', -apple-system, sans-serif;
+  font-family: 'Poppins', sans-serif !important;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -71,7 +70,7 @@ body {
 kbd,
 .dropdown-trigger,
 .dropdown-item {
-  font-family: 'Outfit', sans-serif !important;
+  font-family: 'Poppins', sans-serif !important;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1607,7 +1606,7 @@ kbd {
 }
 
 .model-name {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 700;
   font-size: 16px;
   color: var(--text-primary);
@@ -1647,7 +1646,7 @@ kbd {
 
 .model-filename {
   color: var(--text-muted);
-  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-family: 'Poppins', sans-serif;
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1834,7 +1833,7 @@ kbd {
   padding: 14px 24px;
   color: var(--text-primary);
   font-size: 15px;
-  font-family: 'Urbanist', sans-serif;
+  font-family: 'Poppins', sans-serif;
   outline: none;
   transition: all 0.2s ease;
   text-align: center;
