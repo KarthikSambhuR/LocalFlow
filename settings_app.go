@@ -296,6 +296,7 @@ type WhisperModelInfo struct {
 	SpeedDescription string `json:"speed_description"`
 	Description      string `json:"description"`
 	Language         string `json:"language"`
+	ModelType        string `json:"model_type"` // "whisper" or "llm"
 }
 
 var AvailableModels = []WhisperModelInfo{
@@ -309,6 +310,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "~10-15x realtime",
 		Description:      "Fastest startup and lowest memory usage.",
 		Language:         "english",
+		ModelType:        "whisper",
 	},
 	{
 		ID:               "base",
@@ -320,6 +322,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "~6-10x realtime",
 		Description:      "Good default for quick dictation.",
 		Language:         "english",
+		ModelType:        "whisper",
 	},
 	{
 		ID:               "small",
@@ -331,6 +334,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "~2-4x realtime",
 		Description:      "Better accuracy with a noticeable speed cost.",
 		Language:         "english",
+		ModelType:        "whisper",
 	},
 	{
 		ID:               "medium",
@@ -342,6 +346,7 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "~1x realtime",
 		Description:      "High accuracy with heavier CPU and memory usage.",
 		Language:         "english",
+		ModelType:        "whisper",
 	},
 	{
 		ID:               "large-turbo",
@@ -353,6 +358,19 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "~1-2x realtime",
 		Description:      "Best quality option with optimized inference speed.",
 		Language:         "english",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "qwen3-0.6b",
+		Name:             "Qwen 3 0.6B (Refinement)",
+		Filename:         "Qwen3-0.6B-UD-Q4_K_XL.gguf",
+		URL:              "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-UD-Q4_K_XL.gguf?download=true",
+		SizeMB:           418,
+		SpeedLabel:       "Fast & Lightweight",
+		SpeedDescription: "Optimized for grammar and formatting correction",
+		Description:      "A small but highly capable model for real-time formatting, grammar, and stutter correction.",
+		Language:         "english",
+		ModelType:        "llm",
 	},
 }
 
@@ -369,6 +387,7 @@ type ModelStatus struct {
 	IsDownloading    bool   `json:"is_downloading"`
 	DownloadProgress int    `json:"download_progress"`
 	Language         string `json:"language"`
+	ModelType        string `json:"model_type"`
 }
 
 var (
@@ -403,6 +422,13 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 
 		progress, isDownloading := downloadProgress[m.ID]
 
+		isActive := false
+		if m.ModelType == "llm" {
+			isActive = m.Filename == cfg.LLMActiveModel
+		} else {
+			isActive = m.Filename == activeFilename
+		}
+
 		out = append(out, ModelStatus{
 			ID:               m.ID,
 			Name:             m.Name,
@@ -412,10 +438,11 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			SpeedDescription: m.SpeedDescription,
 			Description:      m.Description,
 			IsDownloaded:     isDownloaded,
-			IsActive:         m.Filename == activeFilename,
+			IsActive:         isActive,
 			IsDownloading:    isDownloading,
 			DownloadProgress: progress,
 			Language:         m.Language,
+			ModelType:        m.ModelType,
 		})
 	}
 	return out
@@ -552,14 +579,14 @@ func (s *SettingsApp) DownloadModel(id string) {
 }
 
 func (s *SettingsApp) SetActiveModel(filename string) error {
-	valid := false
-	for _, m := range AvailableModels {
-		if m.Filename == filename {
-			valid = true
+	var targetModel *WhisperModelInfo
+	for i := range AvailableModels {
+		if AvailableModels[i].Filename == filename {
+			targetModel = &AvailableModels[i]
 			break
 		}
 	}
-	if !valid {
+	if targetModel == nil {
 		return fmt.Errorf("unknown model: %s", filename)
 	}
 
@@ -568,15 +595,33 @@ func (s *SettingsApp) SetActiveModel(filename string) error {
 	}
 
 	cfg := loadConfig()
-	cfg.ActiveModel = filename
+	if targetModel.ModelType == "llm" {
+		cfg.LLMActiveModel = filename
+	} else {
+		cfg.ActiveModel = filename
+	}
 	return saveConfig(cfg)
 }
 
 func (s *SettingsApp) DeleteModel(filename string) error {
+	var targetModel *WhisperModelInfo
+	for i := range AvailableModels {
+		if AvailableModels[i].Filename == filename {
+			targetModel = &AvailableModels[i]
+			break
+		}
+	}
+	if targetModel == nil {
+		return fmt.Errorf("model info not found")
+	}
+
 	modelsDir := s.getModelsDir()
 
 	downloadedList := []string{}
 	for _, m := range AvailableModels {
+		if m.ModelType != targetModel.ModelType {
+			continue
+		}
 		pathInCustom := filepath.Join(modelsDir, m.Filename)
 		pathInLocal := filepath.Join("models", m.Filename)
 
@@ -588,7 +633,7 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 	}
 
 	if len(downloadedList) <= 1 {
-		return fmt.Errorf("cannot delete the only model left on disk; download another model first")
+		return fmt.Errorf("cannot delete the only %s model left on disk; download another model first", targetModel.ModelType)
 	}
 
 	var pathToDelete string
@@ -609,22 +654,42 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 	}
 
 	cfg := loadConfig()
-	if cfg.ActiveModel == filename {
-		for _, m := range AvailableModels {
-			if m.Filename == filename {
-				continue
+	if targetModel.ModelType == "llm" {
+		if cfg.LLMActiveModel == filename {
+			for _, m := range AvailableModels {
+				if m.ModelType != "llm" || m.Filename == filename {
+					continue
+				}
+				pC := filepath.Join(modelsDir, m.Filename)
+				pL := filepath.Join("models", m.Filename)
+				if _, err := os.Stat(pC); err == nil {
+					cfg.LLMActiveModel = m.Filename
+					break
+				} else if _, err := os.Stat(pL); err == nil {
+					cfg.LLMActiveModel = m.Filename
+					break
+				}
 			}
-			pC := filepath.Join(modelsDir, m.Filename)
-			pL := filepath.Join("models", m.Filename)
-			if _, err := os.Stat(pC); err == nil {
-				cfg.ActiveModel = m.Filename
-				break
-			} else if _, err := os.Stat(pL); err == nil {
-				cfg.ActiveModel = m.Filename
-				break
-			}
+			_ = saveConfig(cfg)
 		}
-		_ = saveConfig(cfg)
+	} else {
+		if cfg.ActiveModel == filename {
+			for _, m := range AvailableModels {
+				if m.ModelType == "llm" || m.Filename == filename {
+					continue
+				}
+				pC := filepath.Join(modelsDir, m.Filename)
+				pL := filepath.Join("models", m.Filename)
+				if _, err := os.Stat(pC); err == nil {
+					cfg.ActiveModel = m.Filename
+					break
+				} else if _, err := os.Stat(pL); err == nil {
+					cfg.ActiveModel = m.Filename
+					break
+				}
+			}
+			_ = saveConfig(cfg)
+		}
 	}
 
 	return nil
@@ -779,4 +844,10 @@ func (s *SettingsApp) GetDictionaryWords() []string {
 		return []string{}
 	}
 	return words
+}
+
+func (s *SettingsApp) SetLLMEnabled(enabled bool) {
+	cfg := loadConfig()
+	cfg.LLMEnabled = enabled
+	saveConfig(cfg)
 }

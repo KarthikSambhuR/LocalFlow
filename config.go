@@ -38,6 +38,8 @@ type Config struct {
 	ActiveModel                string  `json:"active_model"`
 	ProcessingEngine           string  `json:"processing_engine"`
 	SelectedGPU                string  `json:"selected_gpu"`
+	LLMEnabled                 bool    `json:"llm_enabled"`
+	LLMActiveModel             string  `json:"llm_active_model"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -60,6 +62,8 @@ func loadConfig() Config {
 		ActiveModel:                "ggml-tiny.en.bin",
 		ProcessingEngine:           "cpu",
 		SelectedGPU:                "Default",
+		LLMEnabled:                 false,
+		LLMActiveModel:             "Qwen3-0.6B-UD-Q4_K_XL.gguf",
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
@@ -116,6 +120,9 @@ func loadConfig() Config {
 	}
 	if cfg.SelectedGPU == "" {
 		cfg.SelectedGPU = "Default"
+	}
+	if cfg.LLMActiveModel == "" {
+		cfg.LLMActiveModel = "Qwen3-0.6B-UD-Q4_K_XL.gguf"
 	}
 	if cfg.WindowWidth < 860 {
 		cfg.WindowWidth = 1100

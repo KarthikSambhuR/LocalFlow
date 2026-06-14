@@ -165,6 +165,19 @@ settingsModal.innerHTML = `
         </div>
       </div>
       <div class="setting-group">
+        <label>LLM Refinement (llama.cpp)</label>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Enable Refinement</span>
+            <span class="setting-desc">Improve grammar and formatting using a local LLM server</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="llmEnabledToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+      <div class="setting-group">
         <label>Startup</label>
         <div class="setting-item">
           <div class="setting-info">
@@ -360,7 +373,7 @@ function showModule() {
 function hideModule() {
   isActive = false;
   isProcessing = false;
-  moduleNode.classList.remove('active', 'processing');
+  moduleNode.classList.remove('active', 'processing', 'refining');
   resetBars();
   setTimeout(() => { if (!isActive && rafId) { cancelAnimationFrame(rafId); rafId = null; } }, 600);
 }
@@ -368,8 +381,15 @@ function hideModule() {
 function showProcessing() {
   isProcessing = true;
   resetBars();
-  moduleNode.classList.remove('active');
+  moduleNode.classList.remove('active', 'refining');
   moduleNode.classList.add('processing');
+}
+
+function showRefining() {
+  isProcessing = true;
+  resetBars();
+  moduleNode.classList.remove('active');
+  moduleNode.classList.add('processing', 'refining');
 }
 
 function setVolume(vol) {
@@ -582,21 +602,42 @@ function renderHome(records, stats) {
     row.className = 'history-card';
     const date = new Date(r.timestamp);
     const words = r.word_count || countWords(r.transcription);
-    
-    let displayText = escapeHtml(r.transcription);
+
+    const finalText = r.transcription     || '';
+    const rawText   = r.raw_transcription || '';
+    // Show toggle only when LLM was used and actually changed the text
+    const hasRefined = finalText && rawText && rawText !== finalText;
+    let showingRefined = true;
+
+    let displayText = escapeHtml(finalText);
     if (!displayText) {
-      if (r.word_count > 0) {
-        displayText = '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>';
-      } else {
-        displayText = '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
-      }
+      displayText = r.word_count > 0
+        ? '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>'
+        : '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
     }
+
+    const toggleHtml = hasRefined ? `
+      <div class="view-toggle">
+        <div class="toggle-pill">
+          <div class="toggle-slider"></div>
+          <button type="button" class="toggle-opt toggle-opt-raw" data-view="raw">
+            <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>
+            Whisper
+          </button>
+          <button type="button" class="toggle-opt toggle-opt-refined active" data-view="refined">
+            <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            Refined
+          </button>
+        </div>
+      </div>
+    ` : '';
 
     row.innerHTML = `
       <div class="card-top">
         <span class="card-meta">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         <span class="badge ghost">${words} words</span>
         ${r.transcription && r.transcription_time_us > 0 ? `<span class="badge ghost" style="opacity: 0.6;">${formatDurationUs(r.transcription_time_us)}</span>` : ''}
+        ${toggleHtml}
       </div>
       <div class="card-center">
         <div class="card-transcript">${displayText}</div>
@@ -606,6 +647,38 @@ function renderHome(records, stats) {
         <div class="copy-btn-small" style="${!r.transcription ? 'opacity: 0.3; pointer-events: none;' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
       </div>
     `;
+
+    if (hasRefined) {
+      const optRaw    = row.querySelector('.toggle-opt-raw');
+      const optRef    = row.querySelector('.toggle-opt-refined');
+      const slider    = row.querySelector('.toggle-slider');
+      const transcript = row.querySelector('.card-transcript');
+
+      function updateView() {
+        const text = showingRefined ? escapeHtml(finalText) : escapeHtml(rawText);
+        transcript.innerHTML = text;
+        transcript.classList.toggle('view-raw', !showingRefined);
+        optRef.classList.toggle('active', showingRefined);
+        optRaw.classList.toggle('active', !showingRefined);
+        slider.style.transform = showingRefined
+          ? `translateX(${optRaw.offsetWidth}px)`
+          : 'translateX(0px)';
+        slider.style.width = showingRefined
+          ? `${optRef.offsetWidth}px`
+          : `${optRaw.offsetWidth}px`;
+      }
+
+      // Init slider without animation on first paint
+      requestAnimationFrame(() => {
+        slider.style.transition = 'none';
+        slider.style.transform = `translateX(${optRaw.offsetWidth}px)`;
+        slider.style.width = `${optRef.offsetWidth}px`;
+        requestAnimationFrame(() => { slider.style.transition = ''; });
+      });
+
+      optRaw.addEventListener('click', e => { e.stopPropagation(); showingRefined = false; updateView(); });
+      optRef.addEventListener('click', e => { e.stopPropagation(); showingRefined = true;  updateView(); });
+    }
 
     const playBtn = row.querySelector('.play-btn');
     playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
@@ -873,6 +946,7 @@ function setupWails() {
   window.runtime.EventsOn('recording-state', (state) => {
     settingsOverlay.classList.remove('active');
     if (state === 'listening' || state === true) showModule();
+    else if (state === 'refining') showRefining();
     else showProcessing();
   });
   window.runtime.EventsOn('recording-done', hideModule);
@@ -1087,6 +1161,26 @@ async function setupAmp() {
   if (toggle) {
     toggle.addEventListener('change', persist);
   }
+}
+
+async function setupLLM() {
+  const toggle = document.getElementById('llmEnabledToggle');
+  if (!toggle) return;
+
+  // Load current values from shared config file
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  if (cfg) {
+    toggle.checked = cfg.llm_enabled || false;
+  }
+
+  toggle.addEventListener('change', () => {
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetLLMEnabled(toggle.checked);
+    }
+  });
 }
 
 async function setupProcessingEngine() {
@@ -1514,120 +1608,131 @@ async function setupDataFolderSettings() {
 async function setupModelsSettings() {
   const modelList = document.getElementById('modelList');
   if (!modelList) return;
-  let modelsExpanded = false;
+  let whisperExpanded = false;
+  let llmExpanded = false;
 
   const renderModels = async () => {
     if (!window.go?.main?.SettingsApp) return;
     try {
-      const models = await window.go.main.SettingsApp.GetModelsList();
+      const allModels = await window.go.main.SettingsApp.GetModelsList() || [];
       modelList.innerHTML = '';
       modelList.className = 'model-list model-list-expanded';
 
-      const activeModel = models.find(m => m.is_active) || models[0];
-      const downloadedCount = models.filter(m => m.is_downloaded).length;
-      const panel = document.createElement('div');
-      panel.className = `models-panel ${modelsExpanded ? 'open' : ''}`;
-      panel.innerHTML = `
-        <button class="models-panel-header" type="button" aria-expanded="${modelsExpanded}">
-          <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${modelsExpanded ? '90deg' : '0deg'});"><polyline points="9 18 15 12 9 6"/></svg>
-          <span class="models-panel-title">Speech Recognition Models</span>
-          <span class="models-panel-meta">${activeModel ? activeModel.name : 'No model selected'} / ${downloadedCount}/${models.length} downloaded</span>
-        </button>
-        <div class="models-panel-body">
-          ${models.map(m => {
-            const statusText = m.is_active ? 'Active' : m.is_downloaded ? 'Downloaded' : 'Available';
-            const statusClass = m.is_active ? 'active' : m.is_downloaded ? 'downloaded' : 'available';
-            let actionHtml = '';
-            if (m.is_downloading) {
-              actionHtml = `
-                <div class="model-progress-container">
-                  <div class="model-progress-bar-bg">
-                    <div class="model-progress-bar-fill" id="bar-${m.id}" style="width: ${m.download_progress}%"></div>
+      const renderPanel = (type, title, isExpanded, setExpanded) => {
+        const models = allModels.filter(m => m.model_type === type || (type === 'whisper' && !m.model_type));
+        const activeModel = models.find(m => m.is_active);
+        const downloadedModels = models.filter(m => m.is_downloaded);
+        const downloadedCount = downloadedModels.length;
+
+        const panel = document.createElement('div');
+        panel.className = `models-panel ${isExpanded ? 'open' : ''}`;
+        panel.style.marginBottom = '20px';
+        panel.innerHTML = `
+          <button class="models-panel-header" type="button" aria-expanded="${isExpanded}">
+            <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${isExpanded ? '90deg' : '0deg'});"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="models-panel-title">${title}</span>
+            <span class="models-panel-meta">${activeModel ? activeModel.name : 'No model active'} / ${downloadedCount}/${models.length} downloaded</span>
+          </button>
+          <div class="models-panel-body">
+            ${models.map(m => {
+              const statusText = m.is_active ? 'Active' : m.is_downloaded ? 'Downloaded' : 'Available';
+              const statusClass = m.is_active ? 'active' : m.is_downloaded ? 'downloaded' : 'available';
+              let actionHtml = '';
+              if (m.is_downloading) {
+                actionHtml = `
+                  <div class="model-progress-container">
+                    <div class="model-progress-bar-bg">
+                      <div class="model-progress-bar-fill" id="bar-${m.id}" style="width: ${m.download_progress}%"></div>
+                    </div>
+                    <div class="model-progress-text" id="text-${m.id}">Downloading... ${m.download_progress}%</div>
                   </div>
-                  <div class="model-progress-text" id="text-${m.id}">Downloading... ${m.download_progress}%</div>
+                `;
+              } else if (m.is_downloaded) {
+                actionHtml = `
+                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" data-filename="${m.filename}">Activate</button>`}
+                  ${downloadedCount > 1 ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
+                `;
+              } else {
+                actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${m.id}">Download</button>`;
+              }
+
+              return `
+                <div class="model-row">
+                  <div class="model-row-main">
+                    <div class="model-name-line">
+                      <span class="model-name">${m.name}</span>
+                      <span class="model-status-pill ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="model-desc">${m.description}</div>
+                    <div class="model-row-specs">
+                      <span>${m.size_mb} MB</span>
+                      <span>${m.speed_label}</span>
+                      <span>${m.speed_description}</span>
+                    </div>
+                    <div class="model-filename">${m.filename}</div>
+                  </div>
+                  <div class="model-row-actions">
+                    ${actionHtml}
+                  </div>
                 </div>
               `;
-            } else if (m.is_downloaded) {
-              actionHtml = `
-                ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" data-filename="${m.filename}">Activate</button>`}
-                ${downloadedCount > 1 ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
-              `;
-            } else {
-              actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${m.id}">Download</button>`;
-            }
+            }).join('')}
+          </div>
+        `;
 
-            return `
-              <div class="model-row">
-                <div class="model-row-main">
-                  <div class="model-name-line">
-                    <span class="model-name">${m.name}</span>
-                    <span class="model-status-pill ${statusClass}">${statusText}</span>
-                  </div>
-                  <div class="model-desc">${m.description}</div>
-                  <div class="model-row-specs">
-                    <span>${m.size_mb} MB</span>
-                    <span>${m.speed_label}</span>
-                    <span>${m.speed_description}</span>
-                  </div>
-                  <div class="model-filename">${m.filename}</div>
-                </div>
-                <div class="model-row-actions">
-                  ${actionHtml}
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
-
-      const header = panel.querySelector('.models-panel-header');
-      header.onclick = () => {
-        modelsExpanded = !modelsExpanded;
-        renderModels();
-      };
-
-      panel.querySelectorAll('.download-btn').forEach((downloadBtn) => {
-        downloadBtn.onclick = async (event) => {
-          event.stopPropagation();
-          downloadBtn.disabled = true;
-          downloadBtn.textContent = 'Starting...';
-          await window.go.main.SettingsApp.DownloadModel(downloadBtn.dataset.id);
+        const header = panel.querySelector('.models-panel-header');
+        header.onclick = () => {
+          setExpanded(!isExpanded);
           renderModels();
         };
-      });
 
-      panel.querySelectorAll('.activate-btn').forEach((activateBtn) => {
-        activateBtn.onclick = async (event) => {
-          event.stopPropagation();
-          activateBtn.disabled = true;
-          activateBtn.textContent = 'Activating...';
-          try {
-            await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.filename);
-          } catch (err) {
-            alert(err);
-          }
-          renderModels();
-        };
-      });
+        panel.querySelectorAll('.download-btn').forEach((downloadBtn) => {
+          downloadBtn.onclick = async (event) => {
+            event.stopPropagation();
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Starting...';
+            await window.go.main.SettingsApp.DownloadModel(downloadBtn.dataset.id);
+            renderModels();
+          };
+        });
 
-      panel.querySelectorAll('.delete-btn').forEach((deleteBtn) => {
-        deleteBtn.onclick = async (event) => {
-          event.stopPropagation();
-          const model = models.find(m => m.filename === deleteBtn.dataset.filename);
-          if (confirm(`Are you sure you want to delete ${model?.name || 'this model'}?`)) {
-            deleteBtn.disabled = true;
-            deleteBtn.textContent = 'Deleting...';
+        panel.querySelectorAll('.activate-btn').forEach((activateBtn) => {
+          activateBtn.onclick = async (event) => {
+            event.stopPropagation();
+            activateBtn.disabled = true;
+            activateBtn.textContent = 'Activating...';
             try {
-              await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
+              await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.filename);
             } catch (err) {
               alert(err);
             }
             renderModels();
-          }
-        };
-      });
+          };
+        });
 
-      modelList.appendChild(panel);
+        panel.querySelectorAll('.delete-btn').forEach((deleteBtn) => {
+          deleteBtn.onclick = async (event) => {
+            event.stopPropagation();
+            const model = models.find(m => m.filename === deleteBtn.dataset.filename);
+            if (confirm(`Are you sure you want to delete ${model?.name || 'this model'}?`)) {
+              deleteBtn.disabled = true;
+              deleteBtn.textContent = 'Deleting...';
+              try {
+                await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
+              } catch (err) {
+                alert(err);
+              }
+              renderModels();
+            }
+          };
+        });
+
+        modelList.appendChild(panel);
+      };
+
+      renderPanel('whisper', 'Speech Recognition Models', whisperExpanded, (val) => whisperExpanded = val);
+      renderPanel('llm', 'Grammar & Formatting Models', llmExpanded, (val) => llmExpanded = val);
+
     } catch (err) {
       console.error(err);
     }
@@ -1843,6 +1948,7 @@ async function init() {
       const route = await window.go.main.SettingsApp.GetInitialRoute();
       switchSection(route || 'home');
       setupAmp(); // load config values into the settings UI
+      setupLLM();
       setupProcessingEngine();
       setupGPUSelector();
       setupKeybinds();

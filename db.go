@@ -114,9 +114,10 @@ func initDB() error {
 		return err
 	}
 
-	// Schema migration: add word_count column if it does not exist
+	// Schema migration: add columns if they do not exist
 	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN word_count INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN transcription_time_us INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN raw_transcription TEXT;`)
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS analytics (
@@ -203,15 +204,16 @@ func migrateLegacyWordCounts() {
 }
 
 // saveRecording inserts a completed recording into the database.
-func saveRecording(filename string, timestamp time.Time, durationMs int64, transcription string, transcriptionTimeUs int64) {
+// rawTranscription is the unmodified Whisper output; transcription is the final (possibly LLM-refined) text.
+func saveRecording(filename string, timestamp time.Time, durationMs int64, rawTranscription string, transcription string, transcriptionTimeUs int64) {
 	if db == nil {
 		return
 	}
 	wc := len(strings.Fields(transcription))
 	tsStr := timestamp.UTC().Format(time.RFC3339)
 	db.Exec(
-		`INSERT INTO recordings (filename, timestamp, duration_ms, transcription, word_count, transcription_time_us) VALUES (?, ?, ?, ?, ?, ?)`,
-		filename, tsStr, durationMs, transcription, wc, transcriptionTimeUs,
+		`INSERT INTO recordings (filename, timestamp, duration_ms, transcription, raw_transcription, word_count, transcription_time_us) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		filename, tsStr, durationMs, transcription, rawTranscription, wc, transcriptionTimeUs,
 	)
 	db.Exec(
 		`INSERT INTO analytics (timestamp, duration_ms, word_count) VALUES (?, ?, ?)`,
@@ -226,6 +228,7 @@ type Recording struct {
 	Timestamp         string `json:"timestamp"`
 	DurationMs        int64  `json:"duration_ms"`
 	Transcription     string `json:"transcription"`
+	RawTranscription  string `json:"raw_transcription"`
 	WordCount         int    `json:"word_count"`
 	TranscriptionTime int64  `json:"transcription_time_us"`
 }
@@ -235,7 +238,7 @@ func GetRecordings() ([]Recording, error) {
 	if db == nil {
 		return nil, nil
 	}
-	rows, err := db.Query(`SELECT id, filename, timestamp, duration_ms, transcription, word_count, transcription_time_us FROM recordings ORDER BY timestamp DESC`)
+	rows, err := db.Query(`SELECT id, filename, timestamp, duration_ms, transcription, COALESCE(raw_transcription, '') as raw_transcription, word_count, transcription_time_us FROM recordings ORDER BY timestamp DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +247,7 @@ func GetRecordings() ([]Recording, error) {
 	var out []Recording
 	for rows.Next() {
 		var r Recording
-		if err := rows.Scan(&r.ID, &r.Filename, &r.Timestamp, &r.DurationMs, &r.Transcription, &r.WordCount, &r.TranscriptionTime); err != nil {
+		if err := rows.Scan(&r.ID, &r.Filename, &r.Timestamp, &r.DurationMs, &r.Transcription, &r.RawTranscription, &r.WordCount, &r.TranscriptionTime); err != nil {
 			continue
 		}
 		// If word count is 0 but we have transcription text, calculate it on the fly
