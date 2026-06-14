@@ -194,10 +194,16 @@ settingsModal.innerHTML = `
             <span class="setting-title">Theme</span>
             <span class="setting-desc">Toggle interface appearance</span>
           </div>
-          <select id="themeSelect" class="brutal-select">
-            <option value="light">Light Mode</option>
-            <option value="dark">Dark Mode</option>
-          </select>
+          <div class="custom-dropdown" id="themeDropdown">
+            <button class="dropdown-trigger">
+              <span id="themeLabel">Dark Mode</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu">
+              <div class="dropdown-item" data-value="light">Light Mode</div>
+              <div class="dropdown-item" data-value="dark">Dark Mode</div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="setting-group">
@@ -861,19 +867,49 @@ function setupWails() {
 }
 
 function setupTheme() {
-  const select = document.getElementById('themeSelect');
-  if (!select) return;
+  const dropdown = document.getElementById('themeDropdown');
+  const label = document.getElementById('themeLabel');
+  const items = dropdown?.querySelectorAll('.dropdown-item');
+  if (!dropdown || !label || !items) return;
+
+  const trigger = dropdown.querySelector('.dropdown-trigger');
 
   // Load saved theme
   const savedTheme = localStorage.getItem('localflow_theme') || 'dark';
   document.documentElement.setAttribute('data-theme', savedTheme);
-  select.value = savedTheme;
+  
+  // Set initial UI state
+  label.textContent = savedTheme === 'light' ? 'Light Mode' : 'Dark Mode';
+  items.forEach(item => {
+    item.classList.toggle('active', item.getAttribute('data-value') === savedTheme);
+  });
 
-  // Handle changes
-  select.addEventListener('change', (e) => {
-    const val = e.target.value;
-    localStorage.setItem('localflow_theme', val);
-    document.documentElement.setAttribute('data-theme', val);
+  // Toggle dropdown menu
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+    // Close other dropdowns
+    document.querySelectorAll('.custom-dropdown').forEach(d => {
+      if (d !== dropdown) d.classList.remove('open');
+    });
+  });
+
+  // Handle item click
+  items.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = item.getAttribute('data-value');
+      localStorage.setItem('localflow_theme', val);
+      document.documentElement.setAttribute('data-theme', val);
+      label.textContent = val === 'light' ? 'Light Mode' : 'Dark Mode';
+      items.forEach(i => i.classList.toggle('active', i === item));
+      dropdown.classList.remove('open');
+    });
+  });
+
+  // Close dropdown on click outside
+  document.addEventListener('click', () => {
+    dropdown.classList.remove('open');
   });
 }
 

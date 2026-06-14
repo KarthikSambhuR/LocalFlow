@@ -1,0 +1,125 @@
+export namespace main {
+	
+	export class Analytics {
+	    timestamp: string;
+	    duration_ms: number;
+	    word_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Analytics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.duration_ms = source["duration_ms"];
+	        this.word_count = source["word_count"];
+	    }
+	}
+	export class Config {
+	    input_boost_enabled: boolean;
+	    input_boost_gain: number;
+	    keybind1_rawcode: number;
+	    keybind2_rawcode: number;
+	    keybind1_name: string;
+	    keybind2_name: string;
+	    start_on_startup: boolean;
+	    start_minimized: boolean;
+	    keybind_capture_active: boolean;
+	    audio_retention_days: number;
+	    transcription_retention_days: number;
+	    active_microphone: string;
+	    data_folder: string;
+	    active_model: string;
+	    processing_engine: string;
+	    selected_gpu: string;
+	    window_width: number;
+	    window_height: number;
+	    window_maximized: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Config(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.input_boost_enabled = source["input_boost_enabled"];
+	        this.input_boost_gain = source["input_boost_gain"];
+	        this.keybind1_rawcode = source["keybind1_rawcode"];
+	        this.keybind2_rawcode = source["keybind2_rawcode"];
+	        this.keybind1_name = source["keybind1_name"];
+	        this.keybind2_name = source["keybind2_name"];
+	        this.start_on_startup = source["start_on_startup"];
+	        this.start_minimized = source["start_minimized"];
+	        this.keybind_capture_active = source["keybind_capture_active"];
+	        this.audio_retention_days = source["audio_retention_days"];
+	        this.transcription_retention_days = source["transcription_retention_days"];
+	        this.active_microphone = source["active_microphone"];
+	        this.data_folder = source["data_folder"];
+	        this.active_model = source["active_model"];
+	        this.processing_engine = source["processing_engine"];
+	        this.selected_gpu = source["selected_gpu"];
+	        this.window_width = source["window_width"];
+	        this.window_height = source["window_height"];
+	        this.window_maximized = source["window_maximized"];
+	    }
+	}
+	export class ModelStatus {
+	    id: string;
+	    name: string;
+	    filename: string;
+	    size_mb: number;
+	    speed_label: string;
+	    speed_description: string;
+	    description: string;
+	    is_downloaded: boolean;
+	    is_active: boolean;
+	    is_downloading: boolean;
+	    download_progress: number;
+	    language: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.filename = source["filename"];
+	        this.size_mb = source["size_mb"];
+	        this.speed_label = source["speed_label"];
+	        this.speed_description = source["speed_description"];
+	        this.description = source["description"];
+	        this.is_downloaded = source["is_downloaded"];
+	        this.is_active = source["is_active"];
+	        this.is_downloading = source["is_downloading"];
+	        this.download_progress = source["download_progress"];
+	        this.language = source["language"];
+	    }
+	}
+	export class Recording {
+	    id: number;
+	    filename: string;
+	    timestamp: string;
+	    duration_ms: number;
+	    transcription: string;
+	    word_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Recording(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.filename = source["filename"];
+	        this.timestamp = source["timestamp"];
+	        this.duration_ms = source["duration_ms"];
+	        this.transcription = source["transcription"];
+	        this.word_count = source["word_count"];
+	    }
+	}
+
+}
+
