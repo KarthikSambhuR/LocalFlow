@@ -1,4 +1,5 @@
 //go:build windows
+
 package main
 
 import (
@@ -20,8 +21,8 @@ func setAutoStart(enabled bool) error {
 		if err != nil {
 			return err
 		}
-		// Wrap in quotes to handle paths with spaces
-		return k.SetStringValue("LocalFlow", fmt.Sprintf(`"%s"`, exePath))
+		// Wrap in quotes to handle paths with spaces.
+		return k.SetStringValue("LocalFlow", fmt.Sprintf(`"%s" --startup`, exePath))
 	} else {
 		// Ignore error if it doesn't exist (e.g., trying to delete when not set)
 		_ = k.DeleteValue("LocalFlow")

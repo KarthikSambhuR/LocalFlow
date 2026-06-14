@@ -64,6 +64,7 @@ type App struct {
 	whisperCtx       *C.struct_whisper_context
 	audioBuffer      []float32
 	mutex            sync.Mutex
+	whisperMutex     sync.Mutex
 	keyStateMutex    sync.RWMutex
 	shortcutKeysDown bool
 	isMicReady       bool
@@ -107,6 +108,7 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) listenToKeyboard() {
 	var (
 		isRecording          = false
+		isProcessing         = false
 		lCtrlPressed         = false
 		lWinPressed          = false
 		acceptingUntil       time.Time
@@ -251,8 +253,9 @@ func (a *App) listenToKeyboard() {
 
 			a.mutex.Lock()
 			recordingNow := isRecording
+			processingNow := isProcessing
 			a.mutex.Unlock()
-			if !recordingNow {
+			if !recordingNow && !processingNow {
 				a.ensureActiveModel()
 			}
 
@@ -315,7 +318,12 @@ func (a *App) listenToKeyboard() {
 			a.setShortcutKeysDown(lCtrlPressed || lWinPressed)
 			shouldBeRecording := lCtrlPressed && lWinPressed
 
-			if shouldBeRecording && !isRecording {
+			a.mutex.Lock()
+			recordingNow := isRecording
+			processingNow := isProcessing
+			a.mutex.Unlock()
+
+			if shouldBeRecording && !recordingNow && !processingNow {
 				a.mutex.Lock()
 				isRecording = true
 				a.isMicReady = false
@@ -334,9 +342,10 @@ func (a *App) listenToKeyboard() {
 					}
 				}
 
-			} else if !shouldBeRecording && isRecording {
+			} else if !shouldBeRecording && recordingNow {
 				a.mutex.Lock()
 				isRecording = false
+				isProcessing = true
 				acceptingUntil = time.Now().Add(400 * time.Millisecond)
 				a.mutex.Unlock()
 
@@ -345,6 +354,12 @@ func (a *App) listenToKeyboard() {
 
 				// Keep accepting samples briefly after key release to capture trailing speech.
 				go func() {
+					defer func() {
+						a.mutex.Lock()
+						isProcessing = false
+						a.mutex.Unlock()
+					}()
+
 					time.Sleep(400 * time.Millisecond)
 
 					if device != nil {
@@ -680,8 +695,8 @@ func (a *App) getModelsDir() string {
 }
 
 func (a *App) ensureActiveModel() {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
+	a.whisperMutex.Lock()
+	defer a.whisperMutex.Unlock()
 
 	cfg := loadConfig()
 	activeModel := cfg.ActiveModel
@@ -829,6 +844,7 @@ func (a *App) transcribe() {
 	result := ""
 	whisperFailed := false
 
+	a.whisperMutex.Lock()
 	if a.whisperCtx == nil {
 		fmt.Println("Whisper context is nil; transcription skipped")
 		whisperFailed = true
@@ -839,7 +855,6 @@ func (a *App) transcribe() {
 		modelLang := "en"
 
 		langC := C.CString(modelLang)
-		defer C.free(unsafe.Pointer(langC))
 		wParams.language = langC
 
 		if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {
@@ -851,7 +866,9 @@ func (a *App) transcribe() {
 				result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
 			}
 		}
+		C.free(unsafe.Pointer(langC))
 	}
+	a.whisperMutex.Unlock()
 
 	result = strings.TrimSpace(result)
 	isBlank := result == "" ||

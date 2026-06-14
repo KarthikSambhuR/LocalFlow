@@ -176,6 +176,16 @@ settingsModal.innerHTML = `
             <span class="toggle-track"></span>
           </label>
         </div>
+        <div class="setting-item" id="startMinimizedItem">
+          <div class="setting-info">
+            <span class="setting-title">Start minimized</span>
+            <span class="setting-desc">Launch in the tray instead of opening Home</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="startMinimizedToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
       </div>
       <div class="setting-group">
         <label>Appearance</label>
@@ -1206,19 +1216,38 @@ async function setupKeybinds() {
 }
 
 async function setupStartupSettings() {
-  const toggle = document.getElementById('startupToggle');
-  if (!toggle) return;
+  const startupToggle = document.getElementById('startupToggle');
+  const minimizedToggle = document.getElementById('startMinimizedToggle');
+  if (!startupToggle || !minimizedToggle) return;
 
   const cfg = window.go?.main?.SettingsApp
     ? await window.go.main.SettingsApp.GetConfig()
     : null;
 
-  const initEnabled = cfg ? cfg.start_on_startup : false;
-  toggle.checked = initEnabled;
+  startupToggle.checked = cfg ? cfg.start_on_startup : false;
+  minimizedToggle.checked = cfg ? cfg.start_minimized : false;
 
-  toggle.addEventListener('change', () => {
-    if (window.go?.main?.SettingsApp) {
-      window.go.main.SettingsApp.SetStartOnStartup(toggle.checked);
+  startupToggle.addEventListener('change', async () => {
+    const nextValue = startupToggle.checked;
+    if (!window.go?.main?.SettingsApp) return;
+    try {
+      await window.go.main.SettingsApp.SetStartOnStartup(nextValue);
+    } catch (err) {
+      startupToggle.checked = !nextValue;
+      console.error('Failed to update startup setting', err);
+      alert('Could not update the Windows startup setting. Please try again.');
+    }
+  });
+
+  minimizedToggle.addEventListener('change', async () => {
+    const nextValue = minimizedToggle.checked;
+    if (!window.go?.main?.SettingsApp) return;
+    try {
+      await window.go.main.SettingsApp.SetStartMinimized(nextValue);
+    } catch (err) {
+      minimizedToggle.checked = !nextValue;
+      console.error('Failed to update start minimized setting', err);
+      alert('Could not update the start minimized setting. Please try again.');
     }
   });
 }

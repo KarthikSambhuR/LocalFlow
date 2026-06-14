@@ -29,6 +29,7 @@ type Config struct {
 	Keybind1Name               string  `json:"keybind1_name"`
 	Keybind2Name               string  `json:"keybind2_name"`
 	StartOnStartup             bool    `json:"start_on_startup"`
+	StartMinimized             bool    `json:"start_minimized"`
 	KeybindCaptureActive       bool    `json:"keybind_capture_active"`
 	AudioRetentionDays         int     `json:"audio_retention_days"`
 	TranscriptionRetentionDays int     `json:"transcription_retention_days"`

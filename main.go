@@ -5,6 +5,7 @@ import (
 	"embed"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -45,6 +46,9 @@ func main() {
 			runSettingsWindow("home")
 			return
 		}
+		if arg == "--startup" {
+			continue
+		}
 		if strings.Contains(arg, "wails") || strings.HasPrefix(arg, "-") {
 			checkMutex = false
 		}
@@ -56,8 +60,17 @@ func main() {
 		return
 	}
 
-	// Default: run as the invisible pill overlay
+	cfg := loadConfig()
+	if !cfg.StartMinimized {
+		startDetachedHomeWindow()
+	}
 	runPillOverlay(checkMutex)
+}
+
+func startDetachedHomeWindow() {
+	if err := exec.Command(os.Args[0], "--home").Start(); err != nil {
+		println("Failed to open LocalFlow home on startup:", err.Error())
+	}
 }
 
 // runPillOverlay is the main transparent fullscreen ghost window for dictation.
@@ -192,4 +205,3 @@ func runSettingsWindow(route string) {
 		println("Settings Error:", err.Error())
 	}
 }
-

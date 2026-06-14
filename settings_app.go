@@ -150,11 +150,19 @@ func (s *SettingsApp) SetKeybindCaptureActive(active bool) {
 	saveConfig(cfg)
 }
 
-func (s *SettingsApp) SetStartOnStartup(enabled bool) {
+func (s *SettingsApp) SetStartOnStartup(enabled bool) error {
 	cfg := loadConfig()
+	if err := setAutoStart(enabled); err != nil {
+		return err
+	}
 	cfg.StartOnStartup = enabled
-	saveConfig(cfg)
-	setAutoStart(enabled)
+	return saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetStartMinimized(enabled bool) error {
+	cfg := loadConfig()
+	cfg.StartMinimized = enabled
+	return saveConfig(cfg)
 }
 
 func (s *SettingsApp) GetPlatform() string {
