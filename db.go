@@ -140,6 +140,16 @@ func initDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS dictionary (
+			id   INTEGER PRIMARY KEY AUTOINCREMENT,
+			word TEXT UNIQUE NOT NULL
+		);
+	`)
+	if err != nil {
+		return err
+	}
+
 	// Perform background migration for legacy records that have empty/0 word_count but non-empty transcription
 	go migrateLegacyWordCounts()
 
@@ -324,4 +334,44 @@ func SetProfileValue(key string, val string) error {
 	}
 	_, err := db.Exec("INSERT INTO profile (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, val)
 	return err
+}
+
+func AddDictionaryWord(word string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return nil
+	}
+	_, err := db.Exec("INSERT INTO dictionary (word) VALUES (?) ON CONFLICT(word) DO NOTHING", word)
+	return err
+}
+
+func DeleteDictionaryWord(word string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	_, err := db.Exec("DELETE FROM dictionary WHERE word = ?", word)
+	return err
+}
+
+func GetDictionaryWords() ([]string, error) {
+	if db == nil {
+		return nil, nil
+	}
+	rows, err := db.Query("SELECT word FROM dictionary ORDER BY id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var w string
+		if err := rows.Scan(&w); err == nil {
+			out = append(out, w)
+		}
+	}
+	return out, nil
 }

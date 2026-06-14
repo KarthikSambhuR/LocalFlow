@@ -117,7 +117,7 @@ func (s *SettingsApp) SetInputBoost(enabled bool, gain float32) {
 
 func (s *SettingsApp) SetProcessingEngine(engine string) {
 	cfg := loadConfig()
-	if engine != "vulkan" {
+	if engine != "vulkan" && engine != "cuda" {
 		engine = "cpu"
 	}
 	cfg.ProcessingEngine = engine
@@ -763,4 +763,20 @@ func downloadFileDirect(url string, filepath string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func (s *SettingsApp) AddDictionaryWord(word string) error {
+	return AddDictionaryWord(word)
+}
+
+func (s *SettingsApp) DeleteDictionaryWord(word string) error {
+	return DeleteDictionaryWord(word)
+}
+
+func (s *SettingsApp) GetDictionaryWords() []string {
+	words, _ := GetDictionaryWords()
+	if words == nil {
+		return []string{}
+	}
+	return words
 }
