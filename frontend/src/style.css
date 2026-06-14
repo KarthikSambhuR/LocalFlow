@@ -1305,6 +1305,13 @@ kbd {
   .history-card {
     grid-template-columns: 1fr;
   }
+
+  .card-top {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 
 @media (max-width: 950px) {

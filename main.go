@@ -19,8 +19,11 @@ import (
 )
 
 var (
-	kernel32    = syscall.NewLazyDLL("kernel32.dll")
-	createMutex = kernel32.NewProc("CreateMutexW")
+	kernel32            = syscall.NewLazyDLL("kernel32.dll")
+	createMutex         = kernel32.NewProc("CreateMutexW")
+	findWindowEx        = user32.NewProc("FindWindowExW")
+	isWindowVisible     = user32.NewProc("IsWindowVisible")
+	setForegroundWindow = user32.NewProc("SetForegroundWindow")
 )
 
 //go:embed all:frontend/dist
@@ -115,6 +118,29 @@ func runPillOverlay(checkMutex bool) {
 
 // runSettingsWindow is a normal, framed, resizable desktop window for settings.
 func runSettingsWindow(route string) {
+	// Single instance check for settings/home window
+	mutexName, _ := syscall.UTF16PtrFromString("LocalFlowSettingsMutex")
+	_, _, mutexErr := createMutex.Call(0, 1, uintptr(unsafe.Pointer(mutexName)))
+	if mutexErr != nil && mutexErr.(syscall.Errno) == 183 { // ERROR_ALREADY_EXISTS
+		// Find already running Settings window and bring to foreground
+		title, _ := syscall.UTF16PtrFromString("LocalFlow")
+		var hwnd uintptr
+		for {
+			hwnd, _, _ = findWindowEx.Call(0, hwnd, 0, uintptr(unsafe.Pointer(title)))
+			if hwnd == 0 {
+				break
+			}
+			visible, _, _ := isWindowVisible.Call(hwnd)
+			if visible != 0 {
+				// SW_RESTORE = 9
+				procShowWindow.Call(hwnd, 9)
+				setForegroundWindow.Call(hwnd)
+				break
+			}
+		}
+		return
+	}
+
 	settingsApp := NewSettingsApp(route)
 
 	// Load saved window geometry so we can pass it as the initial size.
