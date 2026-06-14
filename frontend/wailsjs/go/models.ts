@@ -105,6 +105,7 @@ export namespace main {
 	    duration_ms: number;
 	    transcription: string;
 	    word_count: number;
+	    transcription_time_us: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Recording(source);
@@ -118,6 +119,7 @@ export namespace main {
 	        this.duration_ms = source["duration_ms"];
 	        this.transcription = source["transcription"];
 	        this.word_count = source["word_count"];
+	        this.transcription_time_us = source["transcription_time_us"];
 	    }
 	}
 

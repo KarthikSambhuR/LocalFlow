@@ -401,6 +401,17 @@ navItems.forEach(item => item.addEventListener('click', () => switchSection(item
 
 let audioPort = null; // kept for compat, unused
 
+function formatDurationUs(us) {
+  if (!us || us <= 0) return '';
+  if (us < 1000) {
+    return `${us} µs`;
+  } else if (us < 1000000) {
+    return `${(us / 1000).toFixed(1)} ms`;
+  } else {
+    return `${(us / 1000000).toFixed(2)} s`;
+  }
+}
+
 async function loadHistory() {
   const list = document.getElementById('historyList');
   if (!list) return;
@@ -420,6 +431,7 @@ async function loadHistory() {
       <div class="card-top">
         <span class="card-meta">${date.toLocaleDateString()} • ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         <span class="badge" style="font-size: 10px">${(r.duration_ms / 1000).toFixed(1)}s</span>
+        ${r.transcription && r.transcription_time_us > 0 ? `<span class="badge" style="font-size: 10px; opacity: 0.6; margin-top: 4px;">${formatDurationUs(r.transcription_time_us)}</span>` : ''}
       </div>
       <div class="card-center">
         <div class="card-transcript">${r.transcription || '<i>No speech detected</i>'}</div>
@@ -584,6 +596,7 @@ function renderHome(records, stats) {
       <div class="card-top">
         <span class="card-meta">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         <span class="badge ghost">${words} words</span>
+        ${r.transcription && r.transcription_time_us > 0 ? `<span class="badge ghost" style="opacity: 0.6; margin-top: 4px;">${formatDurationUs(r.transcription_time_us)}</span>` : ''}
       </div>
       <div class="card-center">
         <div class="card-transcript">${displayText}</div>

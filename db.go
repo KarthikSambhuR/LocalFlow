@@ -106,8 +106,8 @@ func initDB() error {
 			id            INTEGER PRIMARY KEY AUTOINCREMENT,
 			filename      TEXT    NOT NULL,
 			timestamp     DATETIME NOT NULL,
-			duration_ms   INTEGER,
-			transcription TEXT
+			transcription TEXT,
+			transcription_time_us INTEGER DEFAULT 0
 		);
 	`)
 	if err != nil {
@@ -116,6 +116,7 @@ func initDB() error {
 
 	// Schema migration: add word_count column if it does not exist
 	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN word_count INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN transcription_time_us INTEGER DEFAULT 0;`)
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS analytics (
@@ -192,15 +193,15 @@ func migrateLegacyWordCounts() {
 }
 
 // saveRecording inserts a completed recording into the database.
-func saveRecording(filename string, timestamp time.Time, durationMs int64, transcription string) {
+func saveRecording(filename string, timestamp time.Time, durationMs int64, transcription string, transcriptionTimeUs int64) {
 	if db == nil {
 		return
 	}
 	wc := len(strings.Fields(transcription))
 	tsStr := timestamp.UTC().Format(time.RFC3339)
 	db.Exec(
-		`INSERT INTO recordings (filename, timestamp, duration_ms, transcription, word_count) VALUES (?, ?, ?, ?, ?)`,
-		filename, tsStr, durationMs, transcription, wc,
+		`INSERT INTO recordings (filename, timestamp, duration_ms, transcription, word_count, transcription_time_us) VALUES (?, ?, ?, ?, ?, ?)`,
+		filename, tsStr, durationMs, transcription, wc, transcriptionTimeUs,
 	)
 	db.Exec(
 		`INSERT INTO analytics (timestamp, duration_ms, word_count) VALUES (?, ?, ?)`,
@@ -210,12 +211,13 @@ func saveRecording(filename string, timestamp time.Time, durationMs int64, trans
 
 // Recording represents a single transcript entry
 type Recording struct {
-	ID            int    `json:"id"`
-	Filename      string `json:"filename"`
-	Timestamp     string `json:"timestamp"`
-	DurationMs    int64  `json:"duration_ms"`
-	Transcription string `json:"transcription"`
-	WordCount     int    `json:"word_count"`
+	ID                int    `json:"id"`
+	Filename          string `json:"filename"`
+	Timestamp         string `json:"timestamp"`
+	DurationMs        int64  `json:"duration_ms"`
+	Transcription     string `json:"transcription"`
+	WordCount         int    `json:"word_count"`
+	TranscriptionTime int64  `json:"transcription_time_us"`
 }
 
 // GetRecordings fetches all recordings from the database, sorted by latest first.
@@ -223,7 +225,7 @@ func GetRecordings() ([]Recording, error) {
 	if db == nil {
 		return nil, nil
 	}
-	rows, err := db.Query(`SELECT id, filename, timestamp, duration_ms, transcription, word_count FROM recordings ORDER BY timestamp DESC`)
+	rows, err := db.Query(`SELECT id, filename, timestamp, duration_ms, transcription, word_count, transcription_time_us FROM recordings ORDER BY timestamp DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +234,7 @@ func GetRecordings() ([]Recording, error) {
 	var out []Recording
 	for rows.Next() {
 		var r Recording
-		if err := rows.Scan(&r.ID, &r.Filename, &r.Timestamp, &r.DurationMs, &r.Transcription, &r.WordCount); err != nil {
+		if err := rows.Scan(&r.ID, &r.Filename, &r.Timestamp, &r.DurationMs, &r.Transcription, &r.WordCount, &r.TranscriptionTime); err != nil {
 			continue
 		}
 		// If word count is 0 but we have transcription text, calculate it on the fly

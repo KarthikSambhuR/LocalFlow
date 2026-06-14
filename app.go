@@ -652,7 +652,7 @@ func (a *App) transcribeOld() {
 		// Save WAV + log to DB (both happen concurrently, non-blocking)
 		go func(buf []float32, ts time.Time, durMs int64, text string) {
 			filename, _ := saveAudioToCache(buf)
-			saveRecording(filename, ts, durMs, text)
+			saveRecording(filename, ts, durMs, text, 0)
 		}(cacheCopy, recordedAt, durationMs, result)
 
 		if !isBlank {
@@ -844,6 +844,7 @@ func (a *App) transcribe() {
 	result := ""
 	whisperFailed := false
 
+	transcribeStart := time.Now()
 	a.whisperMutex.Lock()
 	if a.whisperCtx == nil {
 		fmt.Println("Whisper context is nil; transcription skipped")
@@ -869,6 +870,7 @@ func (a *App) transcribe() {
 		C.free(unsafe.Pointer(langC))
 	}
 	a.whisperMutex.Unlock()
+	transcribeTimeUs := time.Since(transcribeStart).Microseconds()
 
 	result = strings.TrimSpace(result)
 	isBlank := result == "" ||
@@ -881,14 +883,14 @@ func (a *App) transcribe() {
 		fmt.Println("Blank transcription; samples:", len(cacheCopy), "duration_ms:", durationMs, "whisper_failed:", whisperFailed)
 	}
 
-	go func(buf []float32, ts time.Time, durMs int64, text string) {
+	go func(buf []float32, ts time.Time, durMs int64, text string, transTimeUs int64) {
 		filename, err := saveAudioToCache(buf)
 		if err != nil {
 			fmt.Println("Error saving audio cache:", err)
 			return
 		}
-		saveRecording(filename, ts, durMs, text)
-	}(cacheCopy, recordedAt, durationMs, result)
+		saveRecording(filename, ts, durMs, text, transTimeUs)
+	}(cacheCopy, recordedAt, durationMs, result, transcribeTimeUs)
 
 	if !isBlank && !whisperFailed {
 		if err := clipboard.WriteAll(result); err != nil {
