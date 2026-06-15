@@ -503,7 +503,7 @@ kbd,
   border-radius: 0;
   background: var(--bg-card);
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 180px;
+  grid-template-columns: 160px minmax(0, 1fr) 180px;
   gap: 24px;
   padding: 24px;
   align-items: center;

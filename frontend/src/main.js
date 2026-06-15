@@ -683,7 +683,20 @@ function renderHome(records, stats) {
     const playBtn = row.querySelector('.play-btn');
     playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
     if (r.transcription) {
-      row.querySelector('.copy-btn-small').onclick = () => window.runtime.ClipboardSetText(r.transcription);
+      row.querySelector('.copy-btn-small').onclick = (e) => {
+        const textToCopy = (hasRefined && !showingRefined) ? rawText : finalText;
+        window.runtime.ClipboardSetText(textToCopy);
+
+        // Add checkmark visual feedback
+        const btn = e.currentTarget;
+        const originalSVG = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+        btn.style.borderColor = 'var(--accent)';
+        setTimeout(() => {
+          btn.innerHTML = originalSVG;
+          btn.style.borderColor = '';
+        }, 1500);
+      };
     }
     list.appendChild(row);
   });
