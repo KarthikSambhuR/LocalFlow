@@ -81,14 +81,53 @@
 .history-list.show-raw .transcript-raw-text {
   display: inline !important;
 }
-.history-list.show-raw .transcript-refined-text {
+.history-list.show-raw .transcript-refined-text,
+.history-list.show-raw .transcript-diff-text {
   display: none !important;
 }
-.history-list.show-refined .transcript-raw-text {
-  display: none !important;
-}
+
 .history-list.show-refined .transcript-refined-text {
   display: inline !important;
+}
+.history-list.show-refined .transcript-raw-text,
+.history-list.show-refined .transcript-diff-text {
+  display: none !important;
+}
+
+.history-list.show-diff .transcript-diff-text {
+  display: inline !important;
+}
+.history-list.show-diff .transcript-raw-text,
+.history-list.show-diff .transcript-refined-text {
+  display: none !important;
+}
+
+.transcript-diff-text del {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  text-decoration: line-through;
+  padding: 1px 3px;
+  border-radius: 4px;
+  margin: 0 1px;
+}
+
+.transcript-diff-text ins {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  text-decoration: none;
+  padding: 1px 3px;
+  border-radius: 4px;
+  margin: 0 1px;
+}
+
+[data-theme="light"] .transcript-diff-text del {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+[data-theme="light"] .transcript-diff-text ins {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
 }
 
 .history-list.show-raw .card-transcript {

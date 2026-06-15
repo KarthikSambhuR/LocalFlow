@@ -8,7 +8,13 @@ export const state = {
   rafId: null,
   bars: [], // Holds the visualizer bar DOM elements
   selectedYear: new Date().getFullYear(),
-  globalShowingRefined: localStorage.getItem('localflow_global_refined') !== 'false',
+  globalViewMode: localStorage.getItem('localflow_global_view_mode') || (localStorage.getItem('localflow_global_refined') === 'false' ? 'raw' : 'refined'),
+  get globalShowingRefined() {
+    return this.globalViewMode === 'refined';
+  },
+  set globalShowingRefined(val) {
+    this.globalViewMode = val ? 'refined' : 'raw';
+  },
   audioCtx: null,
   gainNode: null,
   currentAmp: 1.0,

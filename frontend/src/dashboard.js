@@ -99,29 +99,103 @@ export async function loadDashboard(targetSection) {
   renderInsights(stats);
 }
 
+// Simple tokenization: words, spaces, punctuation
+export function diffWords(raw, refined) {
+  const tokenRegex = /[\w\u00c0-\u017f']+|[^\w\s\u00c0-\u017f']+|\s+/g;
+  const A = raw.match(tokenRegex) || [];
+  const B = refined.match(tokenRegex) || [];
+
+  const N = A.length;
+  const M = B.length;
+
+  const dp = Array.from({ length: N + 1 }, () => new Int32Array(M + 1));
+
+  for (let i = 1; i <= N; i++) {
+    for (let j = 1; j <= M; j++) {
+      if (A[i - 1] === B[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  let i = N;
+  let j = M;
+  const result = [];
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && A[i - 1] === B[j - 1]) {
+      result.push({ type: 'equal', value: A[i - 1] });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.push({ type: 'insert', value: B[j - 1] });
+      j--;
+    } else {
+      result.push({ type: 'delete', value: A[i - 1] });
+      i--;
+    }
+  }
+
+  result.reverse();
+  return result;
+}
+
+export function generateDiffHtml(raw, refined) {
+  if (!raw && !refined) return '';
+  if (!raw) return `<ins>${escapeHtml(refined)}</ins>`;
+  if (!refined) return `<del>${escapeHtml(raw)}</del>`;
+
+  const diffs = diffWords(raw, refined);
+  let html = '';
+  for (const chunk of diffs) {
+    const esc = escapeHtml(chunk.value);
+    if (chunk.type === 'equal') {
+      html += esc;
+    } else if (chunk.type === 'delete') {
+      html += `<del>${esc}</del>`;
+    } else if (chunk.type === 'insert') {
+      html += `<ins>${esc}</ins>`;
+    }
+  }
+  return html;
+}
+
 export function updateGlobalToggleUI(animate = true) {
   const toggleRaw = document.getElementById('globalToggleRaw');
   const toggleRef = document.getElementById('globalToggleRefined');
+  const toggleDiff = document.getElementById('globalToggleDiff');
   const slider = document.getElementById('globalToggleSlider');
   const historyList = document.getElementById('historyList');
 
-  if (!toggleRaw || !toggleRef || !slider || !historyList) return;
+  if (!toggleRaw || !toggleRef || !toggleDiff || !slider || !historyList) return;
 
   if (!animate) {
     slider.style.transition = 'none';
   }
   
+  const mode = state.globalViewMode || 'refined';
+  
   // Toggle active state
-  toggleRef.classList.toggle('active', state.globalShowingRefined);
-  toggleRaw.classList.toggle('active', !state.globalShowingRefined);
+  toggleRaw.classList.toggle('active', mode === 'raw');
+  toggleRef.classList.toggle('active', mode === 'refined');
+  toggleDiff.classList.toggle('active', mode === 'diff');
   
   // Position/size the slider pill
-  slider.style.transform = state.globalShowingRefined
-    ? `translateX(${toggleRaw.offsetWidth}px)`
-    : 'translateX(0px)';
-  slider.style.width = state.globalShowingRefined
-    ? `${toggleRef.offsetWidth}px`
-    : `${toggleRaw.offsetWidth}px`;
+  let translateVal = 0;
+  let activeWidth = toggleRaw.offsetWidth;
+
+  if (mode === 'refined') {
+    translateVal = toggleRaw.offsetWidth;
+    activeWidth = toggleRef.offsetWidth;
+  } else if (mode === 'diff') {
+    translateVal = toggleRaw.offsetWidth + toggleRef.offsetWidth;
+    activeWidth = toggleDiff.offsetWidth;
+  }
+
+  slider.style.transform = `translateX(${translateVal}px)`;
+  slider.style.width = `${activeWidth}px`;
 
   if (!animate) {
     requestAnimationFrame(() => {
@@ -130,26 +204,34 @@ export function updateGlobalToggleUI(animate = true) {
   }
 
   // Toggle historyList view class
-  historyList.classList.toggle('show-refined', state.globalShowingRefined);
-  historyList.classList.toggle('show-raw', !state.globalShowingRefined);
+  historyList.classList.toggle('show-raw', mode === 'raw');
+  historyList.classList.toggle('show-refined', mode === 'refined');
+  historyList.classList.toggle('show-diff', mode === 'diff');
 }
 
 export function setupGlobalToggle() {
   const toggleRaw = document.getElementById('globalToggleRaw');
   const toggleRef = document.getElementById('globalToggleRefined');
+  const toggleDiff = document.getElementById('globalToggleDiff');
 
-  if (!toggleRaw || !toggleRef) return;
+  if (!toggleRaw || !toggleRef || !toggleDiff) return;
 
   // Handle click events
   toggleRaw.addEventListener('click', () => {
-    state.globalShowingRefined = false;
-    localStorage.setItem('localflow_global_refined', 'false');
+    state.globalViewMode = 'raw';
+    localStorage.setItem('localflow_global_view_mode', 'raw');
     updateGlobalToggleUI();
   });
 
   toggleRef.addEventListener('click', () => {
-    state.globalShowingRefined = true;
-    localStorage.setItem('localflow_global_refined', 'true');
+    state.globalViewMode = 'refined';
+    localStorage.setItem('localflow_global_view_mode', 'refined');
+    updateGlobalToggleUI();
+  });
+
+  toggleDiff.addEventListener('click', () => {
+    state.globalViewMode = 'diff';
+    localStorage.setItem('localflow_global_view_mode', 'diff');
     updateGlobalToggleUI();
   });
 
@@ -194,6 +276,7 @@ export function renderHome(records, stats) {
 
     let displayFinal = escapeHtml(finalText);
     let displayRaw = escapeHtml(rawText);
+    let displayDiff = generateDiffHtml(rawText, finalText);
 
     if (!displayFinal) {
       displayFinal = r.word_count > 0
@@ -202,6 +285,11 @@ export function renderHome(records, stats) {
     }
     if (!displayRaw) {
       displayRaw = r.word_count > 0
+        ? '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>'
+        : '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
+    }
+    if (!displayDiff) {
+      displayDiff = r.word_count > 0
         ? '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>'
         : '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
     }
@@ -216,6 +304,7 @@ export function renderHome(records, stats) {
         <div class="card-transcript">
           <span class="transcript-refined-text">${displayFinal}</span>
           <span class="transcript-raw-text" style="display: none;">${displayRaw}</span>
+          <span class="transcript-diff-text" style="display: none;">${displayDiff}</span>
         </div>
       </div>
       <div class="card-controls">
@@ -228,7 +317,7 @@ export function renderHome(records, stats) {
     playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
     if (r.transcription) {
       row.querySelector('.copy-btn-small').onclick = (e) => {
-        const textToCopy = state.globalShowingRefined ? finalText : rawText;
+        const textToCopy = state.globalViewMode === 'raw' ? rawText : finalText;
         window.runtime.ClipboardSetText(textToCopy);
 
         // Add checkmark visual feedback
@@ -246,8 +335,10 @@ export function renderHome(records, stats) {
   });
 
   // Ensure current global toggle view classes are applied to list
-  list.classList.toggle('show-refined', state.globalShowingRefined);
-  list.classList.toggle('show-raw', !state.globalShowingRefined);
+  const mode = state.globalViewMode || 'refined';
+  list.classList.toggle('show-raw', mode === 'raw');
+  list.classList.toggle('show-refined', mode === 'refined');
+  list.classList.toggle('show-diff', mode === 'diff');
 }
 
 export function renderHomeRail(stats) {

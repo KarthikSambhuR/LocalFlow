@@ -107,6 +107,10 @@ settingsModal.innerHTML = `
                   <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                   Refined
                 </button>
+                <button type="button" class="toggle-opt toggle-opt-diff" id="globalToggleDiff" data-view="diff">
+                  <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v7c0 1.1.9 2 2 2h7"/><path d="M9 6h7a2 2 0 0 1 2 2v7"/></svg>
+                  Diff
+                </button>
               </div>
             </div>
           </div>
