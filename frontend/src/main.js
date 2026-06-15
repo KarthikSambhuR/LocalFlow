@@ -92,8 +92,23 @@ settingsModal.innerHTML = `
       <div class="home-layout">
         <div class="home-stats-bar" id="homeRail"></div>
         <main class="home-main">
-          <div class="section-kicker">Recent dictation</div>
-          <div class="history-list" id="historyList"></div>
+          <div class="recent-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div class="section-kicker" style="margin-bottom: 0;">Recent dictation</div>
+            <div class="view-toggle" id="globalViewToggle" style="margin-top: 0;">
+              <div class="toggle-pill">
+                <div class="toggle-slider" id="globalToggleSlider"></div>
+                <button type="button" class="toggle-opt toggle-opt-raw" id="globalToggleRaw" data-view="raw">
+                  <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>
+                  Transcription
+                </button>
+                <button type="button" class="toggle-opt toggle-opt-refined active" id="globalToggleRefined" data-view="refined">
+                  <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                  Refined
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="history-list show-refined" id="historyList"></div>
         </main>
       </div>
     </div>
@@ -472,7 +487,12 @@ function switchSection(target) {
     if (isTarget) sectionTitle.textContent = i.textContent.trim();
   });
   sections.forEach(s => s.classList.toggle('active', s.id === `sec-${target}`));
-  if (target === 'home' || target === 'insights') loadDashboard(target);
+  if (target === 'home' || target === 'insights') {
+    loadDashboard(target);
+    if (target === 'home') {
+      requestAnimationFrame(() => updateGlobalToggleUI(false));
+    }
+  }
 }
 
 navItems.forEach(item => item.addEventListener('click', () => switchSection(item.getAttribute('data-section'))));
@@ -631,6 +651,68 @@ async function loadDashboard() {
   renderInsights(stats);
 }
 
+let globalShowingRefined = localStorage.getItem('localflow_global_refined') !== 'false';
+
+function updateGlobalToggleUI(animate = true) {
+  const toggleRaw = document.getElementById('globalToggleRaw');
+  const toggleRef = document.getElementById('globalToggleRefined');
+  const slider = document.getElementById('globalToggleSlider');
+  const historyList = document.getElementById('historyList');
+
+  if (!toggleRaw || !toggleRef || !slider || !historyList) return;
+
+  if (!animate) {
+    slider.style.transition = 'none';
+  }
+  
+  // Toggle active state
+  toggleRef.classList.toggle('active', globalShowingRefined);
+  toggleRaw.classList.toggle('active', !globalShowingRefined);
+  
+  // Position/size the slider pill
+  slider.style.transform = globalShowingRefined
+    ? `translateX(${toggleRaw.offsetWidth}px)`
+    : 'translateX(0px)';
+  slider.style.width = globalShowingRefined
+    ? `${toggleRef.offsetWidth}px`
+    : `${toggleRaw.offsetWidth}px`;
+
+  if (!animate) {
+    requestAnimationFrame(() => {
+      slider.style.transition = '';
+    });
+  }
+
+  // Toggle historyList view class
+  historyList.classList.toggle('show-refined', globalShowingRefined);
+  historyList.classList.toggle('show-raw', !globalShowingRefined);
+}
+
+function setupGlobalToggle() {
+  const toggleRaw = document.getElementById('globalToggleRaw');
+  const toggleRef = document.getElementById('globalToggleRefined');
+
+  if (!toggleRaw || !toggleRef) return;
+
+  // Handle click events
+  toggleRaw.addEventListener('click', () => {
+    globalShowingRefined = false;
+    localStorage.setItem('localflow_global_refined', 'false');
+    updateGlobalToggleUI();
+  });
+
+  toggleRef.addEventListener('click', () => {
+    globalShowingRefined = true;
+    localStorage.setItem('localflow_global_refined', 'true');
+    updateGlobalToggleUI();
+  });
+
+  // Initial state setup (without animation)
+  requestAnimationFrame(() => {
+    updateGlobalToggleUI(false);
+  });
+}
+
 function renderHome(records, stats) {
   const list = document.getElementById('historyList');
   const rail = document.getElementById('homeRail');
@@ -662,43 +744,33 @@ function renderHome(records, stats) {
     const words = r.word_count || countWords(r.transcription);
 
     const finalText = r.transcription     || '';
-    const rawText   = r.raw_transcription || '';
-    // Show toggle only when LLM was used and both raw and final texts are present
-    const hasRefined = finalText && rawText;
-    let showingRefined = true;
+    const rawText   = r.raw_transcription || finalText;
 
-    let displayText = escapeHtml(finalText);
-    if (!displayText) {
-      displayText = r.word_count > 0
+    let displayFinal = escapeHtml(finalText);
+    let displayRaw = escapeHtml(rawText);
+
+    if (!displayFinal) {
+      displayFinal = r.word_count > 0
         ? '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>'
         : '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
     }
-
-    const toggleHtml = hasRefined ? `
-      <div class="view-toggle">
-        <div class="toggle-pill">
-          <div class="toggle-slider"></div>
-          <button type="button" class="toggle-opt toggle-opt-raw" data-view="raw">
-            <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>
-            Transcription
-          </button>
-          <button type="button" class="toggle-opt toggle-opt-refined active" data-view="refined">
-            <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-            Refined
-          </button>
-        </div>
-      </div>
-    ` : '';
+    if (!displayRaw) {
+      displayRaw = r.word_count > 0
+        ? '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>'
+        : '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
+    }
 
     row.innerHTML = `
       <div class="card-top">
         <span class="card-meta">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         <span class="badge ghost">${words} words</span>
         ${r.transcription && r.transcription_time_us > 0 ? `<span class="badge ghost" style="opacity: 0.6;">${formatDurationUs(r.transcription_time_us)}</span>` : ''}
-        ${toggleHtml}
       </div>
       <div class="card-center">
-        <div class="card-transcript">${displayText}</div>
+        <div class="card-transcript">
+          <span class="transcript-refined-text">${displayFinal}</span>
+          <span class="transcript-raw-text" style="display: none;">${displayRaw}</span>
+        </div>
       </div>
       <div class="card-controls">
         <div class="play-btn">${PLAY_SVG}<span>Play</span></div>
@@ -706,43 +778,11 @@ function renderHome(records, stats) {
       </div>
     `;
 
-    if (hasRefined) {
-      const optRaw    = row.querySelector('.toggle-opt-raw');
-      const optRef    = row.querySelector('.toggle-opt-refined');
-      const slider    = row.querySelector('.toggle-slider');
-      const transcript = row.querySelector('.card-transcript');
-
-      function updateView() {
-        const text = showingRefined ? escapeHtml(finalText) : escapeHtml(rawText);
-        transcript.innerHTML = text;
-        transcript.classList.toggle('view-raw', !showingRefined);
-        optRef.classList.toggle('active', showingRefined);
-        optRaw.classList.toggle('active', !showingRefined);
-        slider.style.transform = showingRefined
-          ? `translateX(${optRaw.offsetWidth}px)`
-          : 'translateX(0px)';
-        slider.style.width = showingRefined
-          ? `${optRef.offsetWidth}px`
-          : `${optRaw.offsetWidth}px`;
-      }
-
-      // Init slider without animation on first paint
-      requestAnimationFrame(() => {
-        slider.style.transition = 'none';
-        slider.style.transform = `translateX(${optRaw.offsetWidth}px)`;
-        slider.style.width = `${optRef.offsetWidth}px`;
-        requestAnimationFrame(() => { slider.style.transition = ''; });
-      });
-
-      optRaw.addEventListener('click', e => { e.stopPropagation(); showingRefined = false; updateView(); });
-      optRef.addEventListener('click', e => { e.stopPropagation(); showingRefined = true;  updateView(); });
-    }
-
     const playBtn = row.querySelector('.play-btn');
     playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
     if (r.transcription) {
       row.querySelector('.copy-btn-small').onclick = (e) => {
-        const textToCopy = (hasRefined && !showingRefined) ? rawText : finalText;
+        const textToCopy = globalShowingRefined ? finalText : rawText;
         window.runtime.ClipboardSetText(textToCopy);
 
         // Add checkmark visual feedback
@@ -758,6 +798,10 @@ function renderHome(records, stats) {
     }
     list.appendChild(row);
   });
+
+  // Ensure current global toggle view classes are applied to list
+  list.classList.toggle('show-refined', globalShowingRefined);
+  list.classList.toggle('show-raw', !globalShowingRefined);
 }
 
 function renderHomeRail(stats) {
@@ -2095,6 +2139,7 @@ async function init() {
     const isSettings = window.go && window.go.main && window.go.main.SettingsApp;
     if (isSettings) {
       setupWindowTitlebar();
+      setupGlobalToggle();
       moduleNode.style.display = 'none';
       settingsOverlay.classList.add('active');
       const route = await window.go.main.SettingsApp.GetInitialRoute();

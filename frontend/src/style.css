@@ -542,11 +542,24 @@ kbd,
   transition: color 0.2s ease;
 }
 
-.card-transcript.view-raw {
+.history-list.show-raw .transcript-raw-text {
+  display: inline !important;
+}
+.history-list.show-raw .transcript-refined-text {
+  display: none !important;
+}
+.history-list.show-refined .transcript-raw-text {
+  display: none !important;
+}
+.history-list.show-refined .transcript-refined-text {
+  display: inline !important;
+}
+
+.history-list.show-raw .card-transcript {
   color: rgba(255, 210, 140, 0.9);
 }
 
-[data-theme="light"] .card-transcript.view-raw {
+[data-theme="light"] .history-list.show-raw .card-transcript {
   color: rgba(160, 100, 0, 0.85);
 }
 
