@@ -7,10 +7,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -225,13 +226,30 @@ func triggerInstallUpdateAndRestart() error {
 		return fmt.Errorf("update installer not found: %w", err)
 	}
 
-	// Spawn the installer detached with --silent-update flag
-	cmd := exec.Command(updatePath, "--silent-update")
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to launch installer: %w", err)
+	// Launch the installer with elevation via ShellExecuteW (runas verb triggers UAC prompt)
+	shell32 := syscall.NewLazyDLL("shell32.dll")
+	shellExecuteW := shell32.NewProc("ShellExecuteW")
+
+	verb, _ := syscall.UTF16PtrFromString("runas")
+	file, _ := syscall.UTF16PtrFromString(updatePath)
+	args, _ := syscall.UTF16PtrFromString("--silent-update")
+	dir, _ := syscall.UTF16PtrFromString(filepath.Dir(updatePath))
+
+	ret, _, _ := shellExecuteW.Call(
+		0,
+		uintptr(unsafe.Pointer(verb)),
+		uintptr(unsafe.Pointer(file)),
+		uintptr(unsafe.Pointer(args)),
+		uintptr(unsafe.Pointer(dir)),
+		1, // SW_SHOWNORMAL
+	)
+
+	// ShellExecuteW returns a value > 32 on success
+	if ret <= 32 {
+		return fmt.Errorf("failed to launch update installer (ShellExecute returned %d)", ret)
 	}
 
-	// Exit the main application so files are not locked
+	// Exit the main application so the installer can overwrite files
 	os.Exit(0)
 	return nil
 }

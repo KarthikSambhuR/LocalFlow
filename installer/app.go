@@ -138,8 +138,8 @@ func (a *App) Install(targetDir string, createDesktopShortcut, createStartMenuSh
 	// 3. Create Shortcuts
 	exePath := filepath.Join(targetDir, "LocalFlow.exe")
 	if createDesktopShortcut {
-		desktopPath, _ := os.UserHomeDir()
-		desktopPath = filepath.Join(desktopPath, "Desktop")
+		// Use USERPROFILE so this resolves to the real user's Desktop even when running elevated
+		desktopPath := filepath.Join(os.Getenv("USERPROFILE"), "Desktop")
 		shortcutPath := filepath.Join(desktopPath, "LocalFlow.lnk")
 		_ = createShortcut(shortcutPath, exePath, "", targetDir)
 	}
@@ -349,8 +349,8 @@ func PerformUninstallDirect() error {
 	}
 
 	// 3. Remove Shortcuts
-	desktopPath, _ := os.UserHomeDir()
-	desktopPath = filepath.Join(desktopPath, "Desktop")
+	// Use USERPROFILE so this resolves to the real user's Desktop even when running elevated
+	desktopPath := filepath.Join(os.Getenv("USERPROFILE"), "Desktop")
 	_ = os.Remove(filepath.Join(desktopPath, "LocalFlow.lnk"))
 
 	startMenuPath := filepath.Join(os.Getenv("ProgramData"), `Microsoft\Windows\Start Menu\Programs`)
