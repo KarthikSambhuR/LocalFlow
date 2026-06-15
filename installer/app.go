@@ -300,9 +300,26 @@ func PerformSilentUpdateDirect() error {
 		}
 	}
 
-	// 5. Start updated app with the update cleanup argument detached
+	// 5. Clean up: delete the update installer and state file from TEMP
+	selfPath, _ := os.Executable()
+	tempDir := os.Getenv("TEMP")
+	_ = os.Remove(filepath.Join(tempDir, "localflow_update_state.json"))
+
+	// Use a bat script to delete the update installer (it cannot delete itself while running)
+	batchScript := filepath.Join(tempDir, "localflow_update_cleanup.bat")
+	scriptContent := fmt.Sprintf(`@echo off
+timeout /t 2 /nobreak > nul
+del "%s"
+del "%%~f0"
+`, selfPath)
+	_ = os.WriteFile(batchScript, []byte(scriptContent), 0644)
+	cleanupCmd := exec.Command("cmd.exe", "/c", batchScript)
+	cleanupCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	_ = cleanupCmd.Start()
+
+	// 6. Start updated app detached
 	exePath := filepath.Join(targetDir, "LocalFlow.exe")
-	cmd := exec.Command(exePath, "--update-cleanup")
+	cmd := exec.Command(exePath)
 	cmd.Dir = targetDir
 	_ = cmd.Start()
 

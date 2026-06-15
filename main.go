@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v2"
@@ -53,27 +52,13 @@ func main() {
 		}
 	}
 
-	isCleanup := false
-	for _, arg := range os.Args[1:] {
-		if arg == "--update-cleanup" {
-			isCleanup = true
-			go func() {
-				time.Sleep(1 * time.Second)
-				updatePath := filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe")
-				_ = os.Remove(updatePath)
-			}()
-		}
-	}
-
 	// 1. Check if there is a pending update installer to apply
-	if !isCleanup {
-		updatePath := filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe")
-		if _, err := os.Stat(updatePath); err == nil {
-			// Launch the update in silent mode and exit
-			cmd := exec.Command(updatePath, "--silent-update")
-			if err := cmd.Start(); err == nil {
-				os.Exit(0)
-			}
+	updatePath := filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe")
+	if _, err := os.Stat(updatePath); err == nil {
+		// Launch the update in silent mode and exit
+		cmd := exec.Command(updatePath, "--silent-update")
+		if err := cmd.Start(); err == nil {
+			os.Exit(0)
 		}
 	}
 
