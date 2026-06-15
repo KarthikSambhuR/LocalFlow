@@ -30,6 +30,11 @@ var (
 var assets embed.FS
 
 func main() {
+	// Change working directory to the executable's directory to ensure relative paths resolve correctly
+	if exe, err := os.Executable(); err == nil {
+		_ = os.Chdir(filepath.Dir(exe))
+	}
+
 	// Unset any inherited visible devices so we can enumerate all GPUs
 	os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
 
