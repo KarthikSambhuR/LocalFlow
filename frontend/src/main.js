@@ -663,8 +663,8 @@ function renderHome(records, stats) {
 
     const finalText = r.transcription     || '';
     const rawText   = r.raw_transcription || '';
-    // Show toggle only when LLM was used and actually changed the text
-    const hasRefined = finalText && rawText && rawText !== finalText;
+    // Show toggle only when LLM was used and both raw and final texts are present
+    const hasRefined = finalText && rawText;
     let showingRefined = true;
 
     let displayText = escapeHtml(finalText);
@@ -680,7 +680,7 @@ function renderHome(records, stats) {
           <div class="toggle-slider"></div>
           <button type="button" class="toggle-opt toggle-opt-raw" data-view="raw">
             <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>
-            Whisper
+            Transcription
           </button>
           <button type="button" class="toggle-opt toggle-opt-refined active" data-view="refined">
             <svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
