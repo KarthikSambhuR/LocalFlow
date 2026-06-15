@@ -193,9 +193,9 @@
   font-weight: 700;
   justify-self: end;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .models-panel-body {
@@ -567,3 +567,67 @@
   border-color: var(--border-active);
   background: var(--bg-card);
 }
+
+/* Dictionary List Items */
+.dict-row-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.dict-row-item:last-child {
+  border-bottom: 0;
+}
+
+.dict-row-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.dict-word-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dict-row-delete-btn {
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.dict-row-delete-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.dict-row-delete-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.brutal-input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2) !important;
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+
+

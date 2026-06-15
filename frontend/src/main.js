@@ -24,7 +24,8 @@ import {
   setupDataFolderSettings,
   setupModelsSettings,
   setupMicrophoneSettings,
-  setupOnboarding
+  setupOnboarding,
+  setupDictionary
 } from './settings_handlers.js';
 
 // Populate state visualizer bars from DOM module
@@ -106,6 +107,8 @@ function switchSection(target) {
     if (target === 'home') {
       requestAnimationFrame(() => updateGlobalToggleUI(false));
     }
+  } else if (target === 'dictionary') {
+    setupDictionary();
   }
 }
 
@@ -211,6 +214,7 @@ async function init() {
       setupModelsSettings();
       setupMicrophoneSettings();
       setupOnboarding();
+      setupDictionary();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();

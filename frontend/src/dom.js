@@ -67,6 +67,10 @@ settingsModal.innerHTML = `
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>
         Insights
       </div>
+      <div class="nav-item" data-section="dictionary">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
+        Dictionary
+      </div>
       <div class="nav-item" data-section="settings">
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
         Settings
@@ -112,6 +116,39 @@ settingsModal.innerHTML = `
     </div>
     <div class="section" id="sec-insights">
       <div class="insights-wrap" id="insightsRoot"></div>
+    </div>
+    <div class="section" id="sec-dictionary">
+      <div class="dict-layout" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
+        <div class="section-kicker" style="margin-bottom: 0;">Dictionary & Keywords</div>
+        
+        <!-- Token Progress Bar -->
+        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div class="setting-info">
+              <span class="setting-title" style="font-size: 15px;">Whisper Context Usage</span>
+              <span class="setting-desc" style="font-size: 12px;">Prompt tokens used by custom vocabulary. Whisper supports up to 224 context tokens.</span>
+            </div>
+            <span id="dictTokenBadge" class="badge">0 / 224 tokens</span>
+          </div>
+          <div class="model-progress-bar-bg" style="height: 8px; width: 100%;">
+            <div id="dictTokenProgress" class="model-progress-bar-fill" style="width: 0%; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+
+        <!-- Word List like Todo list -->
+        <div class="todo-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; gap: 12px; width: 100%;">
+            <input type="text" id="dictWordInput" class="brutal-input" style="flex: 1; height: 42px; box-sizing: border-box; border-radius: 12px;" placeholder="Add a custom word or phrase..." />
+            <button id="addDictWordBtn" class="kbd-btn" style="padding: 0 24px; font-weight: 700; height: 42px; box-sizing: border-box; border-radius: 12px; background: var(--accent-soft); color: var(--accent); border-color: var(--accent);">Add</button>
+          </div>
+
+          <div class="dict-todo-list-wrapper" style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-sidebar); width: 100%;">
+            <div id="dictWordsList" style="display: flex; flex-direction: column; gap: 0; max-height: 400px; overflow-y: auto;">
+              <!-- Words listed as row items with delete checkbox/button -->
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="section" id="sec-settings">
       <div class="setting-group">

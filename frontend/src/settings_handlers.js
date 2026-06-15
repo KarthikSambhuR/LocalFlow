@@ -588,7 +588,10 @@ export async function setupModelsSettings() {
           <button class="models-panel-header" type="button" aria-expanded="${isExpanded}">
             <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${isExpanded ? '90deg' : '0deg'});"><polyline points="9 18 15 12 9 6"/></svg>
             <span class="models-panel-title">${title}</span>
-            <span class="models-panel-meta">${activeModel ? activeModel.name : 'No model active'} / ${downloadedCount}/${models.length} downloaded</span>
+            <div class="models-panel-meta">
+              <span class="badge" style="font-size: 11px; padding: 4px 10px; text-transform: none; font-weight: 700; width: auto;">${activeModel ? activeModel.name : 'No model active'}</span>
+              <span class="badge ghost" style="font-size: 11px; padding: 4px 10px; text-transform: none; font-weight: 700; width: auto;">${downloadedCount}/${models.length} downloaded</span>
+            </div>
           </button>
           <div class="models-panel-body">
             ${models.map(m => {
@@ -875,3 +878,101 @@ export async function setupMicrophoneSettings() {
     micDropdown.classList.remove('open');
   });
 }
+
+export async function setupDictionary() {
+  const input = document.getElementById('dictWordInput');
+  const addBtn = document.getElementById('addDictWordBtn');
+  const container = document.getElementById('dictWordsList');
+  const tokenBadge = document.getElementById('dictTokenBadge');
+  const tokenProgress = document.getElementById('dictTokenProgress');
+  if (!input || !addBtn || !container) return;
+
+  const estimateTokens = (wordsArray) => {
+    const text = wordsArray.join(', ');
+    if (!text.trim()) return 0;
+    // Estimated: 1 token is roughly 4 characters (standard tokenization estimate)
+    return Math.min(224, Math.ceil(text.length / 4));
+  };
+
+  const loadWords = async () => {
+    if (!window.go?.main?.SettingsApp) return;
+    const words = await window.go.main.SettingsApp.GetDictionaryWords() || [];
+    
+    // Update token usage UI
+    const tokens = estimateTokens(words);
+    if (tokenBadge) {
+      tokenBadge.textContent = `${tokens} / 224 tokens`;
+    }
+    if (tokenProgress) {
+      const percentage = (tokens / 224) * 100;
+      tokenProgress.style.width = `${percentage}%`;
+      // Color coded thresholds
+      if (percentage > 90) {
+        tokenProgress.style.background = '#ef4444'; // Red if near limit
+      } else if (percentage > 70) {
+        tokenProgress.style.background = '#f59e0b'; // Amber
+      } else {
+        tokenProgress.style.background = 'var(--accent)'; // Cyan/Green
+      }
+    }
+
+    container.innerHTML = '';
+    if (words.length === 0) {
+      container.innerHTML = '<div style="padding: 20px; text-align: center; font-size: 13px; color: var(--text-muted); font-style: italic;">No custom vocabulary added yet. Add some above!</div>';
+      return;
+    }
+    words.forEach(word => {
+      const row = document.createElement('div');
+      row.className = 'dict-row-item';
+      row.innerHTML = `
+        <span class="dict-word-text">${escapeHtml(word)}</span>
+        <button class="dict-row-delete-btn" title="Delete word">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      `;
+      row.querySelector('.dict-row-delete-btn').onclick = async (e) => {
+        e.stopPropagation();
+        await window.go.main.SettingsApp.DeleteDictionaryWord(word);
+        loadWords();
+      };
+      container.appendChild(row);
+    });
+  };
+
+  const escapeHtml = (val = '') => {
+    return String(val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  addBtn.onclick = async () => {
+    const word = input.value.trim();
+    if (!word) {
+      input.classList.add('brutal-input-error');
+      input.placeholder = "Please enter a word first!";
+      input.focus();
+      setTimeout(() => {
+        input.classList.remove('brutal-input-error');
+        input.placeholder = "Add a custom word or phrase...";
+      }, 1500);
+      return;
+    }
+    if (window.go?.main?.SettingsApp) {
+      await window.go.main.SettingsApp.AddDictionaryWord(word);
+      input.value = '';
+      loadWords();
+    }
+  };
+
+  input.onkeydown = async (e) => {
+    if (e.key === 'Enter') {
+      addBtn.click();
+    }
+  };
+
+  loadWords();
+}
+
