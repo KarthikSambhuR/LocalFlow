@@ -1,5 +1,6 @@
 import { state } from './state.js';
-import { loadDashboard } from './dashboard.js';
+import { loadDashboard, showCustomConfirm } from './dashboard.js';
+
 
 export async function setupAmp() {
   const slider = document.getElementById('ampSlider');
@@ -449,54 +450,32 @@ export async function setupStorageSettings() {
     transDropdown.classList.remove('open');
   });
 
-  const modal = document.getElementById('confirmModal');
-  const modalConfirm = document.getElementById('confirmModalConfirm');
-  const modalCancel = document.getElementById('confirmModalCancel');
-
-  let onConfirmCallback = null;
-
-  const showConfirmModal = (onConfirm) => {
-    onConfirmCallback = onConfirm;
-    modal.classList.add('active');
-  };
-
-  const hideConfirmModal = () => {
-    modal.classList.remove('active');
-    onConfirmCallback = null;
-  };
-
-  modalCancel.onclick = (e) => {
-    e.stopPropagation();
-    hideConfirmModal();
-  };
-
-  modalConfirm.onclick = (e) => {
-    e.stopPropagation();
-    if (onConfirmCallback) onConfirmCallback();
-    hideConfirmModal();
-  };
-
   purgeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    showConfirmModal(async () => {
-      if (window.go?.main?.SettingsApp) {
-        purgeBtn.disabled = true;
-        purgeBtn.textContent = 'Cleaning...';
-        try {
-          await window.go.main.SettingsApp.PurgeNow();
-          await loadDashboard();
-          purgeBtn.textContent = 'Done!';
-          setTimeout(() => {
-            purgeBtn.textContent = 'Clean Cache Now';
-            purgeBtn.disabled = false;
-          }, 1500);
-        } catch (err) {
-          console.error(err);
-          purgeBtn.textContent = 'Error';
-          setTimeout(() => {
-            purgeBtn.textContent = 'Clean Cache Now';
-            purgeBtn.disabled = false;
-          }, 1500);
+    showCustomConfirm({
+      title: 'Clear All Cache?',
+      message: 'This will permanently delete all raw audio files and transcription texts. Your historical stats will be preserved.',
+      confirmText: 'Clear Everything',
+      onConfirm: async () => {
+        if (window.go?.main?.SettingsApp) {
+          purgeBtn.disabled = true;
+          purgeBtn.textContent = 'Cleaning...';
+          try {
+            await window.go.main.SettingsApp.PurgeNow();
+            await loadDashboard();
+            purgeBtn.textContent = 'Done!';
+            setTimeout(() => {
+              purgeBtn.textContent = 'Clean Cache Now';
+              purgeBtn.disabled = false;
+            }, 1500);
+          } catch (err) {
+            console.error(err);
+            purgeBtn.textContent = 'Error';
+            setTimeout(() => {
+              purgeBtn.textContent = 'Clean Cache Now';
+              purgeBtn.disabled = false;
+            }, 1500);
+          }
         }
       }
     });

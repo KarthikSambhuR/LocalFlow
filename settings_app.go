@@ -99,6 +99,15 @@ func (s *SettingsApp) GetRecordings() []Recording {
 	return recs
 }
 
+func (s *SettingsApp) DeleteRecording(id int) error {
+	return DeleteRecording(id)
+}
+
+func (s *SettingsApp) UpdateRecording(id int, newText string) error {
+	return UpdateRecording(id, newText)
+}
+
+
 func (s *SettingsApp) GetAnalytics() []Analytics {
 	an, _ := GetAnalytics()
 	return an

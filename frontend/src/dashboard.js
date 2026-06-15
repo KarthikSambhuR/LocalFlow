@@ -239,6 +239,17 @@ export function setupGlobalToggle() {
   requestAnimationFrame(() => {
     updateGlobalToggleUI(false);
   });
+  if (document.fonts) {
+    document.fonts.ready.then(() => {
+      updateGlobalToggleUI(false);
+    });
+  }
+  setTimeout(() => {
+    updateGlobalToggleUI(false);
+  }, 100);
+  setTimeout(() => {
+    updateGlobalToggleUI(false);
+  }, 300);
 }
 
 export function renderHome(records, stats) {
@@ -293,46 +304,123 @@ export function renderHome(records, stats) {
         ? '<span style="opacity: 0.4; font-style: italic;">Transcription cleaned (expired)</span>'
         : '<span style="opacity: 0.4; font-style: italic;">No speech detected</span>';
     }
-
     row.innerHTML = `
-      <div class="card-top">
-        <span class="card-meta">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-        <span class="badge ghost">${words} words</span>
-        ${r.transcription && r.transcription_time_us > 0 ? `<span class="badge ghost" style="opacity: 0.6;">${formatDurationUs(r.transcription_time_us)}</span>` : ''}
-      </div>
-      <div class="card-center">
-        <div class="card-transcript">
-          <span class="transcript-refined-text">${displayFinal}</span>
-          <span class="transcript-raw-text" style="display: none;">${displayRaw}</span>
-          <span class="transcript-diff-text" style="display: none;">${displayDiff}</span>
+      <div class="card-main-content">
+        <div class="card-header-row">
+          <span class="card-timestamp">${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          <div class="card-meta-badges">
+            <span class="meta-item">${words} words</span>
+            ${r.transcription && r.transcription_time_us > 0 ? `<span class="meta-item-sep">•</span><span class="meta-item">${formatDurationUs(r.transcription_time_us)}</span>` : ''}
+          </div>
+        </div>
+        <div class="card-center">
+          <div class="card-transcript">
+            <span class="transcript-refined-text">${displayFinal}</span>
+            <span class="transcript-raw-text" style="display: none;">${displayRaw}</span>
+            <span class="transcript-diff-text" style="display: none;">${displayDiff}</span>
+          </div>
         </div>
       </div>
       <div class="card-controls">
-        <div class="play-btn">${PLAY_SVG}<span>Play</span></div>
-        <div class="copy-btn-small" style="${!r.transcription ? 'opacity: 0.3; pointer-events: none;' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>
+        <button class="control-btn-circle play-btn-circle" title="Play recording">${PLAY_SVG}</button>
+        <button class="control-btn-circle copy-btn-circle" title="Copy transcript" style="${!r.transcription ? 'opacity: 0.3; pointer-events: none;' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        <button class="control-btn-circle edit-btn-circle" title="Edit transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+        <button class="control-btn-circle delete-btn-circle" title="Delete dictation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div>
     `;
 
-    const playBtn = row.querySelector('.play-btn');
-    playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
-    if (r.transcription) {
-      row.querySelector('.copy-btn-small').onclick = (e) => {
-        const textToCopy = state.globalViewMode === 'raw' ? rawText : finalText;
-        window.runtime.ClipboardSetText(textToCopy);
+    const cardCenter = row.querySelector('.card-center');
+    const cardControls = row.querySelector('.card-controls');
+    const originalControlsHtml = cardControls.innerHTML;
+    const originalTranscriptHtml = cardCenter.innerHTML;
 
-        // Add checkmark visual feedback
-        const btn = e.currentTarget;
-        const originalSVG = btn.innerHTML;
-        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
-        btn.style.borderColor = 'var(--accent)';
-        setTimeout(() => {
-          btn.innerHTML = originalSVG;
-          btn.style.borderColor = '';
-        }, 1500);
-      };
+    function wireControls() {
+      const playBtn = row.querySelector('.play-btn-circle');
+      if (playBtn) {
+        playBtn.onclick = () => playRecord(`/audio/${r.filename}`, playBtn);
+      }
+      
+      const copyBtn = row.querySelector('.copy-btn-circle');
+      if (copyBtn && r.transcription) {
+        copyBtn.onclick = (e) => {
+          const textToCopy = state.globalViewMode === 'raw' ? rawText : finalText;
+          window.runtime.ClipboardSetText(textToCopy);
+
+          // Add checkmark visual feedback
+          const btn = e.currentTarget;
+          const originalSVG = btn.innerHTML;
+          btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+          btn.style.borderColor = 'var(--accent)';
+          setTimeout(() => {
+            btn.innerHTML = originalSVG;
+            btn.style.borderColor = '';
+          }, 1500);
+        };
+      }
+
+      const editBtn = row.querySelector('.edit-btn-circle');
+      if (editBtn) {
+        editBtn.onclick = () => {
+          row.classList.add('editing');
+          const textToEdit = r.transcription || r.raw_transcription || '';
+          cardCenter.innerHTML = `
+            <textarea class="brutal-textarea edit-transcript-textarea" style="width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box; font-family: inherit; font-size: inherit; line-height: inherit; padding: 12px; border-radius: 8px;">${escapeHtml(textToEdit)}</textarea>
+          `;
+          const textarea = cardCenter.querySelector('.edit-transcript-textarea');
+          textarea.focus();
+          textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+          cardControls.innerHTML = `
+            <button class="kbd-btn save-btn" style="padding: 0 16px; height: 38px; border-radius: 9999px; font-weight: 700; background: var(--accent-soft); color: var(--accent); border-color: var(--accent); cursor: pointer;">Save</button>
+            <button class="kbd-btn cancel-btn" style="padding: 0 16px; height: 38px; border-radius: 9999px; font-weight: 700; border-color: var(--border); cursor: pointer;">Cancel</button>
+          `;
+
+          cardControls.querySelector('.cancel-btn').onclick = () => {
+            row.classList.remove('editing');
+            cardCenter.innerHTML = originalTranscriptHtml;
+            cardControls.innerHTML = originalControlsHtml;
+            wireControls();
+          };
+
+          cardControls.querySelector('.save-btn').onclick = async () => {
+            const newText = textarea.value.trim();
+            try {
+              await window.go.main.SettingsApp.UpdateRecording(r.id, newText);
+              await loadDashboard();
+            } catch (err) {
+              console.error('Failed to update recording:', err);
+              alert('Error saving transcript: ' + err);
+            }
+          };
+        };
+      }
+
+      const deleteBtn = row.querySelector('.delete-btn-circle');
+      if (deleteBtn) {
+        deleteBtn.onclick = () => {
+          showCustomConfirm({
+            title: 'Delete Recording?',
+            message: 'Are you sure you want to permanently delete this dictation? This will also remove the audio file.',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+              try {
+                await window.go.main.SettingsApp.DeleteRecording(r.id);
+                await loadDashboard();
+              } catch (err) {
+                console.error('Failed to delete recording:', err);
+                alert('Error deleting recording: ' + err);
+              }
+            }
+          });
+        };
+      }
     }
+
+    wireControls();
     list.appendChild(row);
   });
+;
+
 
   // Ensure current global toggle view classes are applied to list
   const mode = state.globalViewMode || 'refined';
@@ -591,3 +679,34 @@ export function renderStreakGrid(byDay, year) {
     </div>
   `;
 }
+
+export function showCustomConfirm({ title, message, confirmText, cancelText, onConfirm }) {
+  const modal = document.getElementById('confirmModal');
+  if (!modal) return;
+  
+  const h3 = modal.querySelector('h3');
+  const p = modal.querySelector('p');
+  const confirmBtn = modal.querySelector('#confirmModalConfirm');
+  const cancelBtn = modal.querySelector('#confirmModalCancel');
+  
+  if (h3) h3.textContent = title;
+  if (p) p.textContent = message;
+  if (confirmBtn) {
+    confirmBtn.textContent = confirmText || 'Confirm';
+    confirmBtn.onclick = (e) => {
+      e.stopPropagation();
+      modal.classList.remove('active');
+      if (onConfirm) onConfirm();
+    };
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = cancelText || 'Cancel';
+    cancelBtn.onclick = (e) => {
+      e.stopPropagation();
+      modal.classList.remove('active');
+    };
+  }
+  
+  modal.classList.add('active');
+}
+

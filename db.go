@@ -312,8 +312,45 @@ func pruneRecordings(retentionDays int) {
 	_, _ = db.Exec(`DELETE FROM recordings WHERE timestamp < ?`, cutoff)
 }
 
+// DeleteRecording deletes a single recording and its associated audio file and analytics entry.
+func DeleteRecording(id int) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	var filename string
+	var timestamp string
+	err := db.QueryRow(`SELECT filename, timestamp FROM recordings WHERE id = ?`, id).Scan(&filename, &timestamp)
+	if err != nil {
+		return err
+	}
+	if filename != "" {
+		path := filepath.Join(audioCacheDir, filename)
+		_ = os.Remove(path)
+	}
+	_, _ = db.Exec(`DELETE FROM analytics WHERE timestamp = ?`, timestamp)
+	_, err = db.Exec(`DELETE FROM recordings WHERE id = ?`, id)
+	return err
+}
+
+// UpdateRecording updates the transcription text and word count for a recording and its analytics entry.
+func UpdateRecording(id int, newText string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	var timestamp string
+	err := db.QueryRow(`SELECT timestamp FROM recordings WHERE id = ?`, id).Scan(&timestamp)
+	if err != nil {
+		return err
+	}
+	wc := len(strings.Fields(newText))
+	_, _ = db.Exec(`UPDATE analytics SET word_count = ? WHERE timestamp = ?`, wc, timestamp)
+	_, err = db.Exec(`UPDATE recordings SET transcription = ?, word_count = ? WHERE id = ?`, newText, wc, id)
+	return err
+}
+
 // closeDB closes the database connection.
 func closeDB() {
+
 	if db != nil {
 		db.Close()
 	}

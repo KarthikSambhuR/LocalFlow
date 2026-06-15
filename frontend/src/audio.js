@@ -18,6 +18,10 @@ export function stopCurrentTrack() {
   }
   if (state.currentPlayBtn) {
     state.currentPlayBtn.innerHTML = PLAY_SVG;
+    const card = state.currentPlayBtn.closest('.history-card');
+    if (card) {
+      card.classList.remove('playing');
+    }
     state.currentPlayBtn = null;
   }
 }
@@ -71,8 +75,12 @@ export async function playRecord(url, playBtn) {
   // Stop any previous track
   stopCurrentTrack();
 
-  // Set loading state
+  // Set loading state and add 'playing' class to stay visible
   playBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9" stroke-dasharray="56" stroke-dashoffset="14"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/></circle></svg>`;
+  const card = playBtn.closest('.history-card');
+  if (card) {
+    card.classList.add('playing');
+  }
 
   try {
     // Fetch raw bytes — sidesteps any CORS issues with MediaElementSource
@@ -90,22 +98,30 @@ export async function playRecord(url, playBtn) {
 
     state.currentSource = source;
     state.currentPlayBtn = playBtn;
-    playBtn.innerHTML = PAUSE_SVG + '<span>Pause</span>';
+    playBtn.innerHTML = PAUSE_SVG;
 
     source.onended = () => {
       if (state.currentSource === source) {
         state.currentSource = null;
         state.currentPlayBtn = null;
-        playBtn.innerHTML = PLAY_SVG + '<span>Play</span>';
+        playBtn.innerHTML = PLAY_SVG;
+        const card = playBtn.closest('.history-card');
+        if (card) {
+          card.classList.remove('playing');
+        }
       }
     };
   } catch(err) {
     console.error('Playback failed:', err);
     playBtn.style.color = '#ef4444';
-    playBtn.innerHTML = PLAY_SVG + '<span>Expired</span>';
+    playBtn.innerHTML = PLAY_SVG;
+    const card = playBtn.closest('.history-card');
+    if (card) {
+      card.classList.remove('playing');
+    }
     setTimeout(() => {
       playBtn.style.color = '';
-      playBtn.innerHTML = PLAY_SVG + '<span>Play</span>';
+      playBtn.innerHTML = PLAY_SVG;
     }, 2000);
   }
 }
