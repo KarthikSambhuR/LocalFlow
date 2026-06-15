@@ -9,3 +9,7 @@ localflow_config.json
 dll_builder/
 run_dev.bat
 LocalFlow.exe
+node_modules/
+installer/build/
+payload.zip
+dist/

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -745,6 +746,12 @@ func (s *SettingsApp) GetProfileName() string {
 func (s *SettingsApp) SetProfileName(name string) {
 	_ = SetProfileValue("username", name)
 	_ = SetProfileValue("setup_completed", "true")
+
+	// Start the main dictation process (pill overlay) in the background
+	selfPath, err := os.Executable()
+	if err == nil {
+		_ = exec.Command(selfPath, "--pill-only").Start()
+	}
 }
 
 func (s *SettingsApp) DownloadEssentialAssets() {

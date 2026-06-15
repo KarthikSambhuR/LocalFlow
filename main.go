@@ -64,7 +64,13 @@ func main() {
 	}
 
 	cfg := loadConfig()
-	if !cfg.StartMinimized {
+	launchHome := !cfg.StartMinimized
+	for _, arg := range os.Args[1:] {
+		if arg == "--pill-only" {
+			launchHome = false
+		}
+	}
+	if launchHome {
 		startDetachedHomeWindow()
 	}
 	runPillOverlay(checkMutex)

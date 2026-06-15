@@ -8,11 +8,11 @@ import (
 )
 
 func getBaseAppDir() string {
-	dir, err := os.UserConfigDir()
+	exePath, err := os.Executable()
 	if err != nil {
-		return "."
+		return "data"
 	}
-	appDir := filepath.Join(dir, "LocalFlow")
+	appDir := filepath.Join(filepath.Dir(exePath), "data")
 	_ = os.MkdirAll(appDir, 0755)
 	return appDir
 }

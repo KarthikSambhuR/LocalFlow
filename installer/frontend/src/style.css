@@ -1,0 +1,389 @@
+:root {
+  --bg-app: #090909;
+  --bg-card: #121212;
+  --text-primary: #EEFEFF;
+  --text-secondary: rgba(238, 254, 255, 0.65);
+  --text-muted: rgba(238, 254, 255, 0.35);
+  --accent: #AAFFD4;
+  --accent-soft: rgba(170, 255, 212, 0.1);
+  --border: rgba(238, 254, 255, 0.08);
+  --border-active: #AAFFD4;
+  --danger: #FF6B6B;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Poppins', sans-serif;
+  user-select: none;
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  width: 640px;
+  height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Frameless Window Header & Dragging */
+.window-header {
+  height: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+  background-color: rgba(9, 9, 9, 0.6);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.drag-area {
+  flex: 1;
+  height: 100%;
+  --wails-draggable: drag;
+  display: flex;
+  align-items: center;
+}
+
+.app-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.close-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-muted);
+}
+
+.close-btn:hover {
+  background-color: rgba(255, 107, 107, 0.15);
+  color: var(--danger);
+}
+
+/* Wizard Content */
+.wizard-content {
+  flex: 1;
+  margin-top: 40px;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  z-index: 10;
+}
+
+/* Screen Transitions */
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  animation: fadeIn 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* UI Elements */
+h1 {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #EEFEFF 0%, #AAFFD4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+p.description {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* Form Fields & Inputs */
+.path-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.path-input {
+  flex: 1;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 10px 14px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.path-input:focus {
+  border-color: var(--border-active);
+}
+
+.btn-secondary {
+  background-color: rgba(238, 254, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 0 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(238, 254, 255, 0.1);
+  border-color: var(--text-secondary);
+}
+
+/* Checkbox Style */
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  display: none;
+}
+
+.custom-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  background-color: var(--bg-card);
+}
+
+.checkbox-label input:checked + .custom-checkbox {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.custom-checkbox::after {
+  content: '';
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid var(--bg-app);
+  border-bottom: 2px solid var(--bg-app);
+  transform: rotate(-45deg) translate(1px, -1px);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.checkbox-label input:checked + .custom-checkbox::after {
+  opacity: 1;
+}
+
+/* Action Bar */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: var(--bg-app);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(170, 255, 212, 0.15);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(170, 255, 212, 0.25);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Ambient Waveform Background (for Welcome and Finish Screen) */
+.ambient-bg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 160px;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  background: radial-gradient(circle at center bottom, rgba(170, 255, 212, 0.15) 0%, transparent 60%);
+  animation: waveMotion 12s linear infinite;
+  transform-origin: center bottom;
+}
+
+.wave-2 {
+  background: radial-gradient(circle at center bottom, rgba(238, 254, 255, 0.08) 0%, transparent 70%);
+  animation: waveMotion 18s linear infinite reverse;
+  opacity: 0.7;
+}
+
+@keyframes waveMotion {
+  0% {
+    transform: rotate(0deg) translate(-25%, 10%) scaleY(0.9);
+  }
+  50% {
+    transform: rotate(180deg) translate(-25%, 15%) scaleY(1.1);
+  }
+  100% {
+    transform: rotate(360deg) translate(-25%, 10%) scaleY(0.9);
+  }
+}
+
+/* Progress bar screen styles */
+.progress-container {
+  margin-top: 40px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: var(--bg-card);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background-color: var(--accent);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.status-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: left;
+  min-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 10px;
+  background-color: rgba(255, 107, 107, 0.06);
+  border: 1px solid rgba(255, 107, 107, 0.15);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* Finished Screen Checkmark */
+.checkmark-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80px;
+  margin-bottom: 12px;
+}
+
+.checkmark-circle {
+  width: 60px;
+  height: 60px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px rgba(170, 255, 212, 0.3);
+  animation: scaleUp 0.4s ease forwards;
+}
+
+.checkmark {
+  width: 24px;
+  height: 12px;
+  border-left: 3px solid var(--accent);
+  border-bottom: 3px solid var(--accent);
+  transform: rotate(-45deg) translate(2px, -2px);
+}
+
+@keyframes scaleUp {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

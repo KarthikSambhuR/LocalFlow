@@ -107,7 +107,8 @@ func initDB() error {
 			filename      TEXT    NOT NULL,
 			timestamp     DATETIME NOT NULL,
 			transcription TEXT,
-			transcription_time_us INTEGER DEFAULT 0
+			transcription_time_us INTEGER DEFAULT 0,
+			duration_ms   INTEGER DEFAULT 0
 		);
 	`)
 	if err != nil {
@@ -118,6 +119,7 @@ func initDB() error {
 	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN word_count INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN transcription_time_us INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN raw_transcription TEXT;`)
+	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN duration_ms INTEGER DEFAULT 0;`)
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS analytics (
