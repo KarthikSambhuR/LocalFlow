@@ -224,6 +224,16 @@ settingsModal.innerHTML = `
             </button>
           </div>
         </div>
+        <div class="setting-item llm-choice-setting" id="llmContextSizeSelection">
+          <div class="setting-info">
+            <span class="setting-title">Context Window</span>
+            <span class="setting-desc">Max tokens the model reads at once. Higher values use more RAM.</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+            <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="flex: 1; width: 100%;">
+            <span id="llmContextLabel" class="badge">4K</span>
+          </div>
+        </div>
       </div>
       <div class="setting-group">
         <label>Startup</label>
@@ -1228,6 +1238,7 @@ async function setupLLM() {
   const toggle = document.getElementById('llmEnabledToggle');
   const modeSelection = document.getElementById('llmModeSelection');
   const toneSelection = document.getElementById('llmToneSelection');
+  const contextSizeSelection = document.getElementById('llmContextSizeSelection');
   if (!toggle) return;
 
   const modeOptions = Array.from(document.querySelectorAll('#llmModeOptions .llm-choice'));
@@ -1242,6 +1253,7 @@ async function setupLLM() {
     const show = toggle.checked;
     if (modeSelection) modeSelection.classList.toggle('visible', show);
     if (toneSelection) toneSelection.classList.toggle('visible', show);
+    if (contextSizeSelection) contextSizeSelection.classList.toggle('visible', show);
   };
 
   const setActiveOption = (options, value) => {
@@ -1285,6 +1297,42 @@ async function setupLLM() {
 
   setupChoiceListeners(modeOptions, val => window.go.main.SettingsApp.SetLLMRefinementMode(val));
   setupChoiceListeners(toneOptions, val => window.go.main.SettingsApp.SetLLMTone(val));
+
+  // Context window slider (snaps to powers of 2: 2048, 4096, 8192, 16384, 32768)
+  const CTX_STEPS = [2048, 4096, 8192, 16384, 32768];
+  const CTX_LABELS = ['2K', '4K', '8K', '16K', '32K'];
+  const ctxSlider = document.getElementById('llmContextSlider');
+  const ctxLabel  = document.getElementById('llmContextLabel');
+
+  function ctxSizeToIndex(size) {
+    for (let i = 0; i < CTX_STEPS.length; i++) {
+      if (size <= CTX_STEPS[i]) return i;
+    }
+    return CTX_STEPS.length - 1;
+  }
+
+  if (ctxSlider && ctxLabel) {
+    const savedSize = cfg?.llm_context_size || 4096;
+    const initIdx = ctxSizeToIndex(savedSize);
+    ctxSlider.value = initIdx;
+    ctxLabel.textContent = CTX_LABELS[initIdx];
+
+    ctxSlider.addEventListener('input', () => {
+      ctxLabel.textContent = CTX_LABELS[ctxSlider.value];
+    });
+
+    ctxSlider.addEventListener('change', async () => {
+      const size = CTX_STEPS[ctxSlider.value];
+      ctxLabel.textContent = CTX_LABELS[ctxSlider.value];
+      if (window.go?.main?.SettingsApp) {
+        try {
+          await window.go.main.SettingsApp.SetLLMContextSize(size);
+        } catch (err) {
+          console.error('Failed to update LLM context size', err);
+        }
+      }
+    });
+  }
 }
 
 async function setupProcessingEngine() {

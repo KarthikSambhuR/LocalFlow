@@ -1225,7 +1225,7 @@ func (a *App) startLLMServer(cfg Config) {
 		"-ngl", fmt.Sprintf("%d", gpuLayers),
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", "8192",
+		"-c", fmt.Sprintf("%d", cfg.LLMContextSize),
 	}
 
 	fmt.Printf("Starting llama-server: %s %s (GPU device index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
@@ -1301,7 +1301,8 @@ func (a *App) syncLLMServerState(cfg Config) {
 		configChanged := !isRunning ||
 			runningCfg.LLMActiveModel != cfg.LLMActiveModel ||
 			runningCfg.ProcessingEngine != cfg.ProcessingEngine ||
-			runningCfg.SelectedGPU != cfg.SelectedGPU
+			runningCfg.SelectedGPU != cfg.SelectedGPU ||
+			runningCfg.LLMContextSize != cfg.LLMContextSize
 
 		if configChanged {
 			a.startLLMServer(cfg)

@@ -8,3 +8,4 @@ localflow.db
 localflow_config.json
 dll_builder/
 run_dev.bat
+LocalFlow.exe

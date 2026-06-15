@@ -43,6 +43,7 @@ type Config struct {
 	LLMActiveModel             string  `json:"llm_active_model"`
 	LLMRefinementMode          string  `json:"llm_refinement_mode"`
 	LLMTone                    string  `json:"llm_tone"`
+	LLMContextSize             int     `json:"llm_context_size"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -69,6 +70,7 @@ func loadConfig() Config {
 		LLMActiveModel:             "Qwen3-0.6B-UD-Q4_K_XL.gguf",
 		LLMRefinementMode:          "low",
 		LLMTone:                    "auto",
+		LLMContextSize:             4096,
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
@@ -131,6 +133,7 @@ func loadConfig() Config {
 	}
 	cfg.LLMRefinementMode = normalizeLLMRefinementMode(cfg.LLMRefinementMode)
 	cfg.LLMTone = normalizeLLMTone(cfg.LLMTone)
+	cfg.LLMContextSize = normalizeLLMContextSize(cfg.LLMContextSize)
 	if cfg.WindowWidth < 860 {
 		cfg.WindowWidth = 1100
 	}
@@ -156,6 +159,17 @@ func normalizeLLMTone(tone string) string {
 	default:
 		return "auto"
 	}
+}
+
+// normalizeLLMContextSize clamps to the nearest valid power-of-2 in [2048, 32768].
+func normalizeLLMContextSize(size int) int {
+	valid := []int{2048, 4096, 8192, 16384, 32768}
+	for _, v := range valid {
+		if size <= v {
+			return v
+		}
+	}
+	return valid[len(valid)-1]
 }
 
 func saveConfig(cfg Config) error {

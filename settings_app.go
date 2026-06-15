@@ -863,3 +863,9 @@ func (s *SettingsApp) SetLLMTone(tone string) error {
 	cfg.LLMTone = normalizeLLMTone(tone)
 	return saveConfig(cfg)
 }
+
+func (s *SettingsApp) SetLLMContextSize(size int) error {
+	cfg := loadConfig()
+	cfg.LLMContextSize = normalizeLLMContextSize(size)
+	return saveConfig(cfg)
+}
