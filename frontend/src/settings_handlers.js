@@ -1,0 +1,877 @@
+import { state } from './state.js';
+import { loadDashboard } from './dashboard.js';
+
+export async function setupAmp() {
+  const slider = document.getElementById('ampSlider');
+  const disp   = document.getElementById('ampValue');
+  const toggle = document.getElementById('boostToggle');
+  if (!slider) return;
+
+  // Load current values from shared config file
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  const initGain = cfg ? cfg.input_boost_gain : 1.0;
+  const initEnabled = cfg ? cfg.input_boost_enabled : false;
+
+  slider.value = initGain;
+  state.currentAmp = initGain;
+  disp.textContent = initGain.toFixed(1) + 'x';
+  if (toggle) toggle.checked = initEnabled;
+
+  const persist = () => {
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetInputBoost(
+        toggle ? toggle.checked : false,
+        state.currentAmp
+      );
+    }
+  };
+
+  slider.addEventListener('input', (e) => {
+    state.currentAmp = parseFloat(e.target.value);
+    disp.textContent = state.currentAmp.toFixed(1) + 'x';
+    if (state.gainNode) {
+      state.gainNode.gain.setTargetAtTime(state.currentAmp, state.audioCtx.currentTime, 0.1);
+    }
+    persist();
+  });
+
+  if (toggle) {
+    toggle.addEventListener('change', persist);
+  }
+}
+
+export async function setupLLM() {
+  const toggle = document.getElementById('llmEnabledToggle');
+  const modeSelection = document.getElementById('llmModeSelection');
+  const toneSelection = document.getElementById('llmToneSelection');
+  const contextSizeSelection = document.getElementById('llmContextSizeSelection');
+  if (!toggle) return;
+
+  const modeOptions = Array.from(document.querySelectorAll('#llmModeOptions .llm-choice'));
+  const toneOptions = Array.from(document.querySelectorAll('#llmToneOptions .llm-choice'));
+
+  // Load current values from shared config file
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  const updateSubsettingsVisibility = () => {
+    const show = toggle.checked;
+    if (modeSelection) modeSelection.classList.toggle('visible', show);
+    if (toneSelection) toneSelection.classList.toggle('visible', show);
+    if (contextSizeSelection) contextSizeSelection.classList.toggle('visible', show);
+  };
+
+  const setActiveOption = (options, value) => {
+    options.forEach(option => {
+      const active = option.dataset.value === value;
+      option.classList.toggle('active', active);
+      option.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  };
+
+  if (cfg) {
+    toggle.checked = cfg.llm_enabled || false;
+    setActiveOption(modeOptions, cfg.llm_refinement_mode || 'low');
+    setActiveOption(toneOptions, cfg.llm_tone || 'auto');
+  }
+
+  updateSubsettingsVisibility();
+
+  toggle.addEventListener('change', () => {
+    updateSubsettingsVisibility();
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetLLMEnabled(toggle.checked);
+    }
+  });
+
+  const setupChoiceListeners = (options, persist) => {
+    options.forEach(option => {
+      option.addEventListener('click', async () => {
+        const previous = options.find(item => item.classList.contains('active'))?.dataset.value;
+        setActiveOption(options, option.dataset.value);
+        if (!window.go?.main?.SettingsApp) return;
+        try {
+          await persist(option.dataset.value);
+        } catch (err) {
+          setActiveOption(options, previous);
+          console.error('Failed to update LLM refinement setting', err);
+        }
+      });
+    });
+  };
+
+  setupChoiceListeners(modeOptions, val => window.go.main.SettingsApp.SetLLMRefinementMode(val));
+  setupChoiceListeners(toneOptions, val => window.go.main.SettingsApp.SetLLMTone(val));
+
+  // Context window slider (snaps to powers of 2: 2048, 4096, 8192, 16384, 32768)
+  const CTX_STEPS = [2048, 4096, 8192, 16384, 32768];
+  const CTX_LABELS = ['2K', '4K', '8K', '16K', '32K'];
+  const ctxSlider = document.getElementById('llmContextSlider');
+  const ctxLabel  = document.getElementById('llmContextLabel');
+
+  function ctxSizeToIndex(size) {
+    for (let i = 0; i < CTX_STEPS.length; i++) {
+      if (size <= CTX_STEPS[i]) return i;
+    }
+    return CTX_STEPS.length - 1;
+  }
+
+  if (ctxSlider && ctxLabel) {
+    const savedSize = cfg?.llm_context_size || 4096;
+    const initIdx = ctxSizeToIndex(savedSize);
+    ctxSlider.value = initIdx;
+    ctxLabel.textContent = CTX_LABELS[initIdx];
+
+    ctxSlider.addEventListener('input', () => {
+      ctxLabel.textContent = CTX_LABELS[ctxSlider.value];
+    });
+
+    ctxSlider.addEventListener('change', async () => {
+      const size = CTX_STEPS[ctxSlider.value];
+      ctxLabel.textContent = CTX_LABELS[ctxSlider.value];
+      if (window.go?.main?.SettingsApp) {
+        try {
+          await window.go.main.SettingsApp.SetLLMContextSize(size);
+        } catch (err) {
+          console.error('Failed to update LLM context size', err);
+        }
+      }
+    });
+  }
+}
+
+export async function setupProcessingEngine() {
+  const buttons = Array.from(document.querySelectorAll('.engine-option'));
+  const gpuContainer = document.getElementById('gpuSelectionItem');
+  if (!buttons.length) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  let currentEngine = cfg?.processing_engine === 'vulkan' ? 'vulkan' : 'cpu';
+
+  const render = () => {
+    buttons.forEach((btn) => {
+      const active = btn.dataset.engine === currentEngine;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (gpuContainer) {
+      gpuContainer.style.display = currentEngine === 'vulkan' ? 'flex' : 'none';
+    }
+  };
+
+  render();
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const nextEngine = btn.dataset.engine === 'vulkan' ? 'vulkan' : 'cpu';
+      if (nextEngine === currentEngine) return;
+      currentEngine = nextEngine;
+      render();
+      if (window.go?.main?.SettingsApp) {
+        await window.go.main.SettingsApp.SetProcessingEngine(currentEngine);
+      }
+    });
+  });
+}
+
+export async function setupGPUSelector() {
+  const container = document.getElementById('gpuSelectionItem');
+  const dropdown = document.getElementById('gpuDropdown');
+  const label = document.getElementById('gpuLabel');
+  const menu = document.getElementById('gpuDropdownMenu');
+  if (!container || !dropdown || !label || !menu) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  const selectedGpu = cfg?.selected_gpu || 'Default';
+  label.textContent = selectedGpu;
+
+  const trigger = dropdown.querySelector('.dropdown-trigger');
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  };
+
+  document.addEventListener('click', () => {
+    dropdown.classList.remove('open');
+  });
+
+  if (window.go?.main?.SettingsApp) {
+    const gpus = await window.go.main.SettingsApp.GetGPUDevices();
+    menu.innerHTML = `<div class="dropdown-item ${selectedGpu === 'Default' ? 'active' : ''}" data-value="Default">Default</div>`;
+
+    gpus.forEach((gpu) => {
+      const active = gpu === selectedGpu;
+      const item = document.createElement('div');
+      item.className = `dropdown-item ${active ? 'active' : ''}`;
+      item.dataset.value = gpu;
+      item.textContent = gpu;
+      menu.appendChild(item);
+    });
+
+    const items = menu.querySelectorAll('.dropdown-item');
+    items.forEach((item) => {
+      item.onclick = async (e) => {
+        e.stopPropagation();
+        const val = item.dataset.value;
+        label.textContent = val;
+        items.forEach(i => i.classList.toggle('active', i.dataset.value === val));
+        dropdown.classList.remove('open');
+        await window.go.main.SettingsApp.SetSelectedGPU(val);
+      };
+    });
+  }
+}
+
+export async function setupKeybinds() {
+  const btn = document.getElementById('remapBtn');
+  const k1Label = document.getElementById('k1Label');
+  const k2Label = document.getElementById('k2Label');
+  const sideK1 = document.getElementById('sideK1');
+  const sideK2 = document.getElementById('sideK2');
+  if (!btn) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  k1Label.textContent = cfg ? cfg.keybind1_name : "Ctrl";
+  k2Label.textContent = cfg ? cfg.keybind2_name : "Win";
+  if (sideK1) sideK1.textContent = k1Label.textContent;
+  if (sideK2) sideK2.textContent = k2Label.textContent;
+
+  let isRecording = false;
+  let capturedKeys = [];
+
+  function getRawCode(e) {
+    if (e.keyCode === 17) return e.location === 2 ? 163 : 162; // Ctrl
+    if (e.keyCode === 16) return e.location === 2 ? 161 : 160; // Shift
+    if (e.keyCode === 18) return e.location === 2 ? 165 : 164; // Alt
+    if (e.keyCode === 91) return 91; // LWin
+    if (e.keyCode === 92) return 92; // RWin
+    return e.keyCode;
+  }
+
+  function getFriendlyName(e) {
+    let name = e.code.replace('Left', '').replace('Right', '').replace('Key', '').replace('Digit', '');
+    if (name === 'Meta') return 'Win';
+    if (name === 'Control') return 'Ctrl';
+    return name || String.fromCharCode(e.keyCode);
+  }
+
+  const handleKeydown = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const raw = getRawCode(e);
+    const name = getFriendlyName(e);
+
+    // Prevent identical keys (must be a combination)
+    if (capturedKeys.length === 1 && capturedKeys[0].raw === raw) return;
+
+    capturedKeys.push({ raw, name });
+
+    if (capturedKeys.length === 1) {
+      k1Label.textContent = name;
+      k2Label.textContent = "...";
+    }
+
+    if (capturedKeys.length === 2) {
+      k2Label.textContent = name;
+      if (sideK1) sideK1.textContent = capturedKeys[0].name;
+      if (sideK2) sideK2.textContent = name;
+      window.removeEventListener('keydown', handleKeydown, true);
+      btn.classList.remove('recording');
+      isRecording = false;
+
+      // Save to backend
+      if (window.go?.main?.SettingsApp) {
+        await window.go.main.SettingsApp.SetKeybinds(
+          capturedKeys[0].raw, capturedKeys[0].name,
+          capturedKeys[1].raw, capturedKeys[1].name
+        );
+      }
+    }
+  };
+
+  btn.addEventListener('click', async () => {
+    if (isRecording) return;
+    isRecording = true;
+    capturedKeys = [];
+    if (window.go?.main?.SettingsApp) {
+      await window.go.main.SettingsApp.SetKeybindCaptureActive(true);
+    }
+    btn.classList.add('recording');
+    k1Label.textContent = "...";
+    k2Label.textContent = "...";
+    window.addEventListener('keydown', handleKeydown, true);
+  });
+}
+
+export async function setupStartupSettings() {
+  const startupToggle = document.getElementById('startupToggle');
+  const minimizedToggle = document.getElementById('startMinimizedToggle');
+  if (!startupToggle || !minimizedToggle) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  startupToggle.checked = cfg ? cfg.start_on_startup : false;
+  minimizedToggle.checked = cfg ? cfg.start_minimized : false;
+
+  startupToggle.addEventListener('change', async () => {
+    const nextValue = startupToggle.checked;
+    if (!window.go?.main?.SettingsApp) return;
+    try {
+      await window.go.main.SettingsApp.SetStartOnStartup(nextValue);
+    } catch (err) {
+      startupToggle.checked = !nextValue;
+      console.error('Failed to update startup setting', err);
+      alert('Could not update the Windows startup setting. Please try again.');
+    }
+  });
+
+  minimizedToggle.addEventListener('change', async () => {
+    const nextValue = minimizedToggle.checked;
+    if (!window.go?.main?.SettingsApp) return;
+    try {
+      await window.go.main.SettingsApp.SetStartMinimized(nextValue);
+    } catch (err) {
+      minimizedToggle.checked = !nextValue;
+      console.error('Failed to update start minimized setting', err);
+      alert('Could not update the start minimized setting. Please try again.');
+    }
+  });
+}
+
+export async function setupStorageSettings() {
+  const audioDropdown = document.getElementById('audioRetentionDropdown');
+  const transDropdown = document.getElementById('transcriptionRetentionDropdown');
+  const purgeBtn = document.getElementById('purgeNowBtn');
+  if (!audioDropdown || !transDropdown || !purgeBtn) return;
+
+  const audioTrigger = audioDropdown.querySelector('.dropdown-trigger');
+  const audioLabel = document.getElementById('audioRetentionLabel');
+  const audioItems = audioDropdown.querySelectorAll('.dropdown-item');
+
+  const transTrigger = transDropdown.querySelector('.dropdown-trigger');
+  const transLabel = document.getElementById('transcriptionRetentionLabel');
+  const transItems = transDropdown.querySelectorAll('.dropdown-item');
+
+  let currentAudioVal = 7;
+  let currentTransVal = 30;
+
+  const getLabelText = (val) => {
+    val = parseInt(val, 10);
+    if (val === -1 || val === 99999 || val <= 0) return 'Forever';
+    return val === 1 ? '1 Day' : `${val} Days`;
+  };
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  if (cfg) {
+    currentAudioVal = cfg.audio_retention_days;
+    currentTransVal = cfg.transcription_retention_days;
+    
+    audioLabel.textContent = getLabelText(currentAudioVal);
+    audioItems.forEach(item => {
+      const active = parseInt(item.getAttribute('data-value'), 10) === currentAudioVal;
+      item.classList.toggle('active', active);
+    });
+
+    transLabel.textContent = getLabelText(currentTransVal);
+    transItems.forEach(item => {
+      const active = parseInt(item.getAttribute('data-value'), 10) === currentTransVal;
+      item.classList.toggle('active', active);
+    });
+  }
+
+  const persist = () => {
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetRetention(
+        currentAudioVal,
+        currentTransVal
+      );
+    }
+  };
+
+  // Audio dropdown trigger
+  audioTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    audioDropdown.classList.toggle('open');
+    transDropdown.classList.remove('open');
+  });
+
+  audioItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentAudioVal = parseInt(item.getAttribute('data-value'), 10);
+      audioLabel.textContent = getLabelText(currentAudioVal);
+      audioItems.forEach(i => i.classList.toggle('active', i === item));
+      audioDropdown.classList.remove('open');
+      persist();
+    });
+  });
+
+  // Transcription dropdown trigger
+  transTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    transDropdown.classList.toggle('open');
+    audioDropdown.classList.remove('open');
+  });
+
+  transItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentTransVal = parseInt(item.getAttribute('data-value'), 10);
+      transLabel.textContent = getLabelText(currentTransVal);
+      transItems.forEach(i => i.classList.toggle('active', i === item));
+      transDropdown.classList.remove('open');
+      persist();
+    });
+  });
+
+  // Close dropdowns on click outside
+  document.addEventListener('click', () => {
+    audioDropdown.classList.remove('open');
+    transDropdown.classList.remove('open');
+  });
+
+  const modal = document.getElementById('confirmModal');
+  const modalConfirm = document.getElementById('confirmModalConfirm');
+  const modalCancel = document.getElementById('confirmModalCancel');
+
+  let onConfirmCallback = null;
+
+  const showConfirmModal = (onConfirm) => {
+    onConfirmCallback = onConfirm;
+    modal.classList.add('active');
+  };
+
+  const hideConfirmModal = () => {
+    modal.classList.remove('active');
+    onConfirmCallback = null;
+  };
+
+  modalCancel.onclick = (e) => {
+    e.stopPropagation();
+    hideConfirmModal();
+  };
+
+  modalConfirm.onclick = (e) => {
+    e.stopPropagation();
+    if (onConfirmCallback) onConfirmCallback();
+    hideConfirmModal();
+  };
+
+  purgeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showConfirmModal(async () => {
+      if (window.go?.main?.SettingsApp) {
+        purgeBtn.disabled = true;
+        purgeBtn.textContent = 'Cleaning...';
+        try {
+          await window.go.main.SettingsApp.PurgeNow();
+          await loadDashboard();
+          purgeBtn.textContent = 'Done!';
+          setTimeout(() => {
+            purgeBtn.textContent = 'Clean Cache Now';
+            purgeBtn.disabled = false;
+          }, 1500);
+        } catch (err) {
+          console.error(err);
+          purgeBtn.textContent = 'Error';
+          setTimeout(() => {
+            purgeBtn.textContent = 'Clean Cache Now';
+            purgeBtn.disabled = false;
+          }, 1500);
+        }
+      }
+    });
+  });
+}
+
+export async function setupDataFolderSettings() {
+  const selectBtn = document.getElementById('selectFolderBtn');
+  const folderDesc = document.getElementById('dataFolderDesc');
+  if (!selectBtn || !folderDesc) return;
+
+  const updatePathDisplay = async () => {
+    const cfg = window.go?.main?.SettingsApp
+      ? await window.go.main.SettingsApp.GetConfig()
+      : null;
+    if (cfg && cfg.data_folder) {
+      folderDesc.textContent = cfg.data_folder;
+    } else {
+      folderDesc.textContent = 'Default';
+    }
+  };
+
+  // Initial load
+  await updatePathDisplay();
+
+  selectBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!window.go?.main?.SettingsApp) return;
+
+    try {
+      const selectedPath = await window.go.main.SettingsApp.SelectDataFolder();
+      if (!selectedPath) {
+        // User cancelled dialog
+        return;
+      }
+
+      // Show migrating loader state
+      selectBtn.disabled = true;
+      selectBtn.textContent = 'Migrating...';
+      folderDesc.textContent = `Migrating files to: ${selectedPath}...`;
+
+      await window.go.main.SettingsApp.SetDataFolder(selectedPath);
+
+      selectBtn.textContent = 'Done!';
+      await updatePathDisplay();
+      
+      // Reload dashboard stats and history from the new database path
+      await loadDashboard();
+
+      setTimeout(() => {
+        selectBtn.textContent = 'Change Folder';
+        selectBtn.disabled = false;
+      }, 1500);
+    } catch (err) {
+      console.error('Migration failed:', err);
+      selectBtn.textContent = 'Error';
+      await updatePathDisplay();
+      setTimeout(() => {
+        selectBtn.textContent = 'Change Folder';
+        selectBtn.disabled = false;
+      }, 1500);
+    }
+  });
+}
+
+export async function setupModelsSettings() {
+  const modelList = document.getElementById('modelList');
+  if (!modelList) return;
+  let whisperExpanded = false;
+  let llmExpanded = false;
+
+  const renderModels = async () => {
+    if (!window.go?.main?.SettingsApp) return;
+    try {
+      const allModels = await window.go.main.SettingsApp.GetModelsList() || [];
+      modelList.innerHTML = '';
+      modelList.className = 'model-list model-list-expanded';
+
+      const renderPanel = (type, title, isExpanded, setExpanded) => {
+        const models = allModels.filter(m => m.model_type === type || (type === 'whisper' && !m.model_type));
+        const activeModel = models.find(m => m.is_active);
+        const downloadedModels = models.filter(m => m.is_downloaded);
+        const downloadedCount = downloadedModels.length;
+
+        const panel = document.createElement('div');
+        panel.className = `models-panel ${isExpanded ? 'open' : ''}`;
+        panel.style.marginBottom = '20px';
+        panel.innerHTML = `
+          <button class="models-panel-header" type="button" aria-expanded="${isExpanded}">
+            <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${isExpanded ? '90deg' : '0deg'});"><polyline points="9 18 15 12 9 6"/></svg>
+            <span class="models-panel-title">${title}</span>
+            <span class="models-panel-meta">${activeModel ? activeModel.name : 'No model active'} / ${downloadedCount}/${models.length} downloaded</span>
+          </button>
+          <div class="models-panel-body">
+            ${models.map(m => {
+              const statusText = m.is_active ? 'Active' : m.is_downloaded ? 'Downloaded' : 'Available';
+              const statusClass = m.is_active ? 'active' : m.is_downloaded ? 'downloaded' : 'available';
+              let actionHtml = '';
+              if (m.is_downloading) {
+                actionHtml = `
+                  <div class="model-progress-container">
+                    <div class="model-progress-bar-bg">
+                      <div class="model-progress-bar-fill" id="bar-${m.id}" style="width: ${m.download_progress}%"></div>
+                    </div>
+                    <div class="model-progress-text" id="text-${m.id}">Downloading... ${m.download_progress}%</div>
+                  </div>
+                `;
+              } else if (m.is_downloaded) {
+                actionHtml = `
+                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" data-filename="${m.filename}">Activate</button>`}
+                  ${downloadedCount > 1 ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
+                `;
+              } else {
+                actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${m.id}">Download</button>`;
+              }
+
+              return `
+                <div class="model-row">
+                  <div class="model-row-main">
+                    <div class="model-name-line">
+                      <span class="model-name">${m.name}</span>
+                      <span class="model-status-pill ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="model-desc">${m.description}</div>
+                    <div class="model-row-specs">
+                      <span>${m.size_mb} MB</span>
+                      <span>${m.speed_label}</span>
+                      <span>${m.speed_description}</span>
+                    </div>
+                    <div class="model-filename">${m.filename}</div>
+                  </div>
+                  <div class="model-row-actions">
+                    ${actionHtml}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+
+        const header = panel.querySelector('.models-panel-header');
+        header.onclick = () => {
+          setExpanded(!isExpanded);
+          renderModels();
+        };
+
+        panel.querySelectorAll('.download-btn').forEach((downloadBtn) => {
+          downloadBtn.onclick = async (event) => {
+            event.stopPropagation();
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Starting...';
+            await window.go.main.SettingsApp.DownloadModel(downloadBtn.dataset.id);
+            renderModels();
+          };
+        });
+
+        panel.querySelectorAll('.activate-btn').forEach((activateBtn) => {
+          activateBtn.onclick = async (event) => {
+            event.stopPropagation();
+            activateBtn.disabled = true;
+            activateBtn.textContent = 'Activating...';
+            try {
+              await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.filename);
+            } catch (err) {
+              alert(err);
+            }
+            renderModels();
+          };
+        });
+
+        panel.querySelectorAll('.delete-btn').forEach((deleteBtn) => {
+          deleteBtn.onclick = async (event) => {
+            event.stopPropagation();
+            const model = models.find(m => m.filename === deleteBtn.dataset.filename);
+            if (confirm(`Are you sure you want to delete ${model?.name || 'this model'}?`)) {
+              deleteBtn.disabled = true;
+              deleteBtn.textContent = 'Deleting...';
+              try {
+                await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
+              } catch (err) {
+                alert(err);
+              }
+              renderModels();
+            }
+          };
+        });
+
+        modelList.appendChild(panel);
+      };
+
+      renderPanel('whisper', 'Speech Recognition Models', whisperExpanded, (val) => whisperExpanded = val);
+      renderPanel('llm', 'Grammar & Formatting Models', llmExpanded, (val) => llmExpanded = val);
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  window.runtime.EventsOn('model-download-progress', (id, percent) => {
+    const fill = document.getElementById(`bar-${id}`);
+    const txt = document.getElementById(`text-${id}`);
+    if (fill && txt) {
+      fill.style.width = `${percent}%`;
+      txt.textContent = `Downloading... ${percent}%`;
+    }
+  });
+
+  window.runtime.EventsOn('model-download-done', (id) => {
+    renderModels();
+  });
+
+  window.runtime.EventsOn('model-download-error', (id, errMsg) => {
+    alert(`Download failed for model ${id}: ${errMsg}`);
+    renderModels();
+  });
+
+  await renderModels();
+}
+
+export async function setupOnboarding() {
+  const overlay = document.getElementById('onboardingOverlay');
+  const card = document.getElementById('onboardingCard');
+  if (!overlay || !card) return;
+
+  if (!window.go?.main?.SettingsApp) return;
+
+  const isCompleted = await window.go.main.SettingsApp.IsSetupCompleted();
+  if (isCompleted) {
+    return;
+  }
+
+  // Show overlay
+  overlay.classList.add('active');
+
+  const showScreen1 = () => {
+    card.innerHTML = `
+      <h2 class="onboarding-title">Setting Up LocalFlow</h2>
+      <p class="onboarding-desc">We are downloading the default speech recognition model and local typography so the application can operate 100% offline with complete privacy.</p>
+      <div class="onboarding-progress-container">
+        <div class="onboarding-progress-bar-bg">
+          <div class="onboarding-progress-bar-fill" id="setupBar" style="width: 0%"></div>
+        </div>
+        <div class="onboarding-progress-status" id="setupStatus">Initializing...</div>
+      </div>
+    `;
+
+    // Start download
+    window.go.main.SettingsApp.DownloadEssentialAssets();
+
+    window.runtime.EventsOn('setup-progress', (percent, statusText) => {
+      const bar = document.getElementById('setupBar');
+      const status = document.getElementById('setupStatus');
+      if (bar) bar.style.width = `${percent}%`;
+      if (status) status.textContent = statusText;
+    });
+
+    window.runtime.EventsOn('setup-error', (errMsg) => {
+      const status = document.getElementById('setupStatus');
+      if (status) {
+        status.style.color = '#ef4444';
+        status.textContent = `Error: ${errMsg}`;
+      }
+    });
+
+    window.runtime.EventsOn('setup-done', () => {
+      setTimeout(showScreen2, 800);
+    });
+  };
+
+  const showScreen2 = () => {
+    card.innerHTML = `
+      <h2 class="onboarding-title">Welcome to LocalFlow</h2>
+      <p class="onboarding-desc">Your transcripts and recordings stay securely on your device. Let's start by getting to know you. What should we call you?</p>
+      <div class="onboarding-input-container">
+        <input type="text" id="usernameInput" class="onboarding-input" placeholder="Your Name" />
+      </div>
+      <button id="nextBtn" class="onboarding-btn" disabled>Continue</button>
+    `;
+
+    const input = document.getElementById('usernameInput');
+    const btn = document.getElementById('nextBtn');
+
+    input.focus();
+    input.oninput = () => {
+      btn.disabled = input.value.trim().length === 0;
+    };
+
+    btn.onclick = async () => {
+      const name = input.value.trim();
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      await window.go.main.SettingsApp.SetProfileName(name);
+      showScreen3();
+    };
+  };
+
+  const showScreen3 = async () => {
+    // Load config keybind names dynamically
+    const cfg = await window.go.main.SettingsApp.GetConfig();
+    const k1 = cfg.keybind1_name || 'Ctrl';
+    const k2 = cfg.keybind2_name || 'Win';
+
+    card.innerHTML = `
+      <h2 class="onboarding-title">All Ready!</h2>
+      <p class="onboarding-desc">Press and hold this shortcut combination while speaking, then release to instantly dictate directly into any active input.</p>
+      <div class="onboarding-keybind-demo">
+        <kbd>${k1}</kbd> <span>+</span> <kbd>${k2}</kbd>
+      </div>
+      <button id="finishBtn" class="onboarding-btn">Get Started</button>
+    `;
+
+    const btn = document.getElementById('finishBtn');
+    btn.onclick = () => {
+      overlay.classList.remove('active');
+      // Reload dashboard in case stats/history are present
+      loadDashboard();
+    };
+  };
+
+  // Start with Screen 1
+  showScreen1();
+}
+
+export async function setupMicrophoneSettings() {
+  const micDropdown = document.getElementById('micDropdown');
+  const micLabel = document.getElementById('micLabel');
+  const micMenu = document.getElementById('micDropdownMenu');
+  if (!micDropdown || !micLabel || !micMenu) return;
+
+  const trigger = micDropdown.querySelector('.dropdown-trigger');
+
+  const mics = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetMicrophones()
+    : ["Default"];
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  let currentMic = cfg ? cfg.active_microphone : "Default";
+
+  const renderMics = () => {
+    micMenu.innerHTML = mics.map(m => `
+      <div class="dropdown-item ${m === currentMic ? 'active' : ''}" data-value="${m}">${m}</div>
+    `).join('');
+
+    const items = micMenu.querySelectorAll('.dropdown-item');
+    items.forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        currentMic = item.getAttribute('data-value');
+        micLabel.textContent = currentMic;
+        micDropdown.classList.remove('open');
+        renderMics();
+
+        if (window.go?.main?.SettingsApp) {
+          await window.go.main.SettingsApp.SetMicrophone(currentMic);
+        }
+      });
+    });
+  };
+
+  micLabel.textContent = currentMic;
+  renderMics();
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    micDropdown.classList.toggle('open');
+    const audioDropdown = document.getElementById('audioRetentionDropdown');
+    const transDropdown = document.getElementById('transcriptionRetentionDropdown');
+    if (audioDropdown) audioDropdown.classList.remove('open');
+    if (transDropdown) transDropdown.classList.remove('open');
+  });
+
+  document.addEventListener('click', () => {
+    micDropdown.classList.remove('open');
+  });
+}

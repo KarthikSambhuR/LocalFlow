@@ -1,0 +1,322 @@
+/* ══════════════════════════════
+   DASHBOARD FRAME & NAVIGATION
+   ══════════════════════════════ */
+.settings-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--bg-app);
+  z-index: 100;
+}
+
+.settings-modal {
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.window-titlebar {
+  height: 38px;
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  user-select: none;
+  --wails-draggable: drag;
+}
+
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 14px;
+  min-width: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.titlebar-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.titlebar-controls {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  --wails-draggable: no-drag;
+}
+
+.titlebar-button {
+  width: 46px;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.titlebar-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.titlebar-button:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.titlebar-close:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.settings-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.settings-sidebar {
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  min-height: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  padding: 36px 20px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 36px;
+}
+
+.brand-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-glow);
+  object-fit: cover;
+}
+
+/* Custom Dropdown for Year Selection */
+.custom-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border);
+  border-radius: 9999px; /* Pill shape */
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  height: 38px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.dropdown-trigger:hover {
+  border-color: var(--border-active);
+  box-shadow: var(--shadow-glow);
+}
+
+.dropdown-trigger svg {
+  transition: transform 0.2s ease;
+  stroke: var(--text-primary);
+}
+
+.custom-dropdown.open .dropdown-trigger svg {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 100px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.custom-dropdown.open {
+  z-index: 9999;
+}
+
+.custom-dropdown.open .dropdown-menu {
+  display: flex;
+}
+
+.dropdown-item {
+  padding: 8px 16px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.dropdown-item:hover {
+  background: rgba(238, 254, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.dropdown-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sidebar-header {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.sidebar-subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--border-active);
+  box-shadow: var(--shadow-glow);
+}
+
+.nav-item svg { stroke-width: 2px; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 14px 10px 0;
+}
+
+.shortcut-preview {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 14px;
+}
+
+.shortcut-preview span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.shortcut-preview div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.shortcut-preview kbd,
+.kbd-btn kbd {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-sidebar);
+  color: var(--text-primary);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,.15);
+  font-size: 13px;
+  padding: 4px 8px;
+  font-weight: 700;
+}
+
+/* Content Area */
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+.content-header {
+  padding: 48px 48px 20px;
+}
+
+.section-title {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.section {
+  flex: 1;
+  padding: 0 48px 48px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: none;
+}
+
+.section.active {
+  display: block;
+}
