@@ -191,6 +191,41 @@ function setupWindowTitlebar() {
   });
 }
 
+function setupUpdater() {
+  const notification = document.getElementById('updateNotification');
+  const btn = document.getElementById('restartUpdateBtn');
+  const label = document.getElementById('appVersionLabel');
+  if (!notification || !btn) return;
+
+  if (window.runtime) {
+    window.runtime.EventsOn('update-downloaded', () => {
+      notification.style.display = 'block';
+    });
+  }
+
+  if (window.go?.main?.SettingsApp) {
+    window.go.main.SettingsApp.GetVersion().then(v => {
+      const formattedVer = v.startsWith('v') ? v : `v${v}`;
+      if (label) label.textContent = `LocalFlow ${formattedVer}`;
+    }).catch(err => console.error('Failed to get version:', err));
+  }
+
+  btn.addEventListener('click', async () => {
+    if (window.go?.main?.SettingsApp) {
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      try {
+        await window.go.main.SettingsApp.InstallUpdateAndRestart();
+      } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Restart to Update`;
+        console.error('Update failed:', err);
+        alert('Failed to launch update: ' + err);
+      }
+    }
+  });
+}
+
 async function init() {
   setupTheme();
 
@@ -199,6 +234,7 @@ async function init() {
     if (isSettings) {
       setupWindowTitlebar();
       setupGlobalToggle();
+      setupUpdater();
       moduleNode.style.display = 'none';
       settingsOverlay.classList.add('active');
       const route = await window.go.main.SettingsApp.GetInitialRoute();

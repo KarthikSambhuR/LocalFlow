@@ -66,6 +66,14 @@ export function GetRecordings() {
   return window['go']['main']['SettingsApp']['GetRecordings']();
 }
 
+export function GetVersion() {
+  return window['go']['main']['SettingsApp']['GetVersion']();
+}
+
+export function InstallUpdateAndRestart() {
+  return window['go']['main']['SettingsApp']['InstallUpdateAndRestart']();
+}
+
 export function IsSetupCompleted() {
   return window['go']['main']['SettingsApp']['IsSetupCompleted']();
 }

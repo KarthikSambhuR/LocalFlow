@@ -14,6 +14,7 @@ var assets embed.FS
 
 func main() {
 	CheckAndRunUninstall()
+	CheckAndRunSilentUpdate()
 
 	app := NewApp()
 

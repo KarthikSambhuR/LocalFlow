@@ -79,11 +79,18 @@ settingsModal.innerHTML = `
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
         Models
       </div>
+      <div class="update-notification" id="updateNotification" style="display: none;">
+        <button id="restartUpdateBtn" class="update-btn" type="button">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Restart to Update
+        </button>
+      </div>
       <div class="sidebar-footer">
         <div class="shortcut-preview">
           <span>Shortcut</span>
           <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
         </div>
+        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.0.0</div>
       </div>
     </div>
     <div class="settings-content">

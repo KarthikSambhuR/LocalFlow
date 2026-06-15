@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -223,6 +224,89 @@ func CheckAndRunUninstall() {
 		}
 		os.Exit(0)
 	}
+}
+
+func getInstallLocation() (string, error) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer k.Close()
+
+	val, _, err := k.GetStringValue("InstallLocation")
+	return val, err
+}
+
+func CheckAndRunSilentUpdate() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--silent-update" {
+			err := PerformSilentUpdateDirect()
+			if err != nil {
+				os.Exit(1)
+			}
+			os.Exit(0)
+		}
+	}
+}
+
+func PerformSilentUpdateDirect() error {
+	// 1. Get install location from registry
+	targetDir, err := getInstallLocation()
+	if err != nil || targetDir == "" {
+		return fmt.Errorf("could not find install location: %w", err)
+	}
+
+	// 2. Terminate any running LocalFlow instances to free file locks
+	_ = exec.Command("taskkill", "/f", "/im", "LocalFlow.exe").Run()
+	time.Sleep(1 * time.Second) // Wait for process locks to release
+
+	// 3. Read embedded zip payload
+	payload, err := GetPayloadZip()
+	if err != nil {
+		return err
+	}
+
+	zipReader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
+	if err != nil {
+		return err
+	}
+
+	// 4. Extract and overwrite files
+	for _, file := range zipReader.File {
+		filePath := filepath.Join(targetDir, file.Name)
+		if file.FileInfo().IsDir() {
+			_ = os.MkdirAll(filePath, file.Mode())
+			continue
+		}
+
+		_ = os.MkdirAll(filepath.Dir(filePath), 0755)
+
+		outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+		if err != nil {
+			return err
+		}
+
+		inFile, err := file.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, inFile)
+		inFile.Close()
+		outFile.Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	// 5. Start updated app with the update cleanup argument detached
+	exePath := filepath.Join(targetDir, "LocalFlow.exe")
+	cmd := exec.Command(exePath, "--update-cleanup")
+	cmd.Dir = targetDir
+	_ = cmd.Start()
+
+	return nil
 }
 
 func (a *App) PerformUninstall() error {

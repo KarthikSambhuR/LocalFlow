@@ -34,6 +34,10 @@ export function GetProfileName():Promise<string>;
 
 export function GetRecordings():Promise<Array<main.Recording>>;
 
+export function GetVersion():Promise<string>;
+
+export function InstallUpdateAndRestart():Promise<void>;
+
 export function IsSetupCompleted():Promise<boolean>;
 
 export function PurgeNow():Promise<void>;
