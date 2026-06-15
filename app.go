@@ -1188,6 +1188,10 @@ func (a *App) startLLMServer(cfg Config) {
 		return
 	}
 
+	// Enroll in the Windows Job Object so the OS kills llama-server automatically
+	// if this process exits for any reason (crash, kill, panic, etc.).
+	assignToJobObject(cmd)
+
 	a.llmCmd = cmd
 	a.llmPort = 0 // Not ready yet; will be set once health check passes
 	a.runningLLMConfig = cfg
