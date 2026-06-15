@@ -81,7 +81,7 @@ If you want to modify LocalFlow or build it yourself, follow the development set
 1. **Clone the repository:**
 
 ```bash
-   git clone [https://github.com/KarthikSambhuR/LocalFlow.git](https://github.com/KarthikSambhuR/LocalFlow.git)
+   git clone https://github.com/KarthikSambhuR/LocalFlow.git
    cd LocalFlow
 
 ```
