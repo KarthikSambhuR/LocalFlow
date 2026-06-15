@@ -197,17 +197,41 @@ function setupUpdater() {
   const label = document.getElementById('appVersionLabel');
   if (!notification || !btn) return;
 
-  if (window.runtime) {
-    window.runtime.EventsOn('update-downloaded', () => {
-      notification.style.display = 'block';
-    });
-  }
-
   if (window.go?.main?.SettingsApp) {
     window.go.main.SettingsApp.GetVersion().then(v => {
       const formattedVer = v.startsWith('v') ? v : `v${v}`;
       if (label) label.textContent = `LocalFlow ${formattedVer}`;
     }).catch(err => console.error('Failed to get version:', err));
+
+    const progressContainer = document.getElementById('updateProgressContainer');
+    const progressBar = document.getElementById('updateProgressBar');
+    const progressText = document.getElementById('updateProgressText');
+
+    const checkStatus = async () => {
+      try {
+        const state = await window.go.main.SettingsApp.GetUpdateStatus();
+        if (state.status === 'available' || state.status === 'downloading') {
+          notification.style.display = 'block';
+          if (progressContainer) progressContainer.style.display = 'flex';
+          btn.style.display = 'none';
+          const pct = state.percent || 0;
+          if (progressBar) progressBar.style.width = `${pct}%`;
+          if (progressText) progressText.textContent = `Downloading... ${pct}%`;
+        } else if (state.status === 'downloaded') {
+          notification.style.display = 'block';
+          if (progressContainer) progressContainer.style.display = 'none';
+          btn.style.display = 'flex';
+        } else {
+          notification.style.display = 'none';
+        }
+      } catch (err) {
+        console.error('Failed to get update status:', err);
+      }
+    };
+
+    // Run check status immediately, then every 1 second
+    checkStatus();
+    setInterval(checkStatus, 1000);
   }
 
   btn.addEventListener('click', async () => {

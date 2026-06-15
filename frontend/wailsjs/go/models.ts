@@ -138,6 +138,22 @@ export namespace main {
 	        this.transcription_time_us = source["transcription_time_us"];
 	    }
 	}
+	export class UpdateState {
+	    status: string;
+	    version: string;
+	    percent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.status = source["status"];
+	        this.version = source["version"];
+	        this.percent = source["percent"];
+	    }
+	}
 
 }
 

@@ -115,6 +115,9 @@ func (a *App) startup(ctx context.Context) {
 
 	// 6. Start Global Hook in a Goroutine
 	go a.listenToKeyboard()
+
+	// 7. Start update checker in background
+	go StartBackgroundUpdateCheck(a.ctx)
 }
 
 func (a *App) shutdown(ctx context.Context) {

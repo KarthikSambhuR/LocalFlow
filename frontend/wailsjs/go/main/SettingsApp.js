@@ -66,6 +66,10 @@ export function GetRecordings() {
   return window['go']['main']['SettingsApp']['GetRecordings']();
 }
 
+export function GetUpdateStatus() {
+  return window['go']['main']['SettingsApp']['GetUpdateStatus']();
+}
+
 export function GetVersion() {
   return window['go']['main']['SettingsApp']['GetVersion']();
 }

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	AppVersion = "v1.0.0"
+	AppVersion = "v0.75"
 	GithubRepo = "KarthikSambhuR/LocalFlow"
 )
 
@@ -29,6 +29,12 @@ type GithubRelease struct {
 	} `json:"assets"`
 }
 
+type UpdateState struct {
+	Status  string `json:"status"`
+	Version string `json:"version"`
+	Percent int    `json:"percent"`
+}
+
 func getTempUpdatePath() string {
 	return filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe")
 }
@@ -37,13 +43,50 @@ func getTempUpdateTmpPath() string {
 	return filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe.tmp")
 }
 
+func getUpdateStatePath() string {
+	return filepath.Join(os.Getenv("TEMP"), "localflow_update_state.json")
+}
+
+func writeUpdateState(status string, version string, percent int) {
+	state := UpdateState{
+		Status:  status,
+		Version: version,
+		Percent: percent,
+	}
+	data, err := json.Marshal(state)
+	if err == nil {
+		_ = os.WriteFile(getUpdateStatePath(), data, 0644)
+	}
+}
+
+func readUpdateState() UpdateState {
+	var state UpdateState
+	state.Status = "idle"
+	for i := 0; i < 5; i++ {
+		data, err := os.ReadFile(getUpdateStatePath())
+		if err == nil {
+			if errUnmarshal := json.Unmarshal(data, &state); errUnmarshal == nil {
+				return state
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return state
+}
+
 // StartBackgroundUpdateCheck runs in a goroutine and checks for new GitHub releases.
 func StartBackgroundUpdateCheck(ctx context.Context) {
-	// Wait a moment for the frontend to settle
+	// Wait a moment for the system to settle
 	time.Sleep(3 * time.Second)
 
 	// Check if update file already exists (previously downloaded completely)
 	if _, err := os.Stat(getTempUpdatePath()); err == nil {
+		state := readUpdateState()
+		if state.Status == "downloaded" {
+			wailsRuntime.EventsEmit(ctx, "update-downloaded")
+			return
+		}
+		writeUpdateState("downloaded", state.Version, 100)
 		wailsRuntime.EventsEmit(ctx, "update-downloaded")
 		return
 	}
@@ -72,6 +115,7 @@ func StartBackgroundUpdateCheck(ctx context.Context) {
 	}
 
 	if !isNewerVersion(AppVersion, release.TagName) {
+		writeUpdateState("idle", "", 0)
 		return
 	}
 
@@ -88,6 +132,7 @@ func StartBackgroundUpdateCheck(ctx context.Context) {
 		return
 	}
 
+	writeUpdateState("available", release.TagName, 0)
 	wailsRuntime.EventsEmit(ctx, "update-available", release.TagName)
 
 	// Start downloading in background
@@ -100,29 +145,46 @@ func StartBackgroundUpdateCheck(ctx context.Context) {
 
 		out, err := os.Create(tmpPath)
 		if err != nil {
+			writeUpdateState("idle", "", 0)
 			return
 		}
 		defer out.Close()
 
 		dlReq, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
 		if err != nil {
+			writeUpdateState("idle", "", 0)
 			return
 		}
 
-		dlResp, err := client.Do(dlReq)
+		// Use a separate client with no timeout for the binary download.
+		// The api client above has a 15s timeout which kills large file streams.
+		dlClient := &http.Client{}
+		dlResp, err := dlClient.Do(dlReq)
 		if err != nil {
+			writeUpdateState("idle", "", 0)
 			return
 		}
 		defer dlResp.Body.Close()
 
 		if dlResp.StatusCode != http.StatusOK {
+			writeUpdateState("idle", "", 0)
 			return
 		}
 
-		_, err = io.Copy(out, dlResp.Body)
+		counter := &UpdateWriteCounter{
+			ContentLen: uint64(dlResp.ContentLength),
+			LastPct:    -1,
+			OnProgress: func(percent int) {
+				writeUpdateState("downloading", release.TagName, percent)
+				wailsRuntime.EventsEmit(ctx, "update-progress", percent)
+			},
+		}
+
+		_, err = io.Copy(out, io.TeeReader(dlResp.Body, counter))
 		if err != nil {
 			out.Close()
 			_ = os.Remove(tmpPath)
+			writeUpdateState("idle", "", 0)
 			return
 		}
 		out.Close()
@@ -130,7 +192,10 @@ func StartBackgroundUpdateCheck(ctx context.Context) {
 		// Rename to final path to mark download completion
 		err = os.Rename(tmpPath, finalPath)
 		if err == nil {
+			writeUpdateState("downloaded", release.TagName, 100)
 			wailsRuntime.EventsEmit(ctx, "update-downloaded")
+		} else {
+			writeUpdateState("idle", "", 0)
 		}
 	}()
 }
@@ -169,4 +234,27 @@ func triggerInstallUpdateAndRestart() error {
 	// Exit the main application so files are not locked
 	os.Exit(0)
 	return nil
+}
+
+type UpdateWriteCounter struct {
+	Total      uint64
+	ContentLen uint64
+	LastPct    int
+	OnProgress func(percent int)
+}
+
+func (wc *UpdateWriteCounter) Write(p []byte) (int, error) {
+	n := len(p)
+	wc.Total += uint64(n)
+	if wc.ContentLen > 0 {
+		percent := int((float64(wc.Total) / float64(wc.ContentLen)) * 100)
+		if percent > 100 {
+			percent = 100
+		}
+		if percent != wc.LastPct {
+			wc.LastPct = percent
+			wc.OnProgress(percent)
+		}
+	}
+	return n, nil
 }

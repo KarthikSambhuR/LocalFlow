@@ -33,9 +33,6 @@ func (s *SettingsApp) startup(ctx context.Context) {
 	pruneAudioCache(cfg.AudioRetentionDays)
 	pruneRecordings(cfg.TranscriptionRetentionDays)
 
-	// Start update checker in background
-	go StartBackgroundUpdateCheck(ctx)
-
 	// Restore the window to the size/state it was in when the user last closed it.
 	go func() {
 		// Give the WebView a moment to fully initialize before issuing window calls.
@@ -117,6 +114,10 @@ func (s *SettingsApp) InstallUpdateAndRestart() error {
 
 func (s *SettingsApp) GetVersion() string {
 	return AppVersion
+}
+
+func (s *SettingsApp) GetUpdateStatus() UpdateState {
+	return readUpdateState()
 }
 
 

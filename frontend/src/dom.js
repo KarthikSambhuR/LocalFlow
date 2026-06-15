@@ -80,10 +80,19 @@ settingsModal.innerHTML = `
         Models
       </div>
       <div class="update-notification" id="updateNotification" style="display: none;">
-        <button id="restartUpdateBtn" class="update-btn" type="button">
-          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-          Restart to Update
-        </button>
+        <div class="update-box">
+          <div class="update-title">New Update Available</div>
+          <div class="update-progress-container" id="updateProgressContainer" style="display: none;">
+            <div class="update-progress-bar-bg">
+              <div class="update-progress-bar-fill" id="updateProgressBar" style="width: 0%"></div>
+            </div>
+            <div class="update-progress-text" id="updateProgressText">Downloading... 0%</div>
+          </div>
+          <button id="restartUpdateBtn" class="update-btn" type="button" style="display: none;">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Restart to Update
+          </button>
+        </div>
       </div>
       <div class="sidebar-footer">
         <div class="shortcut-preview">
