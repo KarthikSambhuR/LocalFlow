@@ -851,3 +851,15 @@ func (s *SettingsApp) SetLLMEnabled(enabled bool) {
 	cfg.LLMEnabled = enabled
 	saveConfig(cfg)
 }
+
+func (s *SettingsApp) SetLLMRefinementMode(mode string) error {
+	cfg := loadConfig()
+	cfg.LLMRefinementMode = normalizeLLMRefinementMode(mode)
+	return saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetLLMTone(tone string) error {
+	cfg := loadConfig()
+	cfg.LLMTone = normalizeLLMTone(tone)
+	return saveConfig(cfg)
+}

@@ -176,6 +176,54 @@ settingsModal.innerHTML = `
             <span class="toggle-track"></span>
           </label>
         </div>
+        <div class="setting-item llm-choice-setting" id="llmModeSelection">
+          <div class="setting-info">
+            <span class="setting-title">Refinement strength</span>
+            <span class="setting-desc">Choose how freely LocalFlow can change your original wording.</span>
+          </div>
+          <div class="llm-choice-grid llm-mode-grid" id="llmModeOptions" role="group" aria-label="Refinement strength">
+            <button type="button" class="llm-choice" data-value="minimal" aria-pressed="false">
+              <span class="llm-choice-heading"><strong>Minimal</strong><span>Proofread</span></span>
+              <span>Fixes clear transcription, spelling, capitalization, and punctuation errors only.</span>
+            </button>
+            <button type="button" class="llm-choice" data-value="low" aria-pressed="true">
+              <span class="llm-choice-heading"><strong>Low</strong><span>Clean up</span></span>
+              <span>Removes obvious stutters and filler while keeping your wording and structure.</span>
+            </button>
+            <button type="button" class="llm-choice" data-value="medium" aria-pressed="false">
+              <span class="llm-choice-heading"><strong>Medium</strong><span>Clarify</span></span>
+              <span>Lightly rephrases awkward sentences and improves flow without changing detail.</span>
+            </button>
+            <button type="button" class="llm-choice" data-value="high" aria-pressed="false">
+              <span class="llm-choice-heading"><strong>High</strong><span>Polish</span></span>
+              <span>Freely restructures the transcript into a polished, readable version.</span>
+            </button>
+          </div>
+        </div>
+        <div class="setting-item llm-choice-setting" id="llmToneSelection">
+          <div class="setting-info">
+            <span class="setting-title">Tone</span>
+            <span class="setting-desc">Set the writing style. Refinement strength still limits how much wording can change.</span>
+          </div>
+          <div class="llm-choice-grid llm-tone-grid" id="llmToneOptions" role="group" aria-label="Refinement tone">
+            <button type="button" class="llm-choice" data-value="auto" aria-pressed="true">
+              <span class="llm-choice-heading"><strong>Auto</strong><span>Keep my voice</span></span>
+              <span>Preserves the natural tone and level of formality in your transcript.</span>
+            </button>
+            <button type="button" class="llm-choice" data-value="casual" aria-pressed="false">
+              <span class="llm-choice-heading"><strong>Casual</strong><span>Friendly</span></span>
+              <span>Uses warm, relaxed, conversational phrasing.</span>
+            </button>
+            <button type="button" class="llm-choice" data-value="concise" aria-pressed="false">
+              <span class="llm-choice-heading"><strong>Concise</strong><span>Direct</span></span>
+              <span>Trims avoidable wordiness while keeping useful context.</span>
+            </button>
+            <button type="button" class="llm-choice" data-value="professional" aria-pressed="false">
+              <span class="llm-choice-heading"><strong>Professional</strong><span>Work-ready</span></span>
+              <span>Uses polished, precise, workplace-appropriate phrasing.</span>
+            </button>
+          </div>
+        </div>
       </div>
       <div class="setting-group">
         <label>Startup</label>
@@ -1178,22 +1226,65 @@ async function setupAmp() {
 
 async function setupLLM() {
   const toggle = document.getElementById('llmEnabledToggle');
+  const modeSelection = document.getElementById('llmModeSelection');
+  const toneSelection = document.getElementById('llmToneSelection');
   if (!toggle) return;
+
+  const modeOptions = Array.from(document.querySelectorAll('#llmModeOptions .llm-choice'));
+  const toneOptions = Array.from(document.querySelectorAll('#llmToneOptions .llm-choice'));
 
   // Load current values from shared config file
   const cfg = window.go?.main?.SettingsApp
     ? await window.go.main.SettingsApp.GetConfig()
     : null;
 
+  const updateSubsettingsVisibility = () => {
+    const show = toggle.checked;
+    if (modeSelection) modeSelection.classList.toggle('visible', show);
+    if (toneSelection) toneSelection.classList.toggle('visible', show);
+  };
+
+  const setActiveOption = (options, value) => {
+    options.forEach(option => {
+      const active = option.dataset.value === value;
+      option.classList.toggle('active', active);
+      option.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  };
+
   if (cfg) {
     toggle.checked = cfg.llm_enabled || false;
+    setActiveOption(modeOptions, cfg.llm_refinement_mode || 'low');
+    setActiveOption(toneOptions, cfg.llm_tone || 'auto');
   }
 
+  updateSubsettingsVisibility();
+
   toggle.addEventListener('change', () => {
+    updateSubsettingsVisibility();
     if (window.go?.main?.SettingsApp) {
       window.go.main.SettingsApp.SetLLMEnabled(toggle.checked);
     }
   });
+
+  const setupChoiceListeners = (options, persist) => {
+    options.forEach(option => {
+      option.addEventListener('click', async () => {
+        const previous = options.find(item => item.classList.contains('active'))?.dataset.value;
+        setActiveOption(options, option.dataset.value);
+        if (!window.go?.main?.SettingsApp) return;
+        try {
+          await persist(option.dataset.value);
+        } catch (err) {
+          setActiveOption(options, previous);
+          console.error('Failed to update LLM refinement setting', err);
+        }
+      });
+    });
+  };
+
+  setupChoiceListeners(modeOptions, val => window.go.main.SettingsApp.SetLLMRefinementMode(val));
+  setupChoiceListeners(toneOptions, val => window.go.main.SettingsApp.SetLLMTone(val));
 }
 
 async function setupProcessingEngine() {

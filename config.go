@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func getBaseAppDir() string {
@@ -40,6 +41,8 @@ type Config struct {
 	SelectedGPU                string  `json:"selected_gpu"`
 	LLMEnabled                 bool    `json:"llm_enabled"`
 	LLMActiveModel             string  `json:"llm_active_model"`
+	LLMRefinementMode          string  `json:"llm_refinement_mode"`
+	LLMTone                    string  `json:"llm_tone"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -64,6 +67,8 @@ func loadConfig() Config {
 		SelectedGPU:                "Default",
 		LLMEnabled:                 false,
 		LLMActiveModel:             "Qwen3-0.6B-UD-Q4_K_XL.gguf",
+		LLMRefinementMode:          "low",
+		LLMTone:                    "auto",
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
@@ -124,6 +129,8 @@ func loadConfig() Config {
 	if cfg.LLMActiveModel == "" {
 		cfg.LLMActiveModel = "Qwen3-0.6B-UD-Q4_K_XL.gguf"
 	}
+	cfg.LLMRefinementMode = normalizeLLMRefinementMode(cfg.LLMRefinementMode)
+	cfg.LLMTone = normalizeLLMTone(cfg.LLMTone)
 	if cfg.WindowWidth < 860 {
 		cfg.WindowWidth = 1100
 	}
@@ -131,6 +138,24 @@ func loadConfig() Config {
 		cfg.WindowHeight = 720
 	}
 	return cfg
+}
+
+func normalizeLLMRefinementMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "minimal", "low", "medium", "high":
+		return strings.ToLower(strings.TrimSpace(mode))
+	default:
+		return "low"
+	}
+}
+
+func normalizeLLMTone(tone string) string {
+	switch strings.ToLower(strings.TrimSpace(tone)) {
+	case "auto", "casual", "concise", "professional":
+		return strings.ToLower(strings.TrimSpace(tone))
+	default:
+		return "auto"
+	}
 }
 
 func saveConfig(cfg Config) error {
