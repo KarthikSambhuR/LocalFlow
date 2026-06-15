@@ -174,6 +174,12 @@ func (s *SettingsApp) SetStartMinimized(enabled bool) error {
 	return saveConfig(cfg)
 }
 
+func (s *SettingsApp) SetLLMEnableThinking(enabled bool) {
+	cfg := loadConfig()
+	cfg.LLMEnableThinking = enabled
+	saveConfig(cfg)
+}
+
 func (s *SettingsApp) GetPlatform() string {
 	return runtime.GOOS
 }
@@ -370,6 +376,18 @@ var AvailableModels = []WhisperModelInfo{
 		ModelType:        "whisper",
 	},
 	{
+		ID:               "smollm2-135m",
+		Name:             "SmolLM2 135M (Refinement)",
+		Filename:         "SmolLM2-135M-Instruct-Q8_0.gguf",
+		URL:              "https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q8_0.gguf?download=true",
+		SizeMB:           145,
+		SpeedLabel:       "Ultra Lightweight",
+		SpeedDescription: "Blazing fast inference on any CPU",
+		Description:      "An extremely compact model designed for fast formatting, punctuation cleanup, and spelling correction.",
+		Language:         "english",
+		ModelType:        "llm",
+	},
+	{
 		ID:               "qwen3-0.6b",
 		Name:             "Qwen 3 0.6B (Refinement)",
 		Filename:         "Qwen3-0.6B-UD-Q4_K_XL.gguf",
@@ -378,6 +396,18 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedLabel:       "Fast & Lightweight",
 		SpeedDescription: "Optimized for grammar and formatting correction",
 		Description:      "A small but highly capable model for real-time formatting, grammar, and stutter correction.",
+		Language:         "english",
+		ModelType:        "llm",
+	},
+	{
+		ID:               "gemma4-e2b",
+		Name:             "Gemma 4 E2B (Refinement)",
+		Filename:         "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
+		URL:              "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-UD-Q4_K_XL.gguf?download=true",
+		SizeMB:           3246,
+		SpeedLabel:       "High Quality",
+		SpeedDescription: "Intelligent and expressive refinement",
+		Description:      "Gemma 4 E2B model optimized for premium-quality formatting, context preservation, and grammar correction.",
 		Language:         "english",
 		ModelType:        "llm",
 	},

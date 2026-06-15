@@ -59,11 +59,13 @@ export async function setupLLM() {
     ? await window.go.main.SettingsApp.GetConfig()
     : null;
 
+  const thinkingToggle = document.getElementById('llmThinkingToggle');
+
   const updateSubsettingsVisibility = () => {
     const show = toggle.checked;
-    if (modeSelection) modeSelection.classList.toggle('visible', show);
-    if (toneSelection) toneSelection.classList.toggle('visible', show);
-    if (contextSizeSelection) contextSizeSelection.classList.toggle('visible', show);
+    document.querySelectorAll('.llm-choice-setting').forEach(el => {
+      el.classList.toggle('visible', show);
+    });
   };
 
   const setActiveOption = (options, value) => {
@@ -78,6 +80,9 @@ export async function setupLLM() {
     toggle.checked = cfg.llm_enabled || false;
     setActiveOption(modeOptions, cfg.llm_refinement_mode || 'low');
     setActiveOption(toneOptions, cfg.llm_tone || 'auto');
+    if (thinkingToggle) {
+      thinkingToggle.checked = cfg.llm_enable_thinking || false;
+    }
   }
 
   updateSubsettingsVisibility();
@@ -88,6 +93,14 @@ export async function setupLLM() {
       window.go.main.SettingsApp.SetLLMEnabled(toggle.checked);
     }
   });
+
+  if (thinkingToggle) {
+    thinkingToggle.addEventListener('change', () => {
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetLLMEnableThinking(thinkingToggle.checked);
+      }
+    });
+  }
 
   const setupChoiceListeners = (options, persist) => {
     options.forEach(option => {
@@ -544,6 +557,7 @@ export async function setupDataFolderSettings() {
 export async function setupModelsSettings() {
   const modelList = document.getElementById('modelList');
   if (!modelList) return;
+
   let whisperExpanded = false;
   let llmExpanded = false;
 

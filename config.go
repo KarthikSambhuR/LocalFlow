@@ -44,6 +44,7 @@ type Config struct {
 	LLMRefinementMode          string  `json:"llm_refinement_mode"`
 	LLMTone                    string  `json:"llm_tone"`
 	LLMContextSize             int     `json:"llm_context_size"`
+	LLMEnableThinking          bool    `json:"llm_enable_thinking"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -71,6 +72,7 @@ func loadConfig() Config {
 		LLMRefinementMode:          "low",
 		LLMTone:                    "auto",
 		LLMContextSize:             4096,
+		LLMEnableThinking:          false,
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,

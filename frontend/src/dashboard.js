@@ -101,9 +101,8 @@ export async function loadDashboard(targetSection) {
 
 // Simple tokenization: words, spaces, punctuation
 export function diffWords(raw, refined) {
-  const tokenRegex = /[\w\u00c0-\u017f']+|[^\w\s\u00c0-\u017f']+|\s+/g;
-  const A = raw.match(tokenRegex) || [];
-  const B = refined.match(tokenRegex) || [];
+  const A = raw.split(/\s+/).filter(Boolean);
+  const B = refined.split(/\s+/).filter(Boolean);
 
   const N = A.length;
   const M = B.length;
@@ -152,15 +151,16 @@ export function generateDiffHtml(raw, refined) {
   for (const chunk of diffs) {
     const esc = escapeHtml(chunk.value);
     if (chunk.type === 'equal') {
-      html += esc;
+      html += esc + ' ';
     } else if (chunk.type === 'delete') {
-      html += `<del>${esc}</del>`;
+      html += `<del>${esc}</del> `;
     } else if (chunk.type === 'insert') {
-      html += `<ins>${esc}</ins>`;
+      html += `<ins>${esc}</ins> `;
     }
   }
-  return html;
+  return html.trim();
 }
+
 
 export function updateGlobalToggleUI(animate = true) {
   const toggleRaw = document.getElementById('globalToggleRaw');

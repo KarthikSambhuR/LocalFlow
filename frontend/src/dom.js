@@ -230,6 +230,16 @@ settingsModal.innerHTML = `
             <span class="toggle-track"></span>
           </label>
         </div>
+        <div class="setting-item llm-choice-setting" id="llmThinkingSelection">
+          <div class="setting-info">
+            <span class="setting-title">Enable Thinking / Reasoning</span>
+            <span class="setting-desc">Allow reasoning models (like Gemma 4 E2B) to output thinking steps. Turn off for faster, direct answers.</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="llmThinkingToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
         <div class="setting-item llm-choice-setting" id="llmModeSelection">
           <div class="setting-info">
             <span class="setting-title">Refinement strength</span>
@@ -412,7 +422,7 @@ settingsModal.innerHTML = `
     </div>
     <div class="section" id="sec-models">
       <div class="setting-group">
-        <label>Speech Recognition Models</label>
+        <label>Speech Recognition & Refinement Models</label>
         <div class="model-list" id="modelList">
           <!-- Populated dynamically -->
         </div>

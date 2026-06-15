@@ -916,6 +916,7 @@ func (a *App) transcribe() {
 	// rawResult holds the unmodified Whisper output; result may be overwritten by LLM.
 	rawResult := result
 
+	var llmTimeUs int64
 	if !isBlank && !whisperFailed && cfg.LLMEnabled {
 		runtime.EventsEmit(a.ctx, "recording-state", "refining")
 		a.llmMutex.Lock()
@@ -923,9 +924,11 @@ func (a *App) transcribe() {
 		a.llmMutex.Unlock()
 
 		if port > 0 {
+			llmStart := time.Now()
 			url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
 			prompt := getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords)
-			refinedText, err := refineTextWithLLM(result, url, prompt)
+			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
+			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {
 				fmt.Printf("LLM Refinement failed: %v. Using raw transcription.\n", err)
 			} else {
@@ -941,14 +944,14 @@ func (a *App) transcribe() {
 		fmt.Println("Blank transcription; samples:", len(cacheCopy), "duration_ms:", durationMs, "whisper_failed:", whisperFailed)
 	}
 
-	go func(buf []float32, ts time.Time, durMs int64, raw string, text string, transTimeUs int64) {
+	go func(buf []float32, ts time.Time, durMs int64, raw string, text string, totalTimeUs int64) {
 		filename, err := saveAudioToCache(buf)
 		if err != nil {
 			fmt.Println("Error saving audio cache:", err)
 			return
 		}
-		saveRecording(filename, ts, durMs, raw, text, transTimeUs)
-	}(cacheCopy, recordedAt, durationMs, rawResult, result, transcribeTimeUs)
+		saveRecording(filename, ts, durMs, raw, text, totalTimeUs)
+	}(cacheCopy, recordedAt, durationMs, rawResult, result, transcribeTimeUs+llmTimeUs)
 
 	if !isBlank && !whisperFailed {
 		if err := clipboard.WriteAll(result); err != nil {
@@ -1063,7 +1066,7 @@ Assistant: Let's talk and come to a conclusion before proceeding.
 Return only the polished transcript. Do not include the <transcription_text> or </transcription_text> tags in your output. Do not include explanations, labels, quotation marks, conversational filler like "Sure", markdown fences, or commentary.`
 }
 
-func refineTextWithLLM(text string, serverUrl string, systemPrompt string) (string, error) {
+func refineTextWithLLM(text string, serverUrl string, systemPrompt string, enableThinking bool) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return "", fmt.Errorf("cannot refine empty text")
@@ -1080,7 +1083,7 @@ func refineTextWithLLM(text string, serverUrl string, systemPrompt string) (stri
 		Temperature: 0.1,
 		MaxTokens:   2048,
 		ChatTemplateKwargs: map[string]any{
-			"enable_thinking": false,
+			"enable_thinking": enableThinking,
 		},
 	}
 
@@ -1247,6 +1250,7 @@ func (a *App) startLLMServer(cfg Config) {
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
 		"-c", fmt.Sprintf("%d", cfg.LLMContextSize),
+		"--chat-template-kwargs", `{"enable_thinking": false}`,
 	}
 
 	fmt.Printf("Starting llama-server: %s %s (GPU device index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
