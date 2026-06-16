@@ -67,10 +67,6 @@ settingsModal.innerHTML = `
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>
         Insights
       </div>
-      <div class="nav-item" data-section="models">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
-        Models
-      </div>
       <div class="nav-item" data-section="dictionary">
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
         Dictionary
@@ -237,6 +233,7 @@ settingsModal.innerHTML = `
             </div>
           </div>
         </div>
+        <div id="modelListWhisper" style="margin-top: 20px;"></div>
       </div>
       <div class="setting-group">
         <label>LLM Refinement (llama.cpp)</label>
@@ -328,6 +325,7 @@ settingsModal.innerHTML = `
             <span id="llmContextLabel" class="badge">4K</span>
           </div>
         </div>
+        <div id="modelListLLM" style="margin-top: 20px;"></div>
       </div>
       <div class="setting-group">
         <label>Startup</label>
@@ -447,14 +445,6 @@ settingsModal.innerHTML = `
           <button id="purgeNowBtn" class="kbd-btn" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.4); color: #ef4444;">
             Clean Cache Now
           </button>
-        </div>
-      </div>
-    </div>
-    <div class="section" id="sec-models">
-      <div class="setting-group">
-        <label>Speech Recognition & Refinement Models</label>
-        <div class="model-list" id="modelList">
-          <!-- Populated dynamically -->
         </div>
       </div>
     </div>

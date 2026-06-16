@@ -580,8 +580,9 @@ export async function setupDataFolderSettings() {
 }
 
 export async function setupModelsSettings() {
-  const modelList = document.getElementById('modelList');
-  if (!modelList) return;
+  const modelListWhisper = document.getElementById('modelListWhisper');
+  const modelListLLM = document.getElementById('modelListLLM');
+  if (!modelListWhisper || !modelListLLM) return;
 
   let whisperExpanded = false;
   let llmExpanded = false;
@@ -590,8 +591,10 @@ export async function setupModelsSettings() {
     if (!window.go?.main?.SettingsApp) return;
     try {
       const allModels = await window.go.main.SettingsApp.GetModelsList() || [];
-      modelList.innerHTML = '';
-      modelList.className = 'model-list model-list-expanded';
+      modelListWhisper.innerHTML = '';
+      modelListLLM.innerHTML = '';
+      modelListWhisper.className = 'model-list model-list-expanded';
+      modelListLLM.className = 'model-list model-list-expanded';
 
       const renderPanel = (type, title, isExpanded, setExpanded) => {
         const models = allModels.filter(m => m.model_type === type || (type === 'whisper' && !m.model_type));
@@ -711,7 +714,11 @@ export async function setupModelsSettings() {
           };
         });
 
-        modelList.appendChild(panel);
+        if (type === 'whisper') {
+          modelListWhisper.appendChild(panel);
+        } else {
+          modelListLLM.appendChild(panel);
+        }
       };
 
       renderPanel('whisper', 'Speech Recognition Models', whisperExpanded, (val) => whisperExpanded = val);
