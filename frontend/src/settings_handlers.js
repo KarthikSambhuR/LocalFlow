@@ -1088,5 +1088,95 @@ export async function setupManglishPersonalization() {
       }, 1500);
     }
   };
+
+  const malInput = document.getElementById('translitMalInput');
+  const engInput = document.getElementById('translitEngInput');
+  const addTransBtn = document.getElementById('addTranslitBtn');
+  const transList = document.getElementById('translitWordsList');
+
+  const escapeHtml = (val = '') => {
+    return String(val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  const loadMappings = async () => {
+    if (!window.go?.main?.SettingsApp || !transList) return;
+    const mappings = await window.go.main.SettingsApp.GetTransliterations() || [];
+    transList.innerHTML = '';
+    if (mappings.length === 0) {
+      transList.innerHTML = '<div style="padding: 20px; text-align: center; font-size: 13px; color: var(--text-muted); font-style: italic;">No custom word mappings added yet.</div>';
+      return;
+    }
+    mappings.forEach(m => {
+      const row = document.createElement('div');
+      row.className = 'dict-row-item';
+      row.innerHTML = `
+        <span class="dict-word-text"><strong>${escapeHtml(m.malayalam)}</strong> &rarr; ${escapeHtml(m.translit)}</span>
+        <button class="dict-row-delete-btn" title="Delete mapping">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      `;
+      row.querySelector('.dict-row-delete-btn').onclick = async (e) => {
+        e.stopPropagation();
+        await window.go.main.SettingsApp.DeleteTransliteration(m.malayalam);
+        loadMappings();
+      };
+      transList.appendChild(row);
+    });
+  };
+
+  if (addTransBtn && malInput && engInput) {
+    addTransBtn.onclick = async () => {
+      const malVal = malInput.value.trim();
+      const engVal = engInput.value.trim();
+      if (!malVal || !engVal) {
+        alert("Please enter both Malayalam word(s) and preferred transliteration!");
+        return;
+      }
+      
+      const malWords = malVal.split(',').map(w => w.trim()).filter(Boolean);
+      if (malWords.length === 0) {
+        alert("Please enter at least one Malayalam word!");
+        return;
+      }
+
+      for (const w of malWords) {
+        if (!/[\u0D00-\u0D7F]/.test(w)) {
+          alert(`"${w}" must contain Malayalam characters!`);
+          malInput.focus();
+          return;
+        }
+      }
+
+      if (/[\u0D00-\u0D7F]/.test(engVal)) {
+        alert("The translit preferred spelling must be in English letters/Latin script (no Malayalam script characters)!");
+        engInput.focus();
+        return;
+      }
+
+      if (window.go?.main?.SettingsApp) {
+        for (const w of malWords) {
+          await window.go.main.SettingsApp.AddTransliteration(w, engVal);
+        }
+        malInput.value = '';
+        engInput.value = '';
+        loadMappings();
+      }
+    };
+
+    const handleKey = async (e) => {
+      if (e.key === 'Enter') {
+        addTransBtn.click();
+      }
+    };
+    malInput.onkeydown = handleKey;
+    engInput.onkeydown = handleKey;
+  }
+
+  loadMappings();
 }
 

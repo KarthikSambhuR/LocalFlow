@@ -494,6 +494,26 @@ settingsModal.innerHTML = `
               <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
                 <button id="saveManglishExBtn" class="kbd-btn" style="padding: 10px 24px; font-weight: 700; border-radius: 12px;">Save Preferences</button>
               </div>
+        </div>
+      </div>
+      <div class="setting-group" style="margin-top: 24px;">
+        <label>Custom Word Mappings</label>
+        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 20px;">
+          <div class="setting-info" style="margin-bottom: 0;">
+            <span class="setting-title" style="font-size: 15px;">Word-Level Transliteration Mappings</span>
+            <span class="setting-desc" style="font-size: 12px;">Map specific Malayalam words to your preferred Latin/Manglish spelling when refining (e.g. ഹലോ to Hello).</span>
+          </div>
+        </div>
+        <div class="todo-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; gap: 12px; width: 100%;">
+            <input type="text" id="translitMalInput" class="brutal-input" style="flex: 1; height: 42px; box-sizing: border-box; border-radius: 12px;" placeholder="Malayalam word (e.g. ഹലോ)" />
+            <input type="text" id="translitEngInput" class="brutal-input" style="flex: 1; height: 42px; box-sizing: border-box; border-radius: 12px;" placeholder="Preferred spelling (e.g. Hello)" />
+            <button id="addTranslitBtn" class="kbd-btn" style="padding: 0 24px; font-weight: 700; height: 42px; box-sizing: border-box; border-radius: 12px; background: var(--accent-soft); color: var(--accent); border-color: var(--accent);">Add</button>
+          </div>
+
+          <div class="dict-todo-list-wrapper" style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-sidebar); width: 100%;">
+            <div id="translitWordsList" style="display: flex; flex-direction: column; gap: 0; max-height: 400px; overflow-y: auto;">
+              <!-- Dynamic entries -->
             </div>
           </div>
         </div>

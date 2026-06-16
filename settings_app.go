@@ -1034,6 +1034,19 @@ func (s *SettingsApp) SetManglishExamples(ex1, ex2, ex3, ex4, ex5 string) error 
 	return saveConfig(cfg)
 }
 
+func (s *SettingsApp) AddTransliteration(malayalam, translit string) error {
+	return AddTransliteration(malayalam, translit)
+}
+
+func (s *SettingsApp) DeleteTransliteration(malayalam string) error {
+	return DeleteTransliteration(malayalam)
+}
+
+func (s *SettingsApp) GetTransliterations() ([]WordMapping, error) {
+	return GetTransliterations()
+}
+
+
 func unzip(src string, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {

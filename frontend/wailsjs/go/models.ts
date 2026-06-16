@@ -168,6 +168,20 @@ export namespace main {
 	        this.percent = source["percent"];
 	    }
 	}
+	export class WordMapping {
+	    malayalam: string;
+	    translit: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WordMapping(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.malayalam = source["malayalam"];
+	        this.translit = source["translit"];
+	    }
+	}
 
 }
 

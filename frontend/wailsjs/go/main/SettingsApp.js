@@ -6,6 +6,10 @@ export function AddDictionaryWord(arg1) {
   return window['go']['main']['SettingsApp']['AddDictionaryWord'](arg1);
 }
 
+export function AddTransliteration(arg1, arg2) {
+  return window['go']['main']['SettingsApp']['AddTransliteration'](arg1, arg2);
+}
+
 export function DeleteDictionaryWord(arg1) {
   return window['go']['main']['SettingsApp']['DeleteDictionaryWord'](arg1);
 }
@@ -16,6 +20,10 @@ export function DeleteModel(arg1) {
 
 export function DeleteRecording(arg1) {
   return window['go']['main']['SettingsApp']['DeleteRecording'](arg1);
+}
+
+export function DeleteTransliteration(arg1) {
+  return window['go']['main']['SettingsApp']['DeleteTransliteration'](arg1);
 }
 
 export function DownloadEssentialAssets() {
@@ -64,6 +72,10 @@ export function GetProfileName() {
 
 export function GetRecordings() {
   return window['go']['main']['SettingsApp']['GetRecordings']();
+}
+
+export function GetTransliterations() {
+  return window['go']['main']['SettingsApp']['GetTransliterations']();
 }
 
 export function GetUpdateStatus() {

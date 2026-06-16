@@ -153,6 +153,17 @@ func initDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS transliterations (
+			id        INTEGER PRIMARY KEY AUTOINCREMENT,
+			malayalam TEXT UNIQUE NOT NULL,
+			translit  TEXT NOT NULL
+		);
+	`)
+	if err != nil {
+		return err
+	}
+
 	// Perform background migration for legacy records that have empty/0 word_count but non-empty transcription
 	go migrateLegacyWordCounts()
 
@@ -417,3 +428,51 @@ func GetDictionaryWords() ([]string, error) {
 	}
 	return out, nil
 }
+
+type WordMapping struct {
+	Malayalam string `json:"malayalam"`
+	Translit  string `json:"translit"`
+}
+
+func AddTransliteration(malayalam, translit string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	malayalam = strings.ToLower(strings.TrimSpace(malayalam))
+	translit = strings.TrimSpace(translit)
+	if malayalam == "" || translit == "" {
+		return nil
+	}
+	_, err := db.Exec("INSERT INTO transliterations (malayalam, translit) VALUES (?, ?) ON CONFLICT(malayalam) DO UPDATE SET translit = excluded.translit", malayalam, translit)
+	return err
+}
+
+func DeleteTransliteration(malayalam string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	malayalam = strings.ToLower(strings.TrimSpace(malayalam))
+	_, err := db.Exec("DELETE FROM transliterations WHERE malayalam = ?", malayalam)
+	return err
+}
+
+func GetTransliterations() ([]WordMapping, error) {
+	if db == nil {
+		return nil, nil
+	}
+	rows, err := db.Query("SELECT malayalam, translit FROM transliterations ORDER BY id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []WordMapping
+	for rows.Next() {
+		var m WordMapping
+		if err := rows.Scan(&m.Malayalam, &m.Translit); err == nil {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+

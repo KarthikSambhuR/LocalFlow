@@ -4,11 +4,15 @@ import {main} from '../models';
 
 export function AddDictionaryWord(arg1:string):Promise<void>;
 
+export function AddTransliteration(arg1:string,arg2:string):Promise<void>;
+
 export function DeleteDictionaryWord(arg1:string):Promise<void>;
 
 export function DeleteModel(arg1:string):Promise<void>;
 
 export function DeleteRecording(arg1:number):Promise<void>;
+
+export function DeleteTransliteration(arg1:string):Promise<void>;
 
 export function DownloadEssentialAssets():Promise<void>;
 
@@ -33,6 +37,8 @@ export function GetPlatform():Promise<string>;
 export function GetProfileName():Promise<string>;
 
 export function GetRecordings():Promise<Array<main.Recording>>;
+
+export function GetTransliterations():Promise<Array<main.WordMapping>>;
 
 export function GetUpdateStatus():Promise<main.UpdateState>;
 
