@@ -971,9 +971,6 @@ func (a *App) transcribe() {
 			llmStart := time.Now()
 			url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
 			prompt := getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, cfg.ActiveModel == "indic-conformer-600m-multilingual" && cfg.ManglishEnabled, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5)
-			fmt.Println("----- SYSTEM PROMPT SENT TO LLM -----")
-			fmt.Println(prompt)
-			fmt.Println("-------------------------------------")
 			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
 			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {
