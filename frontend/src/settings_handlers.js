@@ -78,15 +78,6 @@ export async function setupLLM() {
       }
     });
 
-    const navManglish = document.getElementById('navManglish');
-    if (navManglish) {
-      const isManglishActive = show && isConformer;
-      navManglish.style.display = isManglishActive ? 'flex' : 'none';
-      if (!isManglishActive && navManglish.classList.contains('active')) {
-        const settingsNav = document.querySelector('.nav-item[data-section="settings"]');
-        if (settingsNav) settingsNav.click();
-      }
-    }
   };
 
   const setActiveOption = (options, value) => {
@@ -1017,6 +1008,17 @@ export async function setupManglishPersonalization() {
   const ex5 = document.getElementById('manglishEx5');
   const saveBtn = document.getElementById('saveManglishExBtn');
   if (!saveBtn) return;
+
+  const panel = document.getElementById('manglishPanel');
+  const header = document.getElementById('manglishPanelHeader');
+  const chevron = document.getElementById('manglishPanelChevron');
+  if (header && panel && chevron) {
+    header.onclick = () => {
+      const isOpen = panel.classList.toggle('open');
+      header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      chevron.style.transform = isOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+    };
+  }
 
   const cfg = window.go?.main?.SettingsApp
     ? await window.go.main.SettingsApp.GetConfig()
