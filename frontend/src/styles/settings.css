@@ -70,7 +70,8 @@
   flex-direction: column;
 }
 
-#llmThinkingSelection.visible {
+#llmThinkingSelection.visible,
+#llmManglishSelection.visible {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;

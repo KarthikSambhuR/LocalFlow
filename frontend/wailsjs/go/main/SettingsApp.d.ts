@@ -66,6 +66,10 @@ export function SetLLMRefinementMode(arg1:string):Promise<void>;
 
 export function SetLLMTone(arg1:string):Promise<void>;
 
+export function SetManglishEnabled(arg1:boolean):Promise<void>;
+
+export function SetManglishExamples(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
 export function SetMicrophone(arg1:string):Promise<void>;
 
 export function SetProcessingEngine(arg1:string):Promise<void>;

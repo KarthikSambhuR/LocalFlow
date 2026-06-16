@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -389,6 +391,18 @@ var AvailableModels = []WhisperModelInfo{
 		ModelType:        "whisper",
 	},
 	{
+		ID:               "indic-conformer-ml",
+		Name:             "Indic Conformer 600M (Malayalam)",
+		Filename:         "indic-conformer-600m-multilingual.zip",
+		URL:              "https://huggingface.co/KarthikSambhuR/IndicConformerOnnxEncodedZip/resolve/main/indic-conformer-600m-multilingual.zip?download=true",
+		SizeMB:           2270,
+		SpeedLabel:       "Balanced (ONNX)",
+		SpeedDescription: "Multilingual conformer model",
+		Description:      "Indic Conformer 600M model for Malayalam. Uses Go's ONNX Runtime.",
+		Language:         "malayalam",
+		ModelType:        "whisper",
+	},
+	{
 		ID:               "smollm2-135m",
 		Name:             "SmolLM2 135M (Refinement)",
 		Filename:         "SmolLM2-135M-Instruct-Q8_0.gguf",
@@ -440,6 +454,7 @@ type ModelStatus struct {
 	DownloadProgress int    `json:"download_progress"`
 	Language         string `json:"language"`
 	ModelType        string `json:"model_type"`
+	IsDisabled       bool   `json:"is_disabled"`
 }
 
 var (
@@ -466,10 +481,17 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 		pathInLocal := filepath.Join("models", m.Filename)
 
 		isDownloaded := false
-		if _, err := os.Stat(pathInCustom); err == nil {
-			isDownloaded = true
-		} else if _, err := os.Stat(pathInLocal); err == nil {
-			isDownloaded = true
+		if m.ID == "indic-conformer-ml" {
+			downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
+			if _, err := os.Stat(downloadedFolder); err == nil {
+				isDownloaded = true
+			}
+		} else {
+			if _, err := os.Stat(pathInCustom); err == nil {
+				isDownloaded = true
+			} else if _, err := os.Stat(pathInLocal); err == nil {
+				isDownloaded = true
+			}
 		}
 
 		progress, isDownloading := downloadProgress[m.ID]
@@ -477,8 +499,16 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 		isActive := false
 		if m.ModelType == "llm" {
 			isActive = m.Filename == cfg.LLMActiveModel
+		} else if m.ID == "indic-conformer-ml" {
+			// Conformer is stored as the folder name (no .zip) in ActiveModel
+			isActive = activeFilename == "indic-conformer-600m-multilingual"
 		} else {
 			isActive = m.Filename == activeFilename
+		}
+
+		isDisabled := false
+		if activeFilename == "indic-conformer-600m-multilingual" && m.ModelType == "llm" && m.ID != "gemma4-e2b" {
+			isDisabled = true
 		}
 
 		out = append(out, ModelStatus{
@@ -495,6 +525,7 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			DownloadProgress: progress,
 			Language:         m.Language,
 			ModelType:        m.ModelType,
+			IsDisabled:       isDisabled,
 		})
 	}
 	return out
@@ -506,6 +537,15 @@ func (s *SettingsApp) getModelsDir() string {
 }
 
 func (s *SettingsApp) ensureModelInDataFolder(filename string) error {
+	if filename == "indic-conformer-600m-multilingual.zip" {
+		modelsDir := s.getModelsDir()
+		downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
+		if _, err := os.Stat(downloadedFolder); err == nil {
+			return nil
+		}
+		return fmt.Errorf("model folder indic-conformer-600m-multilingual is not downloaded")
+	}
+
 	modelsDir := s.getModelsDir()
 	targetPath := filepath.Join(modelsDir, filename)
 	if fileExists(targetPath) {
@@ -626,6 +666,15 @@ func (s *SettingsApp) DownloadModel(id string) {
 			return
 		}
 
+		if strings.HasSuffix(targetModel.Filename, ".zip") {
+			err = unzip(finalPath, modelsDir)
+			_ = os.Remove(finalPath) // clean up zip
+			if err != nil {
+				wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, "Failed to unzip: "+err.Error())
+				return
+			}
+		}
+
 		wailsRuntime.EventsEmit(s.ctx, "model-download-done", id)
 	}()
 }
@@ -642,13 +691,24 @@ func (s *SettingsApp) SetActiveModel(filename string) error {
 		return fmt.Errorf("unknown model: %s", filename)
 	}
 
+	// For the conformer model (.zip), verify the extracted folder exists.
+	// For all other models, ensure the binary file is in the data folder.
 	if err := s.ensureModelInDataFolder(filename); err != nil {
 		return err
 	}
 
 	cfg := loadConfig()
 	if targetModel.ModelType == "llm" {
+		if cfg.ActiveModel == "indic-conformer-600m-multilingual" && targetModel.ID != "gemma4-e2b" {
+			return fmt.Errorf("Only Gemma is selectable with the Malayalam Conformer model")
+		}
 		cfg.LLMActiveModel = filename
+	} else if filename == "indic-conformer-600m-multilingual.zip" {
+		// Store the conformer using the folder name (without .zip) so that
+		// app.go can detect it with: activeModel == "indic-conformer-600m-multilingual"
+		cfg.ActiveModel = "indic-conformer-600m-multilingual"
+		// Automatically switch active LLM to Gemma
+		cfg.LLMActiveModel = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 	} else {
 		cfg.ActiveModel = filename
 	}
@@ -674,13 +734,20 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 		if m.ModelType != targetModel.ModelType {
 			continue
 		}
-		pathInCustom := filepath.Join(modelsDir, m.Filename)
-		pathInLocal := filepath.Join("models", m.Filename)
+		if m.ID == "indic-conformer-ml" {
+			downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
+			if _, err := os.Stat(downloadedFolder); err == nil {
+				downloadedList = append(downloadedList, downloadedFolder)
+			}
+		} else {
+			pathInCustom := filepath.Join(modelsDir, m.Filename)
+			pathInLocal := filepath.Join("models", m.Filename)
 
-		if _, err := os.Stat(pathInCustom); err == nil {
-			downloadedList = append(downloadedList, pathInCustom)
-		} else if _, err := os.Stat(pathInLocal); err == nil {
-			downloadedList = append(downloadedList, pathInLocal)
+			if _, err := os.Stat(pathInCustom); err == nil {
+				downloadedList = append(downloadedList, pathInCustom)
+			} else if _, err := os.Stat(pathInLocal); err == nil {
+				downloadedList = append(downloadedList, pathInLocal)
+			}
 		}
 	}
 
@@ -689,18 +756,35 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 	}
 
 	var pathToDelete string
-	pathInCustom := filepath.Join(modelsDir, filename)
-	pathInLocal := filepath.Join("models", filename)
+	var isDir bool
 
-	if _, err := os.Stat(pathInCustom); err == nil {
-		pathToDelete = pathInCustom
-	} else if _, err := os.Stat(pathInLocal); err == nil {
-		pathToDelete = pathInLocal
+	if filename == "indic-conformer-600m-multilingual.zip" {
+		downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
+		if _, err := os.Stat(downloadedFolder); err == nil {
+			pathToDelete = downloadedFolder
+			isDir = true
+		} else {
+			return fmt.Errorf("model file not found on disk")
+		}
 	} else {
-		return fmt.Errorf("model file not found on disk")
+		pathInCustom := filepath.Join(modelsDir, filename)
+		pathInLocal := filepath.Join("models", filename)
+
+		if _, err := os.Stat(pathInCustom); err == nil {
+			pathToDelete = pathInCustom
+		} else if _, err := os.Stat(pathInLocal); err == nil {
+			pathToDelete = pathInLocal
+		} else {
+			return fmt.Errorf("model file not found on disk")
+		}
 	}
 
-	err := os.Remove(pathToDelete)
+	var err error
+	if isDir {
+		err = os.RemoveAll(pathToDelete)
+	} else {
+		err = os.Remove(pathToDelete)
+	}
 	if err != nil {
 		return err
 	}
@@ -725,7 +809,13 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 			_ = saveConfig(cfg)
 		}
 	} else {
-		if cfg.ActiveModel == filename {
+		// Conformer is stored as folder name ("indic-conformer-600m-multilingual") in
+		// ActiveModel, but is referenced by its zip filename ("...zip") elsewhere.
+		activeModelKey := filename
+		if filename == "indic-conformer-600m-multilingual.zip" {
+			activeModelKey = "indic-conformer-600m-multilingual"
+		}
+		if cfg.ActiveModel == activeModelKey {
 			for _, m := range AvailableModels {
 				if m.ModelType == "llm" || m.Filename == filename {
 					continue
@@ -926,4 +1016,67 @@ func (s *SettingsApp) SetLLMContextSize(size int) error {
 	cfg := loadConfig()
 	cfg.LLMContextSize = normalizeLLMContextSize(size)
 	return saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetManglishEnabled(enabled bool) {
+	cfg := loadConfig()
+	cfg.ManglishEnabled = enabled
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetManglishExamples(ex1, ex2, ex3, ex4, ex5 string) error {
+	cfg := loadConfig()
+	cfg.ManglishExample1 = ex1
+	cfg.ManglishExample2 = ex2
+	cfg.ManglishExample3 = ex3
+	cfg.ManglishExample4 = ex4
+	cfg.ManglishExample5 = ex5
+	return saveConfig(cfg)
+}
+
+func unzip(src string, dest string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		fpath := filepath.Join(dest, f.Name)
+
+		// Check for Zip Slip vulnerability
+		if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
+			return fmt.Errorf("%s: illegal file path", fpath)
+		}
+
+		if f.FileInfo().IsDir() {
+			_ = os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

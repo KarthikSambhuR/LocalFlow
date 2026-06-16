@@ -116,3 +116,54 @@ func saveAudioToCache(samples []float32) (string, error) {
 func ensureAudioCacheDirErr() error {
 	return os.MkdirAll(audioCacheDir, 0755)
 }
+
+// saveAudioBufferToWavPath writes a float32 PCM slice to a specific WAV file path.
+func saveAudioBufferToWavPath(samples []float32, filename string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	const (
+		sampleRate    = 16000
+		numChannels   = 1
+		bitsPerSample = 16
+		audioFmtPCM   = 1
+	)
+
+	numSamples := len(samples)
+	dataSize := uint32(numSamples * 2)
+	byteRate := uint32(sampleRate * numChannels * bitsPerSample / 8)
+	blockAlign := uint16(numChannels * bitsPerSample / 8)
+
+	write := func(v interface{}) {
+		binary.Write(f, binary.LittleEndian, v)
+	}
+
+	f.WriteString("RIFF")
+	write(uint32(36 + dataSize))
+	f.WriteString("WAVE")
+
+	f.WriteString("fmt ")
+	write(uint32(16))
+	write(uint16(audioFmtPCM))
+	write(uint16(numChannels))
+	write(uint32(sampleRate))
+	write(byteRate)
+	write(blockAlign)
+	write(uint16(bitsPerSample))
+
+	f.WriteString("data")
+	write(dataSize)
+	for _, s := range samples {
+		if s > 1.0 {
+			s = 1.0
+		} else if s < -1.0 {
+			s = -1.0
+		}
+		write(int16(s * 32767))
+	}
+
+	return nil
+}

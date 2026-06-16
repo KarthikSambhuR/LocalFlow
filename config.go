@@ -45,6 +45,12 @@ type Config struct {
 	LLMTone                    string  `json:"llm_tone"`
 	LLMContextSize             int     `json:"llm_context_size"`
 	LLMEnableThinking          bool    `json:"llm_enable_thinking"`
+	ManglishEnabled            bool    `json:"manglish_enabled"`
+	ManglishExample1           string  `json:"manglish_example_1"`
+	ManglishExample2           string  `json:"manglish_example_2"`
+	ManglishExample3           string  `json:"manglish_example_3"`
+	ManglishExample4           string  `json:"manglish_example_4"`
+	ManglishExample5           string  `json:"manglish_example_5"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -73,6 +79,12 @@ func loadConfig() Config {
 		LLMTone:                    "auto",
 		LLMContextSize:             4096,
 		LLMEnableThinking:          false,
+		ManglishEnabled:            false,
+		ManglishExample1:           "Hello, sukhamano enth cheyyunnu?",
+		ManglishExample2:           "Enik naale varaan pattilla.",
+		ManglishExample3:           "Nee naale collegil varunnundo? Namukku orumichu pokam.",
+		ManglishExample4:           "Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla.",
+		ManglishExample5:           "Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam.",
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
@@ -141,6 +153,21 @@ func loadConfig() Config {
 	}
 	if cfg.WindowHeight < 560 {
 		cfg.WindowHeight = 720
+	}
+	if cfg.ManglishExample1 == "" {
+		cfg.ManglishExample1 = "Hello, sukhamano enth cheyyunnu?"
+	}
+	if cfg.ManglishExample2 == "" {
+		cfg.ManglishExample2 = "Enik naale varaan pattilla."
+	}
+	if cfg.ManglishExample3 == "" {
+		cfg.ManglishExample3 = "Nee naale collegil varunnundo? Namukku orumichu pokam."
+	}
+	if cfg.ManglishExample4 == "" {
+		cfg.ManglishExample4 = "Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla."
+	}
+	if cfg.ManglishExample5 == "" {
+		cfg.ManglishExample5 = "Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam."
 	}
 	return cfg
 }

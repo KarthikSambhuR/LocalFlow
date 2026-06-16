@@ -39,6 +39,12 @@ export namespace main {
 	    llm_tone: string;
 	    llm_context_size: number;
 	    llm_enable_thinking: boolean;
+	    manglish_enabled: boolean;
+	    manglish_example_1: string;
+	    manglish_example_2: string;
+	    manglish_example_3: string;
+	    manglish_example_4: string;
+	    manglish_example_5: string;
 	    window_width: number;
 	    window_height: number;
 	    window_maximized: boolean;
@@ -71,6 +77,12 @@ export namespace main {
 	        this.llm_tone = source["llm_tone"];
 	        this.llm_context_size = source["llm_context_size"];
 	        this.llm_enable_thinking = source["llm_enable_thinking"];
+	        this.manglish_enabled = source["manglish_enabled"];
+	        this.manglish_example_1 = source["manglish_example_1"];
+	        this.manglish_example_2 = source["manglish_example_2"];
+	        this.manglish_example_3 = source["manglish_example_3"];
+	        this.manglish_example_4 = source["manglish_example_4"];
+	        this.manglish_example_5 = source["manglish_example_5"];
 	        this.window_width = source["window_width"];
 	        this.window_height = source["window_height"];
 	        this.window_maximized = source["window_maximized"];
@@ -90,6 +102,7 @@ export namespace main {
 	    download_progress: number;
 	    language: string;
 	    model_type: string;
+	    is_disabled: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelStatus(source);
@@ -110,6 +123,7 @@ export namespace main {
 	        this.download_progress = source["download_progress"];
 	        this.language = source["language"];
 	        this.model_type = source["model_type"];
+	        this.is_disabled = source["is_disabled"];
 	    }
 	}
 	export class Recording {

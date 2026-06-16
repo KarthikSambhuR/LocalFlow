@@ -30,9 +30,20 @@ var (
 var assets embed.FS
 
 func main() {
-	// Change working directory to the executable's directory to ensure relative paths resolve correctly
+	// Change working directory to the executable's directory to ensure relative paths resolve correctly,
+	// but avoid doing so if running from a temporary build directory (e.g. during 'wails dev').
 	if exe, err := os.Executable(); err == nil {
-		_ = os.Chdir(filepath.Dir(exe))
+		exeDir := filepath.Dir(exe)
+		if !strings.Contains(strings.ToLower(exeDir), "appdata\\local\\temp") && !strings.Contains(strings.ToLower(exeDir), "\\temp\\") {
+			_ = os.Chdir(exeDir)
+		}
+	}
+
+	// Initialize ONNX Runtime environment
+	if err := InitONNXEnvironment(); err != nil {
+		println("Warning: ONNX Runtime initialization failed:", err.Error())
+	} else {
+		defer DestroyONNXEnvironment()
 	}
 
 	// Unset any inherited visible devices so we can enumerate all GPUs

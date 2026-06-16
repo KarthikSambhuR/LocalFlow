@@ -25,7 +25,8 @@ import {
   setupModelsSettings,
   setupMicrophoneSettings,
   setupOnboarding,
-  setupDictionary
+  setupDictionary,
+  setupManglishPersonalization
 } from './settings_handlers.js';
 
 // Populate state visualizer bars from DOM module
@@ -109,6 +110,8 @@ function switchSection(target) {
     }
   } else if (target === 'dictionary') {
     setupDictionary();
+  } else if (target === 'manglish') {
+    setupManglishPersonalization();
   }
 }
 
@@ -275,6 +278,7 @@ async function init() {
       setupMicrophoneSettings();
       setupOnboarding();
       setupDictionary();
+      setupManglishPersonalization();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();

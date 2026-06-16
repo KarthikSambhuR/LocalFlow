@@ -79,6 +79,10 @@ settingsModal.innerHTML = `
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>
         Models
       </div>
+      <div class="nav-item" data-section="manglish" id="navManglish" style="display: none;">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Manglish
+      </div>
       <div class="update-notification" id="updateNotification" style="display: none;">
         <div class="update-box">
           <div class="update-title">New Update Available</div>
@@ -253,6 +257,16 @@ settingsModal.innerHTML = `
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="llmThinkingToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div class="setting-item llm-choice-setting" id="llmManglishSelection">
+          <div class="setting-info">
+            <span class="setting-title">Convert Malayalam to Manglish</span>
+            <span class="setting-desc">Transliterate Malayalam text to English letters (Latin script) using refinement</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="llmManglishToggle">
             <span class="toggle-track"></span>
           </label>
         </div>
@@ -441,6 +455,48 @@ settingsModal.innerHTML = `
         <label>Speech Recognition & Refinement Models</label>
         <div class="model-list" id="modelList">
           <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+    <div class="section" id="sec-manglish">
+      <div class="setting-group">
+        <label>Manglish Personalization</label>
+        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 20px;">
+          <div class="setting-info" style="margin-bottom: 8px;">
+            <span class="setting-title">Custom Transliteration Examples</span>
+            <span class="setting-desc">Personalize how Malayalam phrases are transliterated into Manglish. These examples will train the LLM refinement model on your spelling preferences. Fill out the boxes in Manglish:</span>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">ഹലോ സുഖമാണോ എന്ത് ചെയ്യുന്നു</div>
+              <input type="text" id="manglishEx1" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Hello, sukhamano enth cheyyunnu?" />
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">എനിക്ക് നാളെ വരാൻ പറ്റില്ല</div>
+              <input type="text" id="manglishEx2" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Enik naale varaan pattilla." />
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">നീ നാളെ കോളേജിൽ വരുന്നുണ്ടോ? നമുക്ക് ഒരുമിച്ച് പോകാം.</div>
+              <input type="text" id="manglishEx3" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Nee naale collegil varunnundo? Namukku orumichu pokam." />
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">ഞാൻ ആ കാര്യം അവളോട് പറഞ്ഞു, പക്ഷെ അവൾക്ക് മനസ്സിലായില്ല.</div>
+              <input type="text" id="manglishEx4" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla." />
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">നീ ആ ഫയൽ എനിക്ക് വാട്സാപ്പിൽ അയച്ചു തരുമോ? ഞാൻ ഇപ്പോഴേ ഡൗൺലോഡ് ചെയ്യാം.</div>
+              <input type="text" id="manglishEx5" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam." />
+            </div>
+          </div>
+
+          <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+            <button id="saveManglishExBtn" class="kbd-btn" style="padding: 10px 24px; font-weight: 700; border-radius: 12px;">Save Preferences</button>
+          </div>
         </div>
       </div>
     </div>

@@ -60,12 +60,33 @@ export async function setupLLM() {
     : null;
 
   const thinkingToggle = document.getElementById('llmThinkingToggle');
+  const manglishToggle = document.getElementById('llmManglishToggle');
 
-  const updateSubsettingsVisibility = () => {
+  const updateSubsettingsVisibility = async () => {
     const show = toggle.checked;
+    const currentCfg = window.go?.main?.SettingsApp
+      ? await window.go.main.SettingsApp.GetConfig()
+      : null;
+    const activeModel = currentCfg ? currentCfg.active_model : '';
+    const isConformer = activeModel === 'indic-conformer-600m-multilingual';
+
     document.querySelectorAll('.llm-choice-setting').forEach(el => {
-      el.classList.toggle('visible', show);
+      if (el.id === 'llmManglishSelection') {
+        el.classList.toggle('visible', show && isConformer);
+      } else {
+        el.classList.toggle('visible', show);
+      }
     });
+
+    const navManglish = document.getElementById('navManglish');
+    if (navManglish) {
+      const isManglishActive = show && isConformer;
+      navManglish.style.display = isManglishActive ? 'flex' : 'none';
+      if (!isManglishActive && navManglish.classList.contains('active')) {
+        const settingsNav = document.querySelector('.nav-item[data-section="settings"]');
+        if (settingsNav) settingsNav.click();
+      }
+    }
   };
 
   const setActiveOption = (options, value) => {
@@ -83,12 +104,15 @@ export async function setupLLM() {
     if (thinkingToggle) {
       thinkingToggle.checked = cfg.llm_enable_thinking || false;
     }
+    if (manglishToggle) {
+      manglishToggle.checked = cfg.manglish_enabled || false;
+    }
   }
 
-  updateSubsettingsVisibility();
+  await updateSubsettingsVisibility();
 
-  toggle.addEventListener('change', () => {
-    updateSubsettingsVisibility();
+  toggle.addEventListener('change', async () => {
+    await updateSubsettingsVisibility();
     if (window.go?.main?.SettingsApp) {
       window.go.main.SettingsApp.SetLLMEnabled(toggle.checked);
     }
@@ -101,6 +125,16 @@ export async function setupLLM() {
       }
     });
   }
+
+  if (manglishToggle) {
+    manglishToggle.addEventListener('change', () => {
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetManglishEnabled(manglishToggle.checked);
+      }
+    });
+  }
+
+  window.addEventListener('active-model-changed', updateSubsettingsVisibility);
 
   const setupChoiceListeners = (options, persist) => {
     options.forEach(option => {
@@ -588,8 +622,8 @@ export async function setupModelsSettings() {
           </button>
           <div class="models-panel-body">
             ${models.map(m => {
-              const statusText = m.is_active ? 'Active' : m.is_downloaded ? 'Downloaded' : 'Available';
-              const statusClass = m.is_active ? 'active' : m.is_downloaded ? 'downloaded' : 'available';
+              const statusText = m.is_active ? 'Active' : m.is_disabled ? 'Unavailable' : m.is_downloaded ? 'Downloaded' : 'Available';
+              const statusClass = m.is_active ? 'active' : m.is_disabled ? 'unavailable' : m.is_downloaded ? 'downloaded' : 'available';
               let actionHtml = '';
               if (m.is_downloading) {
                 actionHtml = `
@@ -602,19 +636,19 @@ export async function setupModelsSettings() {
                 `;
               } else if (m.is_downloaded) {
                 actionHtml = `
-                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" data-filename="${m.filename}">Activate</button>`}
-                  ${downloadedCount > 1 ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
+                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma is supported with Malayalam Conformer"' : ''} data-filename="${m.filename}">Activate</button>`}
+                  ${downloadedCount > 1 && !m.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
                 `;
               } else {
-                actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${m.id}">Download</button>`;
+                actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma is supported with Malayalam Conformer"' : ''} data-id="${m.id}">Download</button>`;
               }
 
               return `
-                <div class="model-row">
+                <div class="model-row ${m.is_disabled ? 'disabled' : ''}">
                   <div class="model-row-main">
                     <div class="model-name-line">
                       <span class="model-name">${m.name}</span>
-                      <span class="model-status-pill ${statusClass}">${statusText}</span>
+                      <span class="model-status-pill ${statusClass}" ${m.is_disabled ? 'title="Only Gemma is supported with Malayalam Conformer"' : ''}>${statusText}</span>
                     </div>
                     <div class="model-desc">${m.description}</div>
                     <div class="model-row-specs">
@@ -656,6 +690,7 @@ export async function setupModelsSettings() {
             activateBtn.textContent = 'Activating...';
             try {
               await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.filename);
+              window.dispatchEvent(new CustomEvent('active-model-changed'));
             } catch (err) {
               alert(err);
             }
@@ -667,16 +702,21 @@ export async function setupModelsSettings() {
           deleteBtn.onclick = async (event) => {
             event.stopPropagation();
             const model = models.find(m => m.filename === deleteBtn.dataset.filename);
-            if (confirm(`Are you sure you want to delete ${model?.name || 'this model'}?`)) {
-              deleteBtn.disabled = true;
-              deleteBtn.textContent = 'Deleting...';
-              try {
-                await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
-              } catch (err) {
-                alert(err);
+            showCustomConfirm({
+              title: 'Delete Model',
+              message: `Are you sure you want to delete ${model?.name || 'this model'}?`,
+              confirmText: 'Delete',
+              onConfirm: async () => {
+                deleteBtn.disabled = true;
+                deleteBtn.textContent = 'Deleting...';
+                try {
+                  await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
+                } catch (err) {
+                  alert(err);
+                }
+                renderModels();
               }
-              renderModels();
-            }
+            });
           };
         });
 
@@ -967,5 +1007,77 @@ export async function setupDictionary() {
   };
 
   loadWords();
+}
+
+export async function setupManglishPersonalization() {
+  const ex1 = document.getElementById('manglishEx1');
+  const ex2 = document.getElementById('manglishEx2');
+  const ex3 = document.getElementById('manglishEx3');
+  const ex4 = document.getElementById('manglishEx4');
+  const ex5 = document.getElementById('manglishEx5');
+  const saveBtn = document.getElementById('saveManglishExBtn');
+  if (!saveBtn) return;
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  if (cfg) {
+    if (ex1) ex1.value = cfg.manglish_example_1 || '';
+    if (ex2) ex2.value = cfg.manglish_example_2 || '';
+    if (ex3) ex3.value = cfg.manglish_example_3 || '';
+    if (ex4) ex4.value = cfg.manglish_example_4 || '';
+    if (ex5) ex5.value = cfg.manglish_example_5 || '';
+  }
+
+  saveBtn.onclick = async () => {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    // Validation: make sure they type in Manglish (no Malayalam script characters)
+    const inputs = [ex1, ex2, ex3, ex4, ex5];
+    for (let input of inputs) {
+      if (!input) continue;
+      const val = input.value.trim();
+      if (!val) {
+        alert("Please fill out all Manglish transcription boxes!");
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Preferences';
+        input.focus();
+        return;
+      }
+      if (/[\u0D00-\u0D7F]/.test(val)) {
+        alert("Please write in Manglish (using English letters/Latin script only, no Malayalam script characters)!");
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Preferences';
+        input.focus();
+        return;
+      }
+    }
+
+    try {
+      if (window.go?.main?.SettingsApp) {
+        await window.go.main.SettingsApp.SetManglishExamples(
+          ex1.value.trim(),
+          ex2.value.trim(),
+          ex3.value.trim(),
+          ex4.value.trim(),
+          ex5.value.trim()
+        );
+        saveBtn.textContent = 'Saved!';
+        setTimeout(() => {
+          saveBtn.textContent = 'Save Preferences';
+          saveBtn.disabled = false;
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Failed to save Manglish examples:', err);
+      saveBtn.textContent = 'Error';
+      setTimeout(() => {
+        saveBtn.textContent = 'Save Preferences';
+        saveBtn.disabled = false;
+      }, 1500);
+    }
+  };
 }
 

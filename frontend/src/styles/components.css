@@ -272,6 +272,24 @@
   color: var(--text-primary);
 }
 
+.model-status-pill.unavailable {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.model-row.disabled {
+  opacity: 0.5;
+}
+
+.model-row.disabled .model-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-sidebar);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
 .model-desc {
   font-size: 13px;
   color: var(--text-secondary);

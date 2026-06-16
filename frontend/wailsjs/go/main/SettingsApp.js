@@ -130,6 +130,14 @@ export function SetLLMTone(arg1) {
   return window['go']['main']['SettingsApp']['SetLLMTone'](arg1);
 }
 
+export function SetManglishEnabled(arg1) {
+  return window['go']['main']['SettingsApp']['SetManglishEnabled'](arg1);
+}
+
+export function SetManglishExamples(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['SettingsApp']['SetManglishExamples'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function SetMicrophone(arg1) {
   return window['go']['main']['SettingsApp']['SetMicrophone'](arg1);
 }
