@@ -138,8 +138,7 @@ func (a *App) Install(targetDir string, createDesktopShortcut, createStartMenuSh
 	// 3. Create Shortcuts
 	exePath := filepath.Join(targetDir, "LocalFlow.exe")
 	if createDesktopShortcut {
-		// Use USERPROFILE so this resolves to the real user's Desktop even when running elevated
-		desktopPath := filepath.Join(os.Getenv("USERPROFILE"), "Desktop")
+		desktopPath := getDesktopPath()
 		shortcutPath := filepath.Join(desktopPath, "LocalFlow.lnk")
 		_ = createShortcut(shortcutPath, exePath, "", targetDir)
 	}
@@ -470,6 +469,63 @@ del "%%~f0"
 }
 
 // Helpers
+
+func getDesktopPath() string {
+	// 1. Try to find the logged-in user's redirected personal Desktop from HKEY_USERS
+	// We look for loaded user hives (SIDs starting with S-1-5-21- and not ending in _Classes)
+	if kUsers, err := registry.OpenKey(registry.USERS, "", registry.ENUMERATE_SUB_KEYS); err == nil {
+		defer kUsers.Close()
+		subkeys, err := kUsers.ReadSubKeyNames(-1)
+		if err == nil {
+			for _, sid := range subkeys {
+				if strings.HasPrefix(sid, "S-1-5-21-") && !strings.HasSuffix(sid, "_Classes") {
+					// Open the User Shell Folders key for this user
+					path := sid + `\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders`
+					if kFolder, err := registry.OpenKey(registry.USERS, path, registry.QUERY_VALUE); err == nil {
+						val, _, err := kFolder.GetStringValue("Desktop")
+						kFolder.Close()
+						if err == nil && val != "" {
+							// If it contains %USERPROFILE%, we expand it using the profile image path
+							if strings.Contains(strings.ToLower(val), "%userprofile%") {
+								if kProfile, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\`+sid, registry.QUERY_VALUE); err == nil {
+									profilePath, _, err := kProfile.GetStringValue("ProfileImagePath")
+									kProfile.Close()
+									if err == nil && profilePath != "" {
+										val = strings.Replace(val, "%USERPROFILE%", profilePath, -1)
+										val = strings.Replace(val, "%userprofile%", profilePath, -1)
+									}
+								}
+							}
+							return val
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Try Common Desktop from registry (so it's visible to all users when installed as admin)
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders`, registry.QUERY_VALUE)
+	if err == nil {
+		defer k.Close()
+		val, _, err := k.GetStringValue("Common Desktop")
+		if err == nil && val != "" {
+			return val
+		}
+	}
+	
+	// Fallback 1: Public Desktop env
+	if pub := os.Getenv("PUBLIC"); pub != "" {
+		return filepath.Join(pub, "Desktop")
+	}
+	
+	// Fallback 2: USERPROFILE Desktop
+	if up := os.Getenv("USERPROFILE"); up != "" {
+		return filepath.Join(up, "Desktop")
+	}
+	
+	return `C:\Users\Public\Desktop`
+}
 
 func createShortcut(shortcutPath, targetPath, arguments, workingDir string) error {
 	psCommand := fmt.Sprintf(
