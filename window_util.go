@@ -36,7 +36,7 @@ var (
 
 // getHWND finds the Wails window handle by its title.
 func getHWND() uintptr {
-	title, _ := syscall.UTF16PtrFromString("LocalFlow")
+	title, _ := syscall.UTF16PtrFromString("LocalFlow Pill Overlay")
 	hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(title)))
 	return hwnd
 }

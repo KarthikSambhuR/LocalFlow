@@ -122,7 +122,7 @@ func runPillOverlay(checkMutex bool) {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:             "LocalFlow",
+		Title:             "LocalFlow Pill Overlay",
 		Width:             1920,
 		Height:            1080,
 		Frameless:         true,
