@@ -305,6 +305,13 @@ func PerformSilentUpdateDirect() error {
 	tempDir := os.Getenv("TEMP")
 	_ = os.Remove(filepath.Join(tempDir, "localflow_update_state.json"))
 
+	// Rename ourselves so that the newly started LocalFlow.exe doesn't find the installer
+	trashPath := selfPath + ".trash"
+	_ = os.Remove(trashPath) // Clear any stale trash file
+	if errRename := os.Rename(selfPath, trashPath); errRename == nil {
+		selfPath = trashPath
+	}
+
 	// Use a bat script to delete the update installer (it cannot delete itself while running)
 	batchScript := filepath.Join(tempDir, "localflow_update_cleanup.bat")
 	scriptContent := fmt.Sprintf(`@echo off
