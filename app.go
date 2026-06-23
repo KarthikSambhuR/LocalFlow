@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -653,6 +654,9 @@ func (a *App) transcribeOld() {
 		}
 
 		wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+		wParams.suppress_blank = C.bool(true)
+		wParams.suppress_nst = C.bool(true)
+		wParams.no_speech_thold = C.float(0.7)
 		C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf)))
 
 		numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
@@ -662,7 +666,7 @@ func (a *App) transcribeOld() {
 		}
 
 		// Trim whitespace and filter Whisper noise/hallucination tokens
-		result = strings.TrimSpace(result)
+		result = cleanSoundTags(result)
 		isBlank := result == "" ||
 			result == "[BLANK_AUDIO]" ||
 			result == "(blank audio)" ||
@@ -920,6 +924,9 @@ func (a *App) transcribe() {
 		} else {
 			wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
 			wParams.translate = C.bool(false)
+			wParams.suppress_blank = C.bool(true)
+			wParams.suppress_nst = C.bool(true)
+			wParams.no_speech_thold = C.float(0.7)
 
 			modelLang := "en"
 
@@ -950,7 +957,7 @@ func (a *App) transcribe() {
 	}
 	transcribeTimeUs := time.Since(transcribeStart).Microseconds()
 
-	result = strings.TrimSpace(result)
+	result = cleanSoundTags(result)
 	isBlank := result == "" ||
 		result == "[BLANK_AUDIO]" ||
 		result == "(blank audio)" ||
@@ -1545,4 +1552,12 @@ func (a *App) syncLLMServerState(cfg Config) {
 			a.startLLMServer(cfg)
 		}
 	}
+}
+
+var soundTagRegex = regexp.MustCompile(`\[[^\]]*\]|\([^)]*\)`)
+
+func cleanSoundTags(text string) string {
+	cleaned := soundTagRegex.ReplaceAllString(text, "")
+	cleaned = regexp.MustCompile(`\s+`).ReplaceAllString(cleaned, " ")
+	return strings.TrimSpace(cleaned)
 }
