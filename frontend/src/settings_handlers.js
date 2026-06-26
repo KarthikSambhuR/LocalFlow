@@ -1253,3 +1253,139 @@ export async function setupManglishPersonalization() {
   loadMappings();
 }
 
+export async function setupBilingualRouting() {
+  const toggle = document.getElementById('bilingualRoutingToggle');
+  if (!toggle) return;
+
+  const whisperDropdown = document.getElementById('bilingualWhisperDropdown');
+  const whisperLabel = document.getElementById('bilingualWhisperLabel');
+  const whisperMenu = document.getElementById('bilingualWhisperDropdownMenu');
+
+  const conformerDropdown = document.getElementById('bilingualConformerDropdown');
+  const conformerLabel = document.getElementById('bilingualConformerLabel');
+  const conformerMenu = document.getElementById('bilingualConformerDropdownMenu');
+
+  const whisperSelectionDiv = document.getElementById('bilingualWhisperModelSelection');
+  const conformerSelectionDiv = document.getElementById('bilingualConformerModelSelection');
+
+  const cfg = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetConfig()
+    : null;
+
+  const models = window.go?.main?.SettingsApp
+    ? await window.go.main.SettingsApp.GetModelsList()
+    : [];
+
+  const updateDropdownVisibility = () => {
+    const show = toggle.checked;
+    if (whisperSelectionDiv) whisperSelectionDiv.style.display = show ? 'flex' : 'none';
+    if (conformerSelectionDiv) conformerSelectionDiv.style.display = show ? 'flex' : 'none';
+  };
+
+  // Populate Whisper Dropdown (only multilingual models allowed in bilingual mode)
+  const whisperModels = models.filter(m => m.model_type === 'whisper' && m.filename.endsWith('.bin') && m.language === 'multilingual' && m.is_downloaded);
+
+  let activeWhisper = cfg?.bilingual_whisper_model || '';
+  if (activeWhisper === '' || activeWhisper.endsWith('.en.bin')) {
+    const firstMulti = whisperModels.find(m => m.is_downloaded);
+    activeWhisper = firstMulti ? firstMulti.filename : 'ggml-tiny.bin';
+  }
+
+  if (cfg) {
+    toggle.checked = cfg.bilingual_routing_enabled || false;
+    if (whisperLabel) whisperLabel.textContent = activeWhisper;
+    if (conformerLabel) conformerLabel.textContent = cfg.bilingual_conformer_model || 'indicconformer.int8.onnx';
+  }
+  updateDropdownVisibility();
+
+  if (whisperMenu) {
+    if (whisperModels.length === 0) {
+      whisperMenu.innerHTML = `<div class="dropdown-item disabled" style="color: var(--text-muted); cursor: not-allowed; padding: 10px 14px;">No multilingual Whisper models downloaded</div>`;
+    } else {
+      whisperMenu.innerHTML = whisperModels.map(m => `
+        <div class="dropdown-item ${m.filename === activeWhisper ? 'active' : ''}" data-value="${m.filename}">${m.name}</div>
+      `).join('');
+    }
+
+    const items = whisperMenu.querySelectorAll('.dropdown-item:not(.disabled)');
+    items.forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const selected = item.getAttribute('data-value');
+        whisperLabel.textContent = selected;
+        whisperDropdown.classList.remove('open');
+        
+        // Remove active class from siblings and add to this one
+        whisperMenu.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+
+        if (window.go?.main?.SettingsApp) {
+          await window.go.main.SettingsApp.SetBilingualWhisperModel(selected);
+        }
+      });
+    });
+  }
+
+  // Populate Conformer Dropdown
+  const conformerModels = models.filter(m => m.model_type === 'whisper' && m.filename.endsWith('.onnx') && m.is_downloaded);
+  if (conformerMenu) {
+    if (conformerModels.length === 0) {
+      conformerMenu.innerHTML = `<div class="dropdown-item disabled" style="color: var(--text-muted); cursor: not-allowed; padding: 10px 14px;">No Conformer models downloaded</div>`;
+    } else {
+      conformerMenu.innerHTML = conformerModels.map(m => `
+        <div class="dropdown-item ${m.filename === cfg?.bilingual_conformer_model ? 'active' : ''}" data-value="${m.filename}">${m.name}</div>
+      `).join('');
+    }
+
+    const items = conformerMenu.querySelectorAll('.dropdown-item:not(.disabled)');
+    items.forEach(item => {
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const selected = item.getAttribute('data-value');
+        conformerLabel.textContent = selected;
+        conformerDropdown.classList.remove('open');
+
+        // Remove active class from siblings and add to this one
+        conformerMenu.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+
+        if (window.go?.main?.SettingsApp) {
+          await window.go.main.SettingsApp.SetBilingualConformerModel(selected);
+        }
+      });
+    });
+  }
+
+  // Toggle Dropdown logic
+  if (whisperDropdown) {
+    const trigger = whisperDropdown.querySelector('.dropdown-trigger');
+    trigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      whisperDropdown.classList.toggle('open');
+      conformerDropdown?.classList.remove('open');
+    });
+  }
+
+  if (conformerDropdown) {
+    const trigger = conformerDropdown.querySelector('.dropdown-trigger');
+    trigger?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      conformerDropdown.classList.toggle('open');
+      whisperDropdown?.classList.remove('open');
+    });
+  }
+
+  // Close when clicking outside
+  document.addEventListener('click', () => {
+    whisperDropdown?.classList.remove('open');
+    conformerDropdown?.classList.remove('open');
+  });
+
+  toggle.addEventListener('change', () => {
+    updateDropdownVisibility();
+    if (window.go?.main?.SettingsApp) {
+      window.go.main.SettingsApp.SetBilingualRoutingEnabled(toggle.checked);
+    }
+  });
+}
+

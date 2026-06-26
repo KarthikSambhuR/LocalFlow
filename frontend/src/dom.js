@@ -233,6 +233,44 @@ settingsModal.innerHTML = `
             </div>
           </div>
         </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Bilingual Routing (English/Malayalam)</span>
+            <span class="setting-desc">Automatically route speech to English Whisper or Malayalam Conformer depending on which language you speak</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="bilingualRoutingToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div class="setting-item bilingual-setting" id="bilingualWhisperModelSelection" style="display: none;">
+          <div class="setting-info">
+            <span class="setting-title">Bilingual Whisper Model</span>
+            <span class="setting-desc">Choose which Whisper model to use for English speech</span>
+          </div>
+          <div class="custom-dropdown" id="bilingualWhisperDropdown">
+            <button class="dropdown-trigger">
+              <span id="bilingualWhisperLabel">ggml-tiny.en.bin</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu" id="bilingualWhisperDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
+            </div>
+          </div>
+        </div>
+        <div class="setting-item bilingual-setting" id="bilingualConformerModelSelection" style="display: none;">
+          <div class="setting-info">
+            <span class="setting-title">Bilingual Conformer Model</span>
+            <span class="setting-desc">Choose which Conformer model to use for Malayalam speech</span>
+          </div>
+          <div class="custom-dropdown" id="bilingualConformerDropdown">
+            <button class="dropdown-trigger">
+              <span id="bilingualConformerLabel">indicconformer.int8.onnx</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="dropdown-menu" id="bilingualConformerDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
+            </div>
+          </div>
+        </div>
         <div id="modelListWhisper" style="margin-top: 20px;"></div>
       </div>
       <div class="setting-group">

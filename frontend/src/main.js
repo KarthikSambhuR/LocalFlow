@@ -26,7 +26,8 @@ import {
   setupMicrophoneSettings,
   setupOnboarding,
   setupDictionary,
-  setupManglishPersonalization
+  setupManglishPersonalization,
+  setupBilingualRouting
 } from './settings_handlers.js';
 
 // Populate state visualizer bars from DOM module
@@ -57,7 +58,7 @@ function showModule() {
 function hideModule() {
   state.isActive = false;
   state.isProcessing = false;
-  moduleNode.classList.remove('active', 'processing', 'refining');
+  moduleNode.classList.remove('active', 'processing', 'refining', 'loading-model');
   resetBars();
   setTimeout(() => {
     if (!state.isActive && state.rafId) {
@@ -70,15 +71,22 @@ function hideModule() {
 function showProcessing() {
   state.isProcessing = true;
   resetBars();
-  moduleNode.classList.remove('active', 'refining');
+  moduleNode.classList.remove('active', 'refining', 'loading-model');
   moduleNode.classList.add('processing');
 }
 
 function showRefining() {
   state.isProcessing = true;
   resetBars();
-  moduleNode.classList.remove('active');
+  moduleNode.classList.remove('active', 'loading-model');
   moduleNode.classList.add('processing', 'refining');
+}
+
+function showLoadingModel() {
+  state.isProcessing = true;
+  resetBars();
+  moduleNode.classList.remove('active', 'refining');
+  moduleNode.classList.add('processing', 'loading-model');
 }
 
 function setVolume(vol) {
@@ -122,6 +130,7 @@ function setupWails() {
     settingsOverlay.classList.remove('active');
     if (status === 'listening' || status === true) showModule();
     else if (status === 'refining') showRefining();
+    else if (status === 'loading-model') showLoadingModel();
     else showProcessing();
   });
   window.runtime.EventsOn('recording-done', hideModule);
@@ -276,6 +285,7 @@ async function init() {
       setupDataFolderSettings();
       setupModelsSettings();
       setupMicrophoneSettings();
+      setupBilingualRouting();
       setupOnboarding();
       setupDictionary();
       setupManglishPersonalization();

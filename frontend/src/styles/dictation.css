@@ -64,3 +64,11 @@
 .module.refining .processing-ring {
   border-top-color: var(--accent);
 }
+
+.module.loading-model .processing-ring {
+  opacity: 1;
+  animation: spin 0.6s linear infinite;
+  border-top-color: #ffd60a; /* Yellow spinner color */
+}
+
+.module.loading-model .visualizer { opacity: 0; }

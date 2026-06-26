@@ -45,6 +45,9 @@ export namespace main {
 	    manglish_example_3: string;
 	    manglish_example_4: string;
 	    manglish_example_5: string;
+	    bilingual_routing_enabled: boolean;
+	    bilingual_whisper_model: string;
+	    bilingual_conformer_model: string;
 	    window_width: number;
 	    window_height: number;
 	    window_maximized: boolean;
@@ -83,6 +86,9 @@ export namespace main {
 	        this.manglish_example_3 = source["manglish_example_3"];
 	        this.manglish_example_4 = source["manglish_example_4"];
 	        this.manglish_example_5 = source["manglish_example_5"];
+	        this.bilingual_routing_enabled = source["bilingual_routing_enabled"];
+	        this.bilingual_whisper_model = source["bilingual_whisper_model"];
+	        this.bilingual_conformer_model = source["bilingual_conformer_model"];
 	        this.window_width = source["window_width"];
 	        this.window_height = source["window_height"];
 	        this.window_maximized = source["window_maximized"];

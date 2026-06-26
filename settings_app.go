@@ -391,6 +391,42 @@ var AvailableModels = []WhisperModelInfo{
 		ModelType:        "whisper",
 	},
 	{
+		ID:               "tiny-multilingual",
+		Name:             "Tiny (Multilingual)",
+		Filename:         "ggml-tiny.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+		SizeMB:           75,
+		SpeedLabel:       "Super fast",
+		SpeedDescription: "~10-15x realtime",
+		Description:      "Multilingual model. Fastest startup and lowest memory usage.",
+		Language:         "multilingual",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "base-multilingual",
+		Name:             "Base (Multilingual)",
+		Filename:         "ggml-base.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+		SizeMB:           142,
+		SpeedLabel:       "Fast",
+		SpeedDescription: "~6-10x realtime",
+		Description:      "Multilingual model. Balanced speed and accuracy.",
+		Language:         "multilingual",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "small-multilingual",
+		Name:             "Small (Multilingual)",
+		Filename:         "ggml-small.bin",
+		URL:              "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
+		SizeMB:           465,
+		SpeedLabel:       "Balanced",
+		SpeedDescription: "~2-4x realtime",
+		Description:      "Multilingual model. Better accuracy with a speed cost.",
+		Language:         "multilingual",
+		ModelType:        "whisper",
+	},
+	{
 		ID:               "indic-conformer-120m-int8",
 		Name:             "Indic Conformer 120M INT8 (Malayalam)",
 		Filename:         "indicconformer.int8.onnx",
@@ -1132,6 +1168,24 @@ func (s *SettingsApp) SetLLMContextSize(size int) error {
 func (s *SettingsApp) SetManglishEnabled(enabled bool) {
 	cfg := loadConfig()
 	cfg.ManglishEnabled = enabled
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetBilingualRoutingEnabled(enabled bool) {
+	cfg := loadConfig()
+	cfg.BilingualRoutingEnabled = enabled
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetBilingualWhisperModel(filename string) {
+	cfg := loadConfig()
+	cfg.BilingualWhisperModel = filename
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetBilingualConformerModel(filename string) {
+	cfg := loadConfig()
+	cfg.BilingualConformerModel = filename
 	saveConfig(cfg)
 }
 

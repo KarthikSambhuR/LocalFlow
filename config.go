@@ -51,6 +51,9 @@ type Config struct {
 	ManglishExample3           string  `json:"manglish_example_3"`
 	ManglishExample4           string  `json:"manglish_example_4"`
 	ManglishExample5           string  `json:"manglish_example_5"`
+	BilingualRoutingEnabled    bool    `json:"bilingual_routing_enabled"`
+	BilingualWhisperModel      string  `json:"bilingual_whisper_model"`
+	BilingualConformerModel    string  `json:"bilingual_conformer_model"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
@@ -85,6 +88,9 @@ func loadConfig() Config {
 		ManglishExample3:           "Nee naale collegil varunnundo? Namukku orumichu pokam.",
 		ManglishExample4:           "Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla.",
 		ManglishExample5:           "Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam.",
+		BilingualRoutingEnabled:    false,
+		BilingualWhisperModel:      "ggml-tiny.en.bin",
+		BilingualConformerModel:    "indicconformer.int8.onnx",
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
@@ -168,6 +174,12 @@ func loadConfig() Config {
 	}
 	if cfg.ManglishExample5 == "" {
 		cfg.ManglishExample5 = "Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam."
+	}
+	if cfg.BilingualWhisperModel == "" {
+		cfg.BilingualWhisperModel = "ggml-tiny.en.bin"
+	}
+	if cfg.BilingualConformerModel == "" {
+		cfg.BilingualConformerModel = "indicconformer.int8.onnx"
 	}
 	return cfg
 }

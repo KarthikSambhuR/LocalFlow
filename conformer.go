@@ -227,7 +227,10 @@ func initOrReuseSessions() error {
 
 	cfg := loadConfig()
 	activeModel := cfg.ActiveModel
-	if activeModel == "" {
+	if cfg.BilingualRoutingEnabled {
+		activeModel = cfg.BilingualConformerModel
+	}
+	if activeModel == "" || filepath.Ext(activeModel) == ".bin" {
 		activeModel = "indicconformer.int8.onnx"
 	}
 

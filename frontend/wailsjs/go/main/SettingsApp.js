@@ -106,6 +106,18 @@ export function SetActiveModel(arg1) {
   return window['go']['main']['SettingsApp']['SetActiveModel'](arg1);
 }
 
+export function SetBilingualConformerModel(arg1) {
+  return window['go']['main']['SettingsApp']['SetBilingualConformerModel'](arg1);
+}
+
+export function SetBilingualRoutingEnabled(arg1) {
+  return window['go']['main']['SettingsApp']['SetBilingualRoutingEnabled'](arg1);
+}
+
+export function SetBilingualWhisperModel(arg1) {
+  return window['go']['main']['SettingsApp']['SetBilingualWhisperModel'](arg1);
+}
+
 export function SetDataFolder(arg1) {
   return window['go']['main']['SettingsApp']['SetDataFolder'](arg1);
 }

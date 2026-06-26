@@ -809,47 +809,7 @@ func (a *App) getModelsDir() string {
 	return dir
 }
 
-func (a *App) ensureActiveModel() {
-	a.whisperMutex.Lock()
-	defer a.whisperMutex.Unlock()
-
-	cfg := loadConfig()
-	activeModel := cfg.ActiveModel
-	if activeModel == "" {
-		activeModel = "ggml-tiny.en.bin"
-	}
-
-	isConformerActive := activeModel == "indicconformer.int8.onnx" || activeModel == "indicconformer.fp32.onnx"
-	if isConformerActive {
-		engine := cfg.ProcessingEngine
-		if engine != "vulkan" {
-			engine = "cpu"
-		}
-		if a.loadedModelPath == activeModel && a.loadedEngine == engine && a.loadedGPU == cfg.SelectedGPU {
-			return
-		}
-
-		if a.whisperCtx != nil {
-			C.whisper_free(a.whisperCtx)
-			a.whisperCtx = nil
-		}
-
-		fmt.Printf("Loading Conformer model with %s engine (GPU: %s)...\n", engine, cfg.SelectedGPU)
-		if err := LoadConformerSessions(); err != nil {
-			fmt.Printf("Error loading Conformer sessions: %v\n", err)
-			a.loadedModelPath = ""
-			a.loadedEngine = ""
-			a.loadedGPU = ""
-		} else {
-			a.loadedModelPath = activeModel
-			a.loadedEngine = engine
-			a.loadedGPU = cfg.SelectedGPU
-			fmt.Printf("Successfully loaded Conformer model: %s with %s engine (GPU: %s)\n", activeModel, engine, cfg.SelectedGPU)
-		}
-		return
-	}
-
-	FreeConformerSessions()
+func (a *App) ensureWhisperLoaded(cfg Config, activeModel string) bool {
 	engine := cfg.ProcessingEngine
 	if engine != "vulkan" {
 		engine = "cpu"
@@ -905,12 +865,12 @@ func (a *App) ensureActiveModel() {
 			_ = saveConfig(cfg)
 		} else {
 			fmt.Println("No Whisper model file found anywhere!")
-			return
+			return false
 		}
 	}
 
 	if a.loadedModelPath == targetPath && a.loadedEngine == engine && a.loadedGPU == cfg.SelectedGPU && a.whisperCtx != nil {
-		return
+		return true
 	}
 
 	fmt.Printf("Loading Whisper model: %s with %s engine (GPU: %s)...\n", targetPath, engine, cfg.SelectedGPU)
@@ -940,12 +900,120 @@ func (a *App) ensureActiveModel() {
 	a.whisperCtx = C.whisper_init_from_file_with_params(modelPathC, params)
 	if a.whisperCtx == nil {
 		fmt.Printf("Error initializing Whisper model from %s with %s engine\n", targetPath, engine)
+		return false
 	} else {
 		a.loadedModelPath = targetPath
 		a.loadedEngine = engine
 		a.loadedGPU = cfg.SelectedGPU
 		fmt.Printf("Successfully loaded Whisper model: %s with %s engine (GPU: %s)\n", targetPath, engine, cfg.SelectedGPU)
+		return true
 	}
+}
+
+func (a *App) ensureActiveModel() {
+	a.whisperMutex.Lock()
+	defer a.whisperMutex.Unlock()
+
+	cfg := loadConfig()
+	activeModel := cfg.ActiveModel
+	if activeModel == "" {
+		activeModel = "ggml-tiny.en.bin"
+	}
+
+	if cfg.BilingualRoutingEnabled {
+		a.ensureWhisperLoaded(cfg, cfg.BilingualWhisperModel)
+		return
+	}
+
+	isConformerActive := activeModel == "indicconformer.int8.onnx" || activeModel == "indicconformer.fp32.onnx"
+	if isConformerActive {
+		engine := cfg.ProcessingEngine
+		if engine != "vulkan" {
+			engine = "cpu"
+		}
+		if a.loadedModelPath == activeModel && a.loadedEngine == engine && a.loadedGPU == cfg.SelectedGPU {
+			return
+		}
+
+		if a.whisperCtx != nil {
+			C.whisper_free(a.whisperCtx)
+			a.whisperCtx = nil
+		}
+
+		fmt.Printf("Loading Conformer model with %s engine (GPU: %s)...\n", engine, cfg.SelectedGPU)
+		if err := LoadConformerSessions(); err != nil {
+			fmt.Printf("Error loading Conformer sessions: %v\n", err)
+			a.loadedModelPath = ""
+			a.loadedEngine = ""
+			a.loadedGPU = ""
+		} else {
+			a.loadedModelPath = activeModel
+			a.loadedEngine = engine
+			a.loadedGPU = cfg.SelectedGPU
+			fmt.Printf("Successfully loaded Conformer model: %s with %s engine (GPU: %s)\n", activeModel, engine, cfg.SelectedGPU)
+		}
+		return
+	}
+
+	FreeConformerSessions()
+	a.ensureWhisperLoaded(cfg, activeModel)
+}
+
+func findSpeechStart(samples []float32, sampleRate int) int {
+	windowSize := int(0.03 * float64(sampleRate)) // 30ms window (480 samples at 16kHz)
+	threshold := float32(0.005)                  // Energy threshold for active speech
+	
+	for i := 0; i <= len(samples)-windowSize; i += windowSize {
+		var sum float32
+		for j := 0; j < windowSize; j++ {
+			sum += samples[i+j] * samples[i+j]
+		}
+		rms := math.Sqrt(float64(sum / float32(windowSize)))
+		
+		if rms > float64(threshold) {
+			return i
+		}
+	}
+	return 0 // Fallback to start if no speech is detected
+}
+
+func (a *App) transcribeFullAudio(samples []float32, useConformer bool) string {
+	if useConformer {
+		text, err := TranscribeIndicConformer(samples)
+		if err != nil {
+			fmt.Println("Conformer full transcription failed:", err)
+			return ""
+		}
+		return text
+	}
+
+	a.whisperMutex.Lock()
+	defer a.whisperMutex.Unlock()
+	if a.whisperCtx == nil {
+		return ""
+	}
+
+	wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+	wParams.translate = C.bool(false)
+	wParams.suppress_blank = C.bool(true)
+	wParams.suppress_nst = C.bool(true)
+	wParams.no_speech_thold = C.float(0.7)
+	langC := C.CString("en")
+	wParams.language = langC
+
+	if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&samples[0])), C.int(len(samples))); code != 0 {
+		fmt.Println("Whisper full transcription failed with code:", int(code))
+		C.free(unsafe.Pointer(langC))
+		return ""
+	}
+
+	numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
+	result := ""
+	for i := 0; i < numSegments; i++ {
+		result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
+	}
+	C.free(unsafe.Pointer(langC))
+	return cleanSoundTags(result)
 }
 
 func (a *App) transcribe() {
@@ -983,18 +1051,126 @@ func (a *App) transcribe() {
 
 	transcribeStart := time.Now()
 
-	// Transcribe the remaining tail chunk
-	tailText := ""
-	if len(tailSamples) > 0 {
-		tailText = a.transcribeChunk(tailSamples)
-	}
-
-	if tailText != "" {
-		interims = append(interims, tailText)
-	}
-
-	result := strings.Join(interims, " ")
+	useConformer := false
+	isConformerModelActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+	result := ""
 	whisperFailed := false
+
+	boostedSamples := cacheCopy
+	if cfg.InputBoostEnabled && cfg.InputBoostGain > 1.0 {
+		boosted := make([]float32, len(cacheCopy))
+		for i, s := range cacheCopy {
+			s *= cfg.InputBoostGain
+			if s > 1.0 {
+				s = 1.0
+			} else if s < -1.0 {
+				s = -1.0
+			}
+			boosted[i] = s
+		}
+		boostedSamples = boosted
+	}
+
+	if cfg.BilingualRoutingEnabled {
+		a.whisperMutex.Lock()
+		wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+		wParams.translate = C.bool(false)
+		wParams.suppress_blank = C.bool(true)
+		wParams.suppress_nst = C.bool(true)
+		wParams.no_speech_thold = C.float(0.7)
+
+		isMultilingual := !strings.HasSuffix(cfg.BilingualWhisperModel, ".en.bin")
+		detectedLang := "en"
+
+		if isMultilingual {
+			// Convert full audio PCM buffer to Mel spectrogram
+			if code := C.whisper_pcm_to_mel(a.whisperCtx, (*C.float)(unsafe.Pointer(&boostedSamples[0])), C.int(len(boostedSamples)), C.int(4)); code == 0 {
+				// Run auto-detection over the entire converted audio buffer
+				langID := C.whisper_lang_auto_detect(a.whisperCtx, 0, C.int(4), nil)
+				if langID >= 0 {
+					detectedLang = C.GoString(C.whisper_lang_str(langID))
+					fmt.Printf("Bilingual Routing Probe auto-detected language over entire audio: %s\n", detectedLang)
+				} else {
+					fmt.Printf("Bilingual Routing auto-detect failed with code: %d\n", int(langID))
+				}
+			} else {
+				fmt.Println("Bilingual Routing: pcm_to_mel failed")
+			}
+		} else {
+			// Fallback to confidence check on the first 1.5 seconds if they somehow selected an English-only model
+			startIndex := findSpeechStart(boostedSamples, 16000)
+			endIndex := startIndex + int(1.5*16000)
+			if endIndex > len(boostedSamples) {
+				endIndex = len(boostedSamples)
+			}
+			if startIndex < len(boostedSamples) {
+				probeChunk := boostedSamples[startIndex:endIndex]
+				langC := C.CString("en")
+				wParams.language = langC
+				avgConfidence := float32(0.0)
+				if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&probeChunk[0])), C.int(len(probeChunk))); code == 0 {
+					numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
+					var sumProb float32
+					var tokenCount int
+					for i := 0; i < numSegments; i++ {
+						numTokens := int(C.whisper_full_n_tokens(a.whisperCtx, C.int(i)))
+						for j := 0; j < numTokens; j++ {
+							p := float32(C.whisper_full_get_token_p(a.whisperCtx, C.int(i), C.int(j)))
+							sumProb += p
+							tokenCount++
+						}
+					}
+					if tokenCount > 0 {
+						avgConfidence = sumProb / float32(tokenCount)
+					}
+				}
+				C.free(unsafe.Pointer(langC))
+				if avgConfidence > 0.65 {
+					detectedLang = "en"
+				} else {
+					detectedLang = "ml" // default fallback to Malayalam
+				}
+				fmt.Printf("Bilingual Routing fallback average confidence: %f -> decided: %s\n", avgConfidence, detectedLang)
+			}
+		}
+		a.whisperMutex.Unlock()
+
+		if detectedLang != "en" {
+			useConformer = true
+			fmt.Printf("Bilingual Routing decided: MALAYALAM (detected %s)\n", detectedLang)
+		} else {
+			useConformer = false
+			fmt.Println("Bilingual Routing decided: ENGLISH")
+		}
+
+		if useConformer {
+			if conformerSession == nil {
+				runtime.EventsEmit(a.ctx, "recording-state", "loading-model")
+				time.Sleep(100 * time.Millisecond) // Give UI time to render yellow spinner
+				if err := LoadConformerSessions(); err != nil {
+					fmt.Printf("Error loading Conformer sessions dynamically: %v\n", err)
+				}
+				runtime.EventsEmit(a.ctx, "recording-state", "processing")
+			}
+		}
+
+		// Transcribe the entire audio buffer
+		result = a.transcribeFullAudio(boostedSamples, useConformer)
+	} else {
+		useConformer = isConformerModelActive
+		// Transcribe the remaining tail chunk
+		tailText := ""
+		if len(tailSamples) > 0 {
+			tailText = a.transcribeChunk(tailSamples)
+		}
+
+		if tailText != "" {
+			interims = append(interims, tailText)
+		}
+
+		result = strings.Join(interims, " ")
+	}
+
 	transcribeTimeUs := time.Since(transcribeStart).Microseconds()
 
 	result = cleanSoundTags(result)
@@ -1018,7 +1194,7 @@ func (a *App) transcribe() {
 			llmStart := time.Now()
 			url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
 			translitMappings, _ := GetTransliterations()
-			isConformer := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+			isConformer := useConformer
 			isSarvam := cfg.LLMActiveModel == "sarvam-1-Q4_K_M.gguf"
 			isGemma := strings.Contains(strings.ToLower(cfg.LLMActiveModel), "gemma")
 			manglishEnabled := cfg.ManglishEnabled && !isSarvam

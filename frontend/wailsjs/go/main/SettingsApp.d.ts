@@ -54,6 +54,12 @@ export function SelectDataFolder():Promise<string>;
 
 export function SetActiveModel(arg1:string):Promise<void>;
 
+export function SetBilingualConformerModel(arg1:string):Promise<void>;
+
+export function SetBilingualRoutingEnabled(arg1:boolean):Promise<void>;
+
+export function SetBilingualWhisperModel(arg1:string):Promise<void>;
+
 export function SetDataFolder(arg1:string):Promise<void>;
 
 export function SetInputBoost(arg1:boolean,arg2:number):Promise<void>;
