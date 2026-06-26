@@ -85,6 +85,8 @@ type App struct {
 	llmMutex         sync.Mutex
 	llmPort          int
 	runningLLMConfig Config
+	routingDecided          bool
+	useConformer            bool
 }
 
 func NewApp() *App {
@@ -395,6 +397,8 @@ func (a *App) listenToKeyboard() {
 				a.audioBuffer = make([]float32, 0)
 				a.transcribedSamplesCount = 0
 				a.interimTranscripts = make([]string, 0)
+				a.routingDecided = false
+				a.useConformer = false
 				a.streamingActive = true
 				a.mutex.Unlock()
 
@@ -977,20 +981,12 @@ func findSpeechStart(samples []float32, sampleRate int) int {
 	return 0 // Fallback to start if no speech is detected
 }
 
-func (a *App) transcribeFullAudio(samples []float32, useConformer bool) string {
-	if useConformer {
-		text, err := TranscribeIndicConformer(samples)
-		if err != nil {
-			fmt.Println("Conformer full transcription failed:", err)
-			return ""
-		}
-		return text
-	}
 
+func (a *App) detectLanguage(samples []float32, cfg Config) string {
 	a.whisperMutex.Lock()
 	defer a.whisperMutex.Unlock()
 	if a.whisperCtx == nil {
-		return ""
+		return "en"
 	}
 
 	wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
@@ -998,22 +994,61 @@ func (a *App) transcribeFullAudio(samples []float32, useConformer bool) string {
 	wParams.suppress_blank = C.bool(true)
 	wParams.suppress_nst = C.bool(true)
 	wParams.no_speech_thold = C.float(0.7)
-	langC := C.CString("en")
-	wParams.language = langC
 
-	if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&samples[0])), C.int(len(samples))); code != 0 {
-		fmt.Println("Whisper full transcription failed with code:", int(code))
-		C.free(unsafe.Pointer(langC))
-		return ""
+	isMultilingual := !strings.HasSuffix(cfg.BilingualWhisperModel, ".en.bin")
+	detectedLang := "en"
+
+	if isMultilingual {
+		if code := C.whisper_pcm_to_mel(a.whisperCtx, (*C.float)(unsafe.Pointer(&samples[0])), C.int(len(samples)), C.int(4)); code == 0 {
+			langID := C.whisper_lang_auto_detect(a.whisperCtx, 0, C.int(4), nil)
+			if langID >= 0 {
+				detectedLang = C.GoString(C.whisper_lang_str(langID))
+				fmt.Printf("Bilingual Routing Probe auto-detected language: %s\n", detectedLang)
+			} else {
+				fmt.Printf("Bilingual Routing auto-detect failed with code: %d\n", int(langID))
+			}
+		} else {
+			fmt.Println("Bilingual Routing: pcm_to_mel failed")
+		}
+	} else {
+		// Fallback confidence check on the samples
+		startIndex := findSpeechStart(samples, 16000)
+		endIndex := startIndex + int(1.5*16000)
+		if endIndex > len(samples) {
+			endIndex = len(samples)
+		}
+		if startIndex < len(samples) {
+			probeChunk := samples[startIndex:endIndex]
+			langC := C.CString("en")
+			wParams.language = langC
+			avgConfidence := float32(0.0)
+			if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&probeChunk[0])), C.int(len(probeChunk))); code == 0 {
+				numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
+				var sumProb float32
+				var tokenCount int
+				for i := 0; i < numSegments; i++ {
+					numTokens := int(C.whisper_full_n_tokens(a.whisperCtx, C.int(i)))
+					for j := 0; j < numTokens; j++ {
+						p := float32(C.whisper_full_get_token_p(a.whisperCtx, C.int(i), C.int(j)))
+						sumProb += p
+						tokenCount++
+					}
+				}
+				if tokenCount > 0 {
+					avgConfidence = sumProb / float32(tokenCount)
+				}
+			}
+			C.free(unsafe.Pointer(langC))
+			if avgConfidence > 0.65 {
+				detectedLang = "en"
+			} else {
+				detectedLang = "ml"
+			}
+			fmt.Printf("Bilingual Routing fallback average confidence: %f -> decided: %s\n", avgConfidence, detectedLang)
+		}
 	}
 
-	numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
-	result := ""
-	for i := 0; i < numSegments; i++ {
-		result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
-	}
-	C.free(unsafe.Pointer(langC))
-	return cleanSoundTags(result)
+	return detectedLang
 }
 
 func (a *App) transcribe() {
@@ -1056,92 +1091,26 @@ func (a *App) transcribe() {
 	result := ""
 	whisperFailed := false
 
-	boostedSamples := cacheCopy
-	if cfg.InputBoostEnabled && cfg.InputBoostGain > 1.0 {
-		boosted := make([]float32, len(cacheCopy))
-		for i, s := range cacheCopy {
-			s *= cfg.InputBoostGain
-			if s > 1.0 {
-				s = 1.0
-			} else if s < -1.0 {
-				s = -1.0
-			}
-			boosted[i] = s
-		}
-		boostedSamples = boosted
-	}
-
 	if cfg.BilingualRoutingEnabled {
-		a.whisperMutex.Lock()
-		wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
-		wParams.translate = C.bool(false)
-		wParams.suppress_blank = C.bool(true)
-		wParams.suppress_nst = C.bool(true)
-		wParams.no_speech_thold = C.float(0.7)
+		a.mutex.Lock()
+		if !a.routingDecided {
+			probeLen := len(a.audioBuffer)
+			if probeLen > 480000 { // 30 seconds max
+				probeLen = 480000
+			}
+			probeSamples := make([]float32, probeLen)
+			copy(probeSamples, a.audioBuffer[:probeLen])
+			a.mutex.Unlock()
 
-		isMultilingual := !strings.HasSuffix(cfg.BilingualWhisperModel, ".en.bin")
-		detectedLang := "en"
+			detectedLang := a.detectLanguage(probeSamples, cfg)
 
-		if isMultilingual {
-			// Convert full audio PCM buffer to Mel spectrogram
-			if code := C.whisper_pcm_to_mel(a.whisperCtx, (*C.float)(unsafe.Pointer(&boostedSamples[0])), C.int(len(boostedSamples)), C.int(4)); code == 0 {
-				// Run auto-detection over the entire converted audio buffer
-				langID := C.whisper_lang_auto_detect(a.whisperCtx, 0, C.int(4), nil)
-				if langID >= 0 {
-					detectedLang = C.GoString(C.whisper_lang_str(langID))
-					fmt.Printf("Bilingual Routing Probe auto-detected language over entire audio: %s\n", detectedLang)
-				} else {
-					fmt.Printf("Bilingual Routing auto-detect failed with code: %d\n", int(langID))
-				}
-			} else {
-				fmt.Println("Bilingual Routing: pcm_to_mel failed")
-			}
-		} else {
-			// Fallback to confidence check on the first 1.5 seconds if they somehow selected an English-only model
-			startIndex := findSpeechStart(boostedSamples, 16000)
-			endIndex := startIndex + int(1.5*16000)
-			if endIndex > len(boostedSamples) {
-				endIndex = len(boostedSamples)
-			}
-			if startIndex < len(boostedSamples) {
-				probeChunk := boostedSamples[startIndex:endIndex]
-				langC := C.CString("en")
-				wParams.language = langC
-				avgConfidence := float32(0.0)
-				if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&probeChunk[0])), C.int(len(probeChunk))); code == 0 {
-					numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
-					var sumProb float32
-					var tokenCount int
-					for i := 0; i < numSegments; i++ {
-						numTokens := int(C.whisper_full_n_tokens(a.whisperCtx, C.int(i)))
-						for j := 0; j < numTokens; j++ {
-							p := float32(C.whisper_full_get_token_p(a.whisperCtx, C.int(i), C.int(j)))
-							sumProb += p
-							tokenCount++
-						}
-					}
-					if tokenCount > 0 {
-						avgConfidence = sumProb / float32(tokenCount)
-					}
-				}
-				C.free(unsafe.Pointer(langC))
-				if avgConfidence > 0.65 {
-					detectedLang = "en"
-				} else {
-					detectedLang = "ml" // default fallback to Malayalam
-				}
-				fmt.Printf("Bilingual Routing fallback average confidence: %f -> decided: %s\n", avgConfidence, detectedLang)
-			}
+			a.mutex.Lock()
+			a.routingDecided = true
+			a.useConformer = (detectedLang != "en")
+			fmt.Printf("End of recording Bilingual Routing decided: useConformer=%t (detected %s)\n", a.useConformer, detectedLang)
 		}
-		a.whisperMutex.Unlock()
-
-		if detectedLang != "en" {
-			useConformer = true
-			fmt.Printf("Bilingual Routing decided: MALAYALAM (detected %s)\n", detectedLang)
-		} else {
-			useConformer = false
-			fmt.Println("Bilingual Routing decided: ENGLISH")
-		}
+		useConformer = a.useConformer
+		a.mutex.Unlock()
 
 		if useConformer {
 			if conformerSession == nil {
@@ -1153,23 +1122,21 @@ func (a *App) transcribe() {
 				runtime.EventsEmit(a.ctx, "recording-state", "processing")
 			}
 		}
-
-		// Transcribe the entire audio buffer
-		result = a.transcribeFullAudio(boostedSamples, useConformer)
 	} else {
 		useConformer = isConformerModelActive
-		// Transcribe the remaining tail chunk
-		tailText := ""
-		if len(tailSamples) > 0 {
-			tailText = a.transcribeChunk(tailSamples)
-		}
-
-		if tailText != "" {
-			interims = append(interims, tailText)
-		}
-
-		result = strings.Join(interims, " ")
 	}
+
+	// Transcribe the remaining tail chunk
+	tailText := ""
+	if len(tailSamples) > 0 {
+		tailText = a.transcribeChunk(tailSamples)
+	}
+
+	if tailText != "" {
+		interims = append(interims, tailText)
+	}
+
+	result = strings.Join(interims, " ")
 
 	transcribeTimeUs := time.Since(transcribeStart).Microseconds()
 
@@ -1872,6 +1839,58 @@ func (a *App) backgroundTranscriptionLoop() {
 			return
 		}
 
+		cfg := loadConfig()
+		if cfg.BilingualRoutingEnabled {
+			a.mutex.Lock()
+			decided := a.routingDecided
+			bufLen := len(a.audioBuffer)
+			a.mutex.Unlock()
+
+			if !decided {
+				if bufLen >= 320000 { // 20 seconds at 16kHz
+					probeLen := bufLen
+					if probeLen > 480000 { // 30 seconds max
+						probeLen = 480000
+					}
+
+					a.mutex.Lock()
+					probeSamples := make([]float32, probeLen)
+					copy(probeSamples, a.audioBuffer[:probeLen])
+					a.routingDecided = true // Set decided to true to prevent duplicate triggers
+					a.mutex.Unlock()
+
+					// Run language detection without holding a.mutex
+					detectedLang := a.detectLanguage(probeSamples, cfg)
+
+					a.mutex.Lock()
+					if detectedLang != "en" {
+						a.useConformer = true
+						fmt.Printf("Early Bilingual Routing: Decided MALAYALAM (detected %s)\n", detectedLang)
+					} else {
+						a.useConformer = false
+						fmt.Println("Early Bilingual Routing: Decided ENGLISH")
+					}
+					a.mutex.Unlock()
+
+					if a.useConformer {
+						if conformerSession == nil {
+							runtime.EventsEmit(a.ctx, "recording-state", "loading-model")
+							if err := LoadConformerSessions(); err != nil {
+								fmt.Printf("Error loading Conformer sessions dynamically in background: %v\n", err)
+							}
+							runtime.EventsEmit(a.ctx, "recording-state", "processing")
+						}
+					}
+				} else {
+					// Let audio accumulate to 20 seconds before deciding route
+					select {
+					case <-ticker.C:
+					}
+					continue
+				}
+			}
+		}
+
 		// 15 seconds of 16kHz audio is 240,000 samples
 		if len(untranscribedSamples) >= 240000 {
 			// Find the quietest 300ms window (4800 samples) in the range from 12s to end
@@ -1954,6 +1973,11 @@ func (a *App) transcribeChunk(chunk []float32) string {
 	}
 
 	isConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+	if cfg.BilingualRoutingEnabled {
+		a.mutex.Lock()
+		isConformerActive = a.useConformer
+		a.mutex.Unlock()
+	}
 	if isConformerActive {
 		text, err := TranscribeIndicConformer(whisperBuf)
 		if err != nil {
