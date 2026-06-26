@@ -66,18 +66,22 @@ type kbdLLHookStruct struct {
 }
 
 type App struct {
-	ctx              context.Context
-	whisperCtx       *C.struct_whisper_context
-	audioBuffer      []float32
-	mutex            sync.Mutex
-	whisperMutex     sync.Mutex
-	keyStateMutex    sync.RWMutex
-	shortcutKeysDown bool
-	isMicReady       bool
-	loadedModelPath  string
-	loadedEngine     string
-	loadedGPU        string
-	llmCmd           *exec.Cmd
+	ctx                     context.Context
+	whisperCtx              *C.struct_whisper_context
+	audioBuffer             []float32
+	mutex                   sync.Mutex
+	whisperMutex            sync.Mutex
+	keyStateMutex           sync.RWMutex
+	shortcutKeysDown        bool
+	isMicReady              bool
+	loadedModelPath         string
+	loadedEngine            string
+	loadedGPU               string
+	llmCmd                  *exec.Cmd
+	transcribedSamplesCount int
+	interimTranscripts      []string
+	streamingActive         bool
+	streamingWG             sync.WaitGroup
 	llmMutex         sync.Mutex
 	llmPort          int
 	runningLLMConfig Config
@@ -389,7 +393,13 @@ func (a *App) listenToKeyboard() {
 				isRecording = true
 				a.isMicReady = false
 				a.audioBuffer = make([]float32, 0)
+				a.transcribedSamplesCount = 0
+				a.interimTranscripts = make([]string, 0)
+				a.streamingActive = true
 				a.mutex.Unlock()
+
+				a.streamingWG.Add(1)
+				go a.backgroundTranscriptionLoop()
 
 				// Show the window WITHOUT stealing focus
 				go showWindowNoActivate()
@@ -434,7 +444,11 @@ func (a *App) listenToKeyboard() {
 					padding := make([]float32, 1600)
 					a.audioBuffer = append(a.audioBuffer, padding...)
 					acceptingUntil = time.Time{}
+					a.streamingActive = false
 					a.mutex.Unlock()
+
+					// Wait for background worker to fully finish
+					a.streamingWG.Wait()
 
 					a.transcribe()
 				}()
@@ -953,85 +967,34 @@ func (a *App) transcribe() {
 	// Snapshot buffer for cache saving. The raw WAV stays unaffected by input boost.
 	cacheCopy := make([]float32, len(a.audioBuffer))
 	copy(cacheCopy, a.audioBuffer)
+
+	// Copy streaming state variables under lock
+	tailSamples := make([]float32, len(a.audioBuffer)-a.transcribedSamplesCount)
+	copy(tailSamples, a.audioBuffer[a.transcribedSamplesCount:])
+	interims := make([]string, len(a.interimTranscripts))
+	copy(interims, a.interimTranscripts)
 	a.mutex.Unlock()
 
 	// Duration in milliseconds: samples / sample_rate * 1000.
 	durationMs := int64(len(cacheCopy)) * 1000 / 16000
 
-	whisperBuf := cacheCopy
 	cfg := loadConfig()
-	if cfg.InputBoostEnabled && cfg.InputBoostGain > 1.0 {
-		boosted := make([]float32, len(cacheCopy))
-		for i, s := range cacheCopy {
-			s *= cfg.InputBoostGain
-			if s > 1.0 {
-				s = 1.0
-			} else if s < -1.0 {
-				s = -1.0
-			}
-			boosted[i] = s
-		}
-		whisperBuf = boosted
-	}
-
-	result := ""
-	whisperFailed := false
-
 	dictWords, _ := GetDictionaryWords()
-	var wordsPrompt string
-	if len(dictWords) > 0 {
-		wordsPrompt = strings.Join(dictWords, ", ")
-	}
 
 	transcribeStart := time.Now()
-	isConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
-	if isConformerActive {
-		text, err := TranscribeIndicConformer(whisperBuf)
-		if err != nil {
-			fmt.Println("Conformer transcription failed:", err)
-			whisperFailed = true
-		} else {
-			result = text
-		}
-	} else {
-		a.whisperMutex.Lock()
-		if a.whisperCtx == nil {
-			fmt.Println("Whisper context is nil; transcription skipped")
-			whisperFailed = true
-		} else {
-			wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
-			wParams.translate = C.bool(false)
-			wParams.suppress_blank = C.bool(true)
-			wParams.suppress_nst = C.bool(true)
-			wParams.no_speech_thold = C.float(0.7)
 
-			modelLang := "en"
-
-			langC := C.CString(modelLang)
-			wParams.language = langC
-
-			var promptC *C.char
-			if wordsPrompt != "" {
-				promptC = C.CString(wordsPrompt)
-				wParams.initial_prompt = promptC
-			}
-
-			if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {
-				fmt.Println("Whisper transcription failed with code:", int(code), "samples:", len(whisperBuf), "duration_ms:", durationMs)
-				whisperFailed = true
-			} else {
-				numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
-				for i := 0; i < numSegments; i++ {
-					result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
-				}
-			}
-			C.free(unsafe.Pointer(langC))
-			if promptC != nil {
-				C.free(unsafe.Pointer(promptC))
-			}
-		}
-		a.whisperMutex.Unlock()
+	// Transcribe the remaining tail chunk
+	tailText := ""
+	if len(tailSamples) > 0 {
+		tailText = a.transcribeChunk(tailSamples)
 	}
+
+	if tailText != "" {
+		interims = append(interims, tailText)
+	}
+
+	result := strings.Join(interims, " ")
+	whisperFailed := false
 	transcribeTimeUs := time.Since(transcribeStart).Microseconds()
 
 	result = cleanSoundTags(result)
@@ -1711,6 +1674,146 @@ func (a *App) syncLLMServerState(cfg Config) {
 			a.startLLMServer(cfg)
 		}
 	}
+}
+
+func (a *App) backgroundTranscriptionLoop() {
+	defer a.streamingWG.Done()
+
+	ticker := time.NewTicker(400 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		a.mutex.Lock()
+		active := a.streamingActive
+		var untranscribedSamples []float32
+		if active && len(a.audioBuffer) > a.transcribedSamplesCount {
+			untranscribedSamples = make([]float32, len(a.audioBuffer)-a.transcribedSamplesCount)
+			copy(untranscribedSamples, a.audioBuffer[a.transcribedSamplesCount:])
+		}
+		a.mutex.Unlock()
+
+		if !active {
+			return
+		}
+
+		// 15 seconds of 16kHz audio is 240,000 samples
+		if len(untranscribedSamples) >= 240000 {
+			// Find the quietest 300ms window (4800 samples) in the range from 12s to end
+			// 12s is 192000 samples
+			searchStart := 192000
+			windowSize := 4800 // 300ms
+			step := 800        // 50ms step
+
+			if len(untranscribedSamples) > searchStart+windowSize {
+				bestIdx := -1
+				minEnergy := float64(1e30)
+
+				searchEnd := len(untranscribedSamples) - windowSize
+				forceSplit := len(untranscribedSamples) >= 400000 // 25s
+
+				for i := searchStart; i < searchEnd; i += step {
+					var energy float64
+					for j := 0; j < windowSize; j++ {
+						val := math.Abs(float64(untranscribedSamples[i+j]))
+						energy += val
+					}
+					energy /= float64(windowSize)
+
+					if energy < minEnergy {
+						minEnergy = energy
+						bestIdx = i
+					}
+				}
+
+				splitPoint := -1
+				if bestIdx != -1 && (minEnergy < 0.02 || forceSplit) {
+					splitPoint = bestIdx + (windowSize / 2)
+				}
+
+				if splitPoint != -1 {
+					a.mutex.Lock()
+					if a.transcribedSamplesCount+splitPoint <= len(a.audioBuffer) {
+						chunk := make([]float32, splitPoint)
+						copy(chunk, a.audioBuffer[a.transcribedSamplesCount:a.transcribedSamplesCount+splitPoint])
+						a.transcribedSamplesCount += splitPoint
+						a.mutex.Unlock()
+
+						// Run transcription on this chunk
+						text := a.transcribeChunk(chunk)
+
+						if text != "" {
+							a.mutex.Lock()
+							a.interimTranscripts = append(a.interimTranscripts, text)
+							a.mutex.Unlock()
+						}
+					} else {
+						a.mutex.Unlock()
+					}
+				}
+			}
+		}
+
+		select {
+		case <-ticker.C:
+		}
+	}
+}
+
+func (a *App) transcribeChunk(chunk []float32) string {
+	cfg := loadConfig()
+
+	whisperBuf := chunk
+	if cfg.InputBoostEnabled && cfg.InputBoostGain > 1.0 {
+		boosted := make([]float32, len(chunk))
+		for i, s := range chunk {
+			s *= cfg.InputBoostGain
+			if s > 1.0 {
+				s = 1.0
+			} else if s < -1.0 {
+				s = -1.0
+			}
+			boosted[i] = s
+		}
+		whisperBuf = boosted
+	}
+
+	isConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+	if isConformerActive {
+		text, err := TranscribeIndicConformer(whisperBuf)
+		if err != nil {
+			fmt.Println("Background Conformer chunk transcription failed:", err)
+			return ""
+		}
+		return text
+	}
+
+	a.whisperMutex.Lock()
+	defer a.whisperMutex.Unlock()
+	if a.whisperCtx == nil {
+		return ""
+	}
+
+	wParams := C.whisper_full_default_params(C.WHISPER_SAMPLING_GREEDY)
+	wParams.translate = C.bool(false)
+	wParams.suppress_blank = C.bool(true)
+	wParams.suppress_nst = C.bool(true)
+	wParams.no_speech_thold = C.float(0.7)
+	langC := C.CString("en")
+	wParams.language = langC
+
+	if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {
+		fmt.Println("Background Whisper chunk transcription failed with code:", int(code))
+		C.free(unsafe.Pointer(langC))
+		return ""
+	}
+
+	numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
+	result := ""
+	for i := 0; i < numSegments; i++ {
+		result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
+	}
+	C.free(unsafe.Pointer(langC))
+	return cleanSoundTags(result)
 }
 
 var soundTagRegex = regexp.MustCompile(`\[[^\]]*\]|\([^)]*\)`)
