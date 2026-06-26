@@ -380,6 +380,16 @@ settingsModal.innerHTML = `
             <kbd id="k1Label">Ctrl</kbd> <span class="kbd-plus">+</span> <kbd id="k2Label">Win</kbd>
           </button>
         </div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-title">Use Copilot Key</span>
+            <span class="setting-desc">Use the dedicated Copilot key on your keyboard as trigger</span>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="copilotKeyToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
       </div>
       <div class="setting-group">
         <label>Storage & Cache</label>

@@ -131,6 +131,8 @@ func (a *App) listenToKeyboard() {
 		isProcessing         = false
 		lCtrlPressed         = false
 		lWinPressed          = false
+		lShiftPressed        = false
+		lF23Pressed          = false
 		acceptingUntil       time.Time
 		keyMutex             sync.RWMutex
 		key1Rawcode          uint16
@@ -300,6 +302,8 @@ func (a *App) listenToKeyboard() {
 
 				lCtrlPressed = false
 				lWinPressed = false
+				lShiftPressed = false
+				lF23Pressed = false
 				a.setShortcutKeysDown(false)
 
 				if wasRecording {
@@ -320,26 +324,60 @@ func (a *App) listenToKeyboard() {
 			if currentKeybindCaptureActive {
 				lCtrlPressed = false
 				lWinPressed = false
+				lShiftPressed = false
+				lF23Pressed = false
 				a.setShortcutKeysDown(false)
 				continue
 			}
 
-			if ev.rawcode == currentKey1Rawcode {
-				if ev.down {
-					lCtrlPressed = true
-				} else {
-					lCtrlPressed = false
-				}
-			} else if ev.rawcode == currentKey2Rawcode {
-				if ev.down {
-					lWinPressed = true
-				} else {
-					lWinPressed = false
-				}
-			}
+			var shouldBeRecording bool
+			if currentKey1Rawcode == 255 {
+				winPressed := ev.rawcode == vkLWin || ev.rawcode == vkRWin
+				shiftPressed := ev.rawcode == 160
+				f23Pressed := ev.rawcode == 134
 
-			a.setShortcutKeysDown(lCtrlPressed || lWinPressed)
-			shouldBeRecording := lCtrlPressed && lWinPressed
+				if ev.down {
+					if winPressed {
+						lWinPressed = true
+					}
+					if shiftPressed {
+						lShiftPressed = true
+					}
+					if f23Pressed {
+						lF23Pressed = true
+					}
+				} else {
+					if winPressed {
+						lWinPressed = false
+					}
+					if shiftPressed {
+						lShiftPressed = false
+					}
+					if f23Pressed {
+						lF23Pressed = false
+					}
+				}
+
+				a.setShortcutKeysDown(lWinPressed || lShiftPressed || lF23Pressed)
+				shouldBeRecording = lWinPressed && lShiftPressed && lF23Pressed
+			} else {
+				if ev.rawcode == currentKey1Rawcode {
+					if ev.down {
+						lCtrlPressed = true
+					} else {
+						lCtrlPressed = false
+					}
+				} else if ev.rawcode == currentKey2Rawcode {
+					if ev.down {
+						lWinPressed = true
+					} else {
+						lWinPressed = false
+					}
+				}
+
+				a.setShortcutKeysDown(lCtrlPressed || lWinPressed)
+				shouldBeRecording = lCtrlPressed && lWinPressed
+			}
 
 			a.mutex.Lock()
 			recordingNow := isRecording
@@ -433,9 +471,27 @@ func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyE
 
 			if isDown || isUp {
 				key1Rawcode, key2Rawcode := getHotkey()
-				hotkeyUsesThisWin := isWinRawcode(rawcode) && (isSameHotkeyKey(rawcode, key1Rawcode) || isSameHotkeyKey(rawcode, key2Rawcode))
-				isHotkeyKey := isSameHotkeyKey(rawcode, key1Rawcode) || isSameHotkeyKey(rawcode, key2Rawcode)
-				otherHotkeyDown := isOtherHotkeyDown(pressed, rawcode, key1Rawcode, key2Rawcode)
+				isCopilot := key1Rawcode == 255
+
+				var hotkeyUsesThisWin bool
+				var isHotkeyKey bool
+				var otherHotkeyDown bool
+
+				if isCopilot {
+					hotkeyUsesThisWin = isWinRawcode(rawcode)
+					isHotkeyKey = isWinRawcode(rawcode) || rawcode == 160 || rawcode == 134
+					if isWinRawcode(rawcode) {
+						otherHotkeyDown = pressed[160] && pressed[134]
+					} else if rawcode == 160 {
+						otherHotkeyDown = (pressed[vkLWin] || pressed[vkRWin]) && pressed[134]
+					} else if rawcode == 134 {
+						otherHotkeyDown = (pressed[vkLWin] || pressed[vkRWin]) && pressed[160]
+					}
+				} else {
+					hotkeyUsesThisWin = isWinRawcode(rawcode) && (isSameHotkeyKey(rawcode, key1Rawcode) || isSameHotkeyKey(rawcode, key2Rawcode))
+					isHotkeyKey = isSameHotkeyKey(rawcode, key1Rawcode) || isSameHotkeyKey(rawcode, key2Rawcode)
+					otherHotkeyDown = isOtherHotkeyDown(pressed, rawcode, key1Rawcode, key2Rawcode)
+				}
 
 				select {
 				case events <- keyEvent{rawcode: rawcode, down: isDown}:
@@ -450,6 +506,13 @@ func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyE
 
 				if isDown && winDown && winOwned && isHotkeyKey && !isWinRawcode(rawcode) {
 					localFlowGesture = true
+				}
+
+				if isCopilot && isHotkeyKey && winOwned && !isWinRawcode(rawcode) {
+					if isDown {
+						localFlowGesture = true
+					}
+					return 1
 				}
 
 				if hotkeyUsesThisWin {
@@ -572,6 +635,18 @@ func isSameHotkeyKey(rawcode uint16, configured uint16) bool {
 }
 
 func isOtherHotkeyDown(pressed map[uint16]bool, rawcode uint16, key1Rawcode uint16, key2Rawcode uint16) bool {
+	if key1Rawcode == 255 {
+		if isWinRawcode(rawcode) {
+			return pressed[160] && pressed[134]
+		}
+		if rawcode == 160 {
+			return (pressed[vkLWin] || pressed[vkRWin]) && pressed[134]
+		}
+		if rawcode == 134 {
+			return (pressed[vkLWin] || pressed[vkRWin]) && pressed[160]
+		}
+		return false
+	}
 	if isSameHotkeyKey(rawcode, key1Rawcode) {
 		return pressed[key2Rawcode]
 	}

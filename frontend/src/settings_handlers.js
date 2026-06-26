@@ -282,14 +282,76 @@ export async function setupKeybinds() {
   const sideK2 = document.getElementById('sideK2');
   if (!btn) return;
 
-  const cfg = window.go?.main?.SettingsApp
+  let cfg = window.go?.main?.SettingsApp
     ? await window.go.main.SettingsApp.GetConfig()
     : null;
 
-  k1Label.textContent = cfg ? cfg.keybind1_name : "Ctrl";
-  k2Label.textContent = cfg ? cfg.keybind2_name : "Win";
-  if (sideK1) sideK1.textContent = k1Label.textContent;
-  if (sideK2) sideK2.textContent = k2Label.textContent;
+  const copilotToggle = document.getElementById('copilotKeyToggle');
+  const isCopilot = cfg && cfg.keybind1_rawcode === 255;
+  if (copilotToggle) {
+    copilotToggle.checked = isCopilot;
+  }
+
+  const updateUIForCopilot = (active) => {
+    const plusSpanEl = btn.querySelector('.kbd-plus');
+    const sidePlusEl = sideK1 ? sideK1.nextSibling : null;
+    
+    if (active) {
+      k1Label.textContent = "Copilot";
+      k2Label.style.display = 'none';
+      if (plusSpanEl) plusSpanEl.style.display = 'none';
+      btn.style.opacity = '0.6';
+      btn.style.pointerEvents = 'none';
+      
+      if (sideK1) {
+        sideK1.textContent = "Copilot";
+        if (sidePlusEl) sidePlusEl.style.display = 'none';
+      }
+      if (sideK2) {
+        sideK2.style.display = 'none';
+      }
+    } else {
+      k1Label.textContent = cfg ? cfg.keybind1_name : "Ctrl";
+      k2Label.textContent = cfg ? cfg.keybind2_name : "Win";
+      k2Label.style.display = 'inline-block';
+      if (plusSpanEl) plusSpanEl.style.display = 'inline';
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+      
+      if (sideK1) {
+        sideK1.textContent = k1Label.textContent;
+        if (sidePlusEl) sidePlusEl.style.display = 'inline';
+      }
+      if (sideK2) {
+        sideK2.textContent = k2Label.textContent;
+        sideK2.style.display = 'inline-block';
+      }
+    }
+  };
+
+  updateUIForCopilot(isCopilot);
+
+  if (copilotToggle) {
+    copilotToggle.addEventListener('change', async () => {
+      if (copilotToggle.checked) {
+        updateUIForCopilot(true);
+        if (window.go?.main?.SettingsApp) {
+          await window.go.main.SettingsApp.SetKeybinds(255, "Copilot", 255, "Copilot");
+        }
+      } else {
+        cfg = {
+          keybind1_rawcode: 162,
+          keybind1_name: "Ctrl",
+          keybind2_rawcode: 91,
+          keybind2_name: "Win"
+        };
+        updateUIForCopilot(false);
+        if (window.go?.main?.SettingsApp) {
+          await window.go.main.SettingsApp.SetKeybinds(162, "Ctrl", 91, "Win");
+        }
+      }
+    });
+  }
 
   let isRecording = false;
   let capturedKeys = [];
@@ -341,6 +403,10 @@ export async function setupKeybinds() {
           capturedKeys[0].raw, capturedKeys[0].name,
           capturedKeys[1].raw, capturedKeys[1].name
         );
+        cfg = await window.go.main.SettingsApp.GetConfig();
+      }
+      if (copilotToggle) {
+        copilotToggle.checked = false;
       }
     }
   };
