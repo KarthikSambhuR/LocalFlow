@@ -7,6 +7,7 @@ require (
 	github.com/gen2brain/malgo v0.11.24
 	github.com/getlantern/systray v1.2.2
 	github.com/go-vgo/robotgo v1.0.2
+	github.com/tggo/goSentencePiece v1.1.0
 	github.com/wailsapp/wails/v2 v2.12.0
 	github.com/yalue/onnxruntime_go v1.24.0
 	golang.org/x/sys v0.42.0
@@ -72,6 +73,7 @@ require (
 	golang.org/x/image v0.38.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

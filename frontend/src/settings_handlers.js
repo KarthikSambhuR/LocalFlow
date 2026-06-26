@@ -68,11 +68,14 @@ export async function setupLLM() {
       ? await window.go.main.SettingsApp.GetConfig()
       : null;
     const activeModel = currentCfg ? currentCfg.active_model : '';
-    const isConformer = activeModel === 'indic-conformer-600m-multilingual';
+    const isConformer = activeModel === 'indicconformer.int8.onnx' || activeModel === 'indicconformer.fp32.onnx';
+    const activeLLM = currentCfg ? currentCfg.llm_active_model : '';
+    const isSarvam = activeLLM === 'sarvam-1-Q4_K_M.gguf';
+    const showManglish = show && isConformer && !isSarvam;
 
     document.querySelectorAll('.llm-choice-setting').forEach(el => {
       if (el.id === 'llmManglishSelection') {
-        el.classList.toggle('visible', show && isConformer);
+        el.classList.toggle('visible', showManglish);
       } else {
         el.classList.toggle('visible', show);
       }
@@ -630,11 +633,11 @@ export async function setupModelsSettings() {
                 `;
               } else if (m.is_downloaded) {
                 actionHtml = `
-                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma is supported with Malayalam Conformer"' : ''} data-filename="${m.filename}">Activate</button>`}
+                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-filename="${m.filename}">Activate</button>`}
                   ${downloadedCount > 1 && !m.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
                 `;
               } else {
-                actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma is supported with Malayalam Conformer"' : ''} data-id="${m.id}">Download</button>`;
+                actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${m.id}">Download</button>`;
               }
 
               return `
@@ -642,7 +645,7 @@ export async function setupModelsSettings() {
                   <div class="model-row-main">
                     <div class="model-name-line">
                       <span class="model-name">${m.name}</span>
-                      <span class="model-status-pill ${statusClass}" ${m.is_disabled ? 'title="Only Gemma is supported with Malayalam Conformer"' : ''}>${statusText}</span>
+                      <span class="model-status-pill ${statusClass}" ${m.is_disabled ? 'title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''}>${statusText}</span>
                     </div>
                     <div class="model-desc">${m.description}</div>
                     <div class="model-row-specs">
@@ -729,12 +732,16 @@ export async function setupModelsSettings() {
     }
   };
 
-  window.runtime.EventsOn('model-download-progress', (id, percent) => {
+  window.runtime.EventsOn('model-download-progress', (id, percent, speed, eta) => {
     const fill = document.getElementById(`bar-${id}`);
     const txt = document.getElementById(`text-${id}`);
     if (fill && txt) {
       fill.style.width = `${percent}%`;
-      txt.textContent = `Downloading... ${percent}%`;
+      if (speed && eta) {
+        txt.textContent = `Downloading... ${percent}% (${speed}, ETA: ${eta})`;
+      } else {
+        txt.textContent = `Downloading... ${percent}%`;
+      }
     }
   });
 

@@ -391,14 +391,26 @@ var AvailableModels = []WhisperModelInfo{
 		ModelType:        "whisper",
 	},
 	{
-		ID:               "indic-conformer-ml",
-		Name:             "Indic Conformer 600M (Malayalam)",
-		Filename:         "indic-conformer-600m-multilingual.zip",
-		URL:              "https://huggingface.co/KarthikSambhuR/IndicConformerOnnxEncodedZip/resolve/main/indic-conformer-600m-multilingual.zip?download=true",
-		SizeMB:           2270,
-		SpeedLabel:       "Balanced (ONNX)",
-		SpeedDescription: "Multilingual conformer model",
-		Description:      "Indic Conformer 600M model for Malayalam. Uses Go's ONNX Runtime.",
+		ID:               "indic-conformer-120m-int8",
+		Name:             "Indic Conformer 120M INT8 (Malayalam)",
+		Filename:         "indicconformer.int8.onnx",
+		URL:              "https://huggingface.co/KarthikSambhuR/indicconformer_stt_ml_hybrid_rnnt_large/resolve/main/model.int8.onnx?download=true",
+		SizeMB:           141,
+		SpeedLabel:       "Blazing Fast (ONNX)",
+		SpeedDescription: "Quantized 8-bit model",
+		Description:      "Quantized 8-bit Indic Conformer 120M model for Malayalam. Extremely fast and lightweight.",
+		Language:         "malayalam",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "indic-conformer-120m-fp32",
+		Name:             "Indic Conformer 120M FP32 (Malayalam)",
+		Filename:         "indicconformer.fp32.onnx",
+		URL:              "https://huggingface.co/KarthikSambhuR/indicconformer_stt_ml_hybrid_rnnt_large/resolve/main/model.fp32.onnx?download=true",
+		SizeMB:           494,
+		SpeedLabel:       "Accurate (ONNX)",
+		SpeedDescription: "Full precision 32-bit model",
+		Description:      "Full precision 32-bit Indic Conformer 120M model for Malayalam. Balanced speed and accuracy.",
 		Language:         "malayalam",
 		ModelType:        "whisper",
 	},
@@ -436,6 +448,18 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "Intelligent and expressive refinement",
 		Description:      "Gemma 4 E2B model optimized for premium-quality formatting, context preservation, and grammar correction.",
 		Language:         "english",
+		ModelType:        "llm",
+	},
+	{
+		ID:               "sarvam-1-3b",
+		Name:             "Sarvam 1 3B (Refinement)",
+		Filename:         "sarvam-1-Q4_K_M.gguf",
+		URL:              "https://huggingface.co/bartowski/sarvam-1-GGUF/resolve/main/sarvam-1-Q4_K_M.gguf?download=true",
+		SizeMB:           1250,
+		SpeedLabel:       "Balanced",
+		SpeedDescription: "Bilingual English/Malayalam model",
+		Description:      "Sarvam 1 3B model optimized for English and Malayalam text refinement.",
+		Language:         "malayalam",
 		ModelType:        "llm",
 	},
 }
@@ -481,9 +505,14 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 		pathInLocal := filepath.Join("models", m.Filename)
 
 		isDownloaded := false
-		if m.ID == "indic-conformer-ml" {
-			downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
-			if _, err := os.Stat(downloadedFolder); err == nil {
+		if m.ID == "indic-conformer-120m-int8" || m.ID == "indic-conformer-120m-fp32" {
+			tokenizerPath := filepath.Join(modelsDir, "tokenizer.model")
+			modelPathCustom := filepath.Join(modelsDir, m.Filename)
+			modelPathLocal := filepath.Join("models", m.Filename)
+			_, errT := os.Stat(tokenizerPath)
+			_, errM1 := os.Stat(modelPathCustom)
+			_, errM2 := os.Stat(modelPathLocal)
+			if errT == nil && (errM1 == nil || errM2 == nil) {
 				isDownloaded = true
 			}
 		} else {
@@ -496,18 +525,14 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 
 		progress, isDownloading := downloadProgress[m.ID]
 
-		isActive := false
+		isActive := m.Filename == activeFilename
 		if m.ModelType == "llm" {
 			isActive = m.Filename == cfg.LLMActiveModel
-		} else if m.ID == "indic-conformer-ml" {
-			// Conformer is stored as the folder name (no .zip) in ActiveModel
-			isActive = activeFilename == "indic-conformer-600m-multilingual"
-		} else {
-			isActive = m.Filename == activeFilename
 		}
 
 		isDisabled := false
-		if activeFilename == "indic-conformer-600m-multilingual" && m.ModelType == "llm" && m.ID != "gemma4-e2b" {
+		isConformerActive := activeFilename == "indicconformer.int8.onnx" || activeFilename == "indicconformer.fp32.onnx"
+		if isConformerActive && m.ModelType == "llm" && m.ID != "gemma4-e2b" && m.ID != "sarvam-1-3b" {
 			isDisabled = true
 		}
 
@@ -537,17 +562,24 @@ func (s *SettingsApp) getModelsDir() string {
 }
 
 func (s *SettingsApp) ensureModelInDataFolder(filename string) error {
-	if filename == "indic-conformer-600m-multilingual.zip" {
-		modelsDir := s.getModelsDir()
-		downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
-		if _, err := os.Stat(downloadedFolder); err == nil {
-			return nil
-		}
-		return fmt.Errorf("model folder indic-conformer-600m-multilingual is not downloaded")
-	}
-
 	modelsDir := s.getModelsDir()
 	targetPath := filepath.Join(modelsDir, filename)
+
+	if filename == "indicconformer.int8.onnx" || filename == "indicconformer.fp32.onnx" {
+		tokenizerTarget := filepath.Join(modelsDir, "tokenizer.model")
+		if !fileExists(tokenizerTarget) {
+			legacyTokenizer := filepath.Join("models", "tokenizer.model")
+			if fileExists(legacyTokenizer) {
+				if err := copyFile(legacyTokenizer, tokenizerTarget); err == nil {
+					_ = os.Remove(legacyTokenizer)
+				}
+			}
+		}
+		if !fileExists(tokenizerTarget) {
+			return fmt.Errorf("tokenizer.model is not downloaded")
+		}
+	}
+
 	if fileExists(targetPath) {
 		return nil
 	}
@@ -568,20 +600,67 @@ func (s *SettingsApp) ensureModelInDataFolder(filename string) error {
 type WriteCounter struct {
 	Total      uint64
 	ContentLen uint64
-	OnProgress func(percent int)
+	StartTime  time.Time
+	LastUpdate time.Time
+	OnProgress func(percent int, speed float64, eta time.Duration)
 }
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
 	n := len(p)
 	wc.Total += uint64(n)
 	if wc.ContentLen > 0 {
-		percent := int((float64(wc.Total) / float64(wc.ContentLen)) * 100)
-		if percent > 100 {
-			percent = 100
+		now := time.Now()
+		if now.Sub(wc.LastUpdate) >= 1*time.Second || wc.Total == wc.ContentLen {
+			wc.LastUpdate = now
+			percent := int((float64(wc.Total) / float64(wc.ContentLen)) * 100)
+			if percent > 100 {
+				percent = 100
+			}
+
+			elapsed := now.Sub(wc.StartTime)
+			var speed float64
+			var eta time.Duration
+			if elapsed > 0 {
+				speed = float64(wc.Total) / elapsed.Seconds()
+				if speed > 0 {
+					remainingBytes := wc.ContentLen - wc.Total
+					eta = time.Duration(float64(remainingBytes)/speed) * time.Second
+				}
+			}
+
+			wc.OnProgress(percent, speed, eta)
 		}
-		wc.OnProgress(percent)
 	}
 	return n, nil
+}
+
+func formatBytes(bytes float64) string {
+	if bytes >= 1024*1024*1024 {
+		return fmt.Sprintf("%.2f GB", bytes/(1024*1024*1024))
+	}
+	if bytes >= 1024*1024 {
+		return fmt.Sprintf("%.2f MB", bytes/(1024*1024))
+	}
+	if bytes >= 1024 {
+		return fmt.Sprintf("%.2f KB", bytes/1024)
+	}
+	return fmt.Sprintf("%.0f B", bytes)
+}
+
+func formatDuration(d time.Duration) string {
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
 }
 
 func (s *SettingsApp) DownloadModel(id string) {
@@ -617,6 +696,34 @@ func (s *SettingsApp) DownloadModel(id string) {
 		modelsDir := s.getModelsDir()
 		_ = os.MkdirAll(modelsDir, 0755)
 
+		if id == "indic-conformer-120m-int8" || id == "indic-conformer-120m-fp32" {
+			tokenizerPath := filepath.Join(modelsDir, "tokenizer.model")
+			if _, err := os.Stat(tokenizerPath); err != nil {
+				fmt.Println("Downloading tokenizer.model...")
+				tokenizerURL := "https://huggingface.co/KarthikSambhuR/indicconformer_stt_ml_hybrid_rnnt_large/resolve/main/tokenizer.model?download=true"
+				respTok, errTok := http.Get(tokenizerURL)
+				if errTok == nil && respTok.StatusCode == http.StatusOK {
+					tokTmp := tokenizerPath + ".tmp"
+					outTok, errCreate := os.Create(tokTmp)
+					if errCreate == nil {
+						_, errCopy := io.Copy(outTok, respTok.Body)
+						outTok.Close()
+						respTok.Body.Close()
+						if errCopy == nil {
+							_ = os.Rename(tokTmp, tokenizerPath)
+							fmt.Println("Successfully downloaded tokenizer.model")
+						} else {
+							_ = os.Remove(tokTmp)
+						}
+					} else {
+						respTok.Body.Close()
+					}
+				} else if errTok == nil {
+					respTok.Body.Close()
+				}
+			}
+		}
+
 		tmpPath := filepath.Join(modelsDir, targetModel.Filename+".tmp")
 		finalPath := filepath.Join(modelsDir, targetModel.Filename)
 
@@ -642,13 +749,19 @@ func (s *SettingsApp) DownloadModel(id string) {
 			_ = os.Remove(tmpPath)
 		}()
 
+		startTime := time.Now()
 		counter := &WriteCounter{
 			ContentLen: uint64(resp.ContentLength),
-			OnProgress: func(percent int) {
+			StartTime:  startTime,
+			LastUpdate: startTime,
+			OnProgress: func(percent int, speed float64, eta time.Duration) {
 				downloadLock.Lock()
 				downloadProgress[id] = percent
 				downloadLock.Unlock()
-				wailsRuntime.EventsEmit(s.ctx, "model-download-progress", id, percent)
+				
+				speedStr := formatBytes(speed) + "/s"
+				etaStr := formatDuration(eta)
+				wailsRuntime.EventsEmit(s.ctx, "model-download-progress", id, percent, speedStr, etaStr)
 			},
 		}
 
@@ -698,15 +811,15 @@ func (s *SettingsApp) SetActiveModel(filename string) error {
 	}
 
 	cfg := loadConfig()
+	isConformerActive := filename == "indicconformer.int8.onnx" || filename == "indicconformer.fp32.onnx"
 	if targetModel.ModelType == "llm" {
-		if cfg.ActiveModel == "indic-conformer-600m-multilingual" && targetModel.ID != "gemma4-e2b" {
-			return fmt.Errorf("Only Gemma is selectable with the Malayalam Conformer model")
+		isConfigConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+		if isConfigConformerActive && targetModel.ID != "gemma4-e2b" && targetModel.ID != "sarvam-1-3b" {
+			return fmt.Errorf("Only Gemma and Sarvam are selectable with the Malayalam Conformer model")
 		}
 		cfg.LLMActiveModel = filename
-	} else if filename == "indic-conformer-600m-multilingual.zip" {
-		// Store the conformer using the folder name (without .zip) so that
-		// app.go can detect it with: activeModel == "indic-conformer-600m-multilingual"
-		cfg.ActiveModel = "indic-conformer-600m-multilingual"
+	} else if isConformerActive {
+		cfg.ActiveModel = filename
 		// Automatically switch active LLM to Gemma
 		cfg.LLMActiveModel = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 	} else {
@@ -756,37 +869,36 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 	}
 
 	var pathToDelete string
-	var isDir bool
 
-	if filename == "indic-conformer-600m-multilingual.zip" {
-		downloadedFolder := filepath.Join(modelsDir, "indic-conformer-600m-multilingual")
-		if _, err := os.Stat(downloadedFolder); err == nil {
-			pathToDelete = downloadedFolder
-			isDir = true
-		} else {
-			return fmt.Errorf("model file not found on disk")
-		}
+	pathInCustom := filepath.Join(modelsDir, filename)
+	pathInLocal := filepath.Join("models", filename)
+
+	if _, err := os.Stat(pathInCustom); err == nil {
+		pathToDelete = pathInCustom
+	} else if _, err := os.Stat(pathInLocal); err == nil {
+		pathToDelete = pathInLocal
 	} else {
-		pathInCustom := filepath.Join(modelsDir, filename)
-		pathInLocal := filepath.Join("models", filename)
-
-		if _, err := os.Stat(pathInCustom); err == nil {
-			pathToDelete = pathInCustom
-		} else if _, err := os.Stat(pathInLocal); err == nil {
-			pathToDelete = pathInLocal
-		} else {
-			return fmt.Errorf("model file not found on disk")
-		}
+		return fmt.Errorf("model file not found on disk")
 	}
 
-	var err error
-	if isDir {
-		err = os.RemoveAll(pathToDelete)
-	} else {
-		err = os.Remove(pathToDelete)
-	}
+	err := os.Remove(pathToDelete)
 	if err != nil {
 		return err
+	}
+
+	if filename == "indicconformer.int8.onnx" || filename == "indicconformer.fp32.onnx" {
+		otherFilename := "indicconformer.fp32.onnx"
+		if filename == "indicconformer.fp32.onnx" {
+			otherFilename = "indicconformer.int8.onnx"
+		}
+		pOtherC := filepath.Join(modelsDir, otherFilename)
+		pOtherL := filepath.Join("models", otherFilename)
+		_, errOtherC := os.Stat(pOtherC)
+		_, errOtherL := os.Stat(pOtherL)
+		if errOtherC != nil && errOtherL != nil {
+			_ = os.Remove(filepath.Join(modelsDir, "tokenizer.model"))
+			_ = os.Remove(filepath.Join("models", "tokenizer.model"))
+		}
 	}
 
 	cfg := loadConfig()
@@ -809,13 +921,7 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 			_ = saveConfig(cfg)
 		}
 	} else {
-		// Conformer is stored as folder name ("indic-conformer-600m-multilingual") in
-		// ActiveModel, but is referenced by its zip filename ("...zip") elsewhere.
-		activeModelKey := filename
-		if filename == "indic-conformer-600m-multilingual.zip" {
-			activeModelKey = "indic-conformer-600m-multilingual"
-		}
-		if cfg.ActiveModel == activeModelKey {
+		if cfg.ActiveModel == filename {
 			for _, m := range AvailableModels {
 				if m.ModelType == "llm" || m.Filename == filename {
 					continue
@@ -927,11 +1033,16 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 			_ = os.Remove(tmpModelPath)
 		}()
 
+		startTime := time.Now()
 		counter := &WriteCounter{
 			ContentLen: uint64(resp.ContentLength),
-			OnProgress: func(percent int) {
+			StartTime:  startTime,
+			LastUpdate: startTime,
+			OnProgress: func(percent int, speed float64, eta time.Duration) {
 				overallPercent := 20 + int(float64(percent)*0.8)
-				wailsRuntime.EventsEmit(s.ctx, "setup-progress", overallPercent, fmt.Sprintf("Downloading Whisper Tiny model... %d%%", percent))
+				speedStr := formatBytes(speed) + "/s"
+				etaStr := formatDuration(eta)
+				wailsRuntime.EventsEmit(s.ctx, "setup-progress", overallPercent, fmt.Sprintf("Downloading Whisper Tiny model... %d%% (%s, ETA: %s)", percent, speedStr, etaStr))
 			},
 		}
 
