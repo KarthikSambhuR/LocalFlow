@@ -1878,7 +1878,7 @@ func (a *App) backgroundTranscriptionLoop() {
 							if err := LoadConformerSessions(); err != nil {
 								fmt.Printf("Error loading Conformer sessions dynamically in background: %v\n", err)
 							}
-							runtime.EventsEmit(a.ctx, "recording-state", "processing")
+							runtime.EventsEmit(a.ctx, "recording-state", "listening")
 						}
 					}
 				} else {

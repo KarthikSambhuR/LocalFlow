@@ -50,7 +50,7 @@ function animateBars() {
 function showModule() {
   state.isActive = true;
   state.isProcessing = false;
-  moduleNode.classList.remove('processing');
+  moduleNode.classList.remove('processing', 'loading-model');
   moduleNode.classList.add('active');
   if (!state.rafId) animateBars();
 }
@@ -83,10 +83,11 @@ function showRefining() {
 }
 
 function showLoadingModel() {
-  state.isProcessing = true;
-  resetBars();
-  moduleNode.classList.remove('active', 'refining');
-  moduleNode.classList.add('processing', 'loading-model');
+  state.isActive = true;
+  state.isProcessing = false;
+  moduleNode.classList.remove('processing', 'refining');
+  moduleNode.classList.add('active', 'loading-model');
+  if (!state.rafId) animateBars();
 }
 
 function setVolume(vol) {
