@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	AppVersion = "v1.2.5"
+	AppVersion = "v1.3.0"
 	GithubRepo = "KarthikSambhuR/LocalFlow"
 )
 

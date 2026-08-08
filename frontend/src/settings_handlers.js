@@ -699,7 +699,7 @@ export async function setupModelsSettings() {
                 `;
               } else if (m.is_downloaded) {
                 actionHtml = `
-                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-filename="${m.filename}">Activate</button>`}
+                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${m.id}">Activate</button>`}
                   ${downloadedCount > 1 && !m.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
                 `;
               } else {
@@ -752,7 +752,7 @@ export async function setupModelsSettings() {
             activateBtn.disabled = true;
             activateBtn.textContent = 'Activating...';
             try {
-              await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.filename);
+              await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.id);
               window.dispatchEvent(new CustomEvent('active-model-changed'));
             } catch (err) {
               alert(err);

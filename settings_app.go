@@ -498,6 +498,18 @@ var AvailableModels = []WhisperModelInfo{
 		Language:         "malayalam",
 		ModelType:        "llm",
 	},
+	{
+		ID:               "gemma4-e2b-audio",
+		Name:             "Gemma 4 E2B (Direct Audio STT)",
+		Filename:         "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
+		URL:              "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-UD-Q4_K_XL.gguf?download=true",
+		SizeMB:           3246,
+		SpeedLabel:       "Direct Audio (RTF ~0.08)",
+		SpeedDescription: "Directly processes audio on GPU",
+		Description:      "Gemma 4 E2B model operating as direct audio-to-text transcriber.",
+		Language:         "multilingual",
+		ModelType:        "whisper",
+	},
 }
 
 type ModelStatus struct {
@@ -551,6 +563,18 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			if errT == nil && (errM1 == nil || errM2 == nil) {
 				isDownloaded = true
 			}
+		} else if m.ID == "gemma4-e2b-audio" {
+			projPathCustom := filepath.Join(modelsDir, "gemma-4-e2b-mmproj-BF16.gguf")
+			projPathLocal := filepath.Join("models", "gemma-4-e2b-mmproj-BF16.gguf")
+			_, errProjCustom := os.Stat(projPathCustom)
+			_, errProjLocal := os.Stat(projPathLocal)
+			hasProj := errProjCustom == nil || errProjLocal == nil
+
+			_, errModelCustom := os.Stat(pathInCustom)
+			_, errModelLocal := os.Stat(pathInLocal)
+			hasModel := errModelCustom == nil || errModelLocal == nil
+
+			isDownloaded = hasProj && hasModel
 		} else {
 			if _, err := os.Stat(pathInCustom); err == nil {
 				isDownloaded = true
@@ -568,7 +592,10 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 
 		isDisabled := false
 		isConformerActive := activeFilename == "indicconformer.int8.onnx" || activeFilename == "indicconformer.fp32.onnx"
+		isGemmaAudioActive := activeFilename == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 		if isConformerActive && m.ModelType == "llm" && m.ID != "gemma4-e2b" && m.ID != "sarvam-1-3b" {
+			isDisabled = true
+		} else if isGemmaAudioActive && m.ModelType == "llm" && m.ID != "gemma4-e2b" {
 			isDisabled = true
 		}
 
@@ -760,6 +787,34 @@ func (s *SettingsApp) DownloadModel(id string) {
 			}
 		}
 
+		if id == "gemma4-e2b-audio" {
+			projPath := filepath.Join(modelsDir, "gemma-4-e2b-mmproj-BF16.gguf")
+			if _, err := os.Stat(projPath); err != nil {
+				fmt.Println("Downloading gemma-4-e2b-mmproj-BF16.gguf...")
+				projURL := "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/mmproj-BF16.gguf?download=true"
+				respProj, errProj := http.Get(projURL)
+				if errProj == nil && respProj.StatusCode == http.StatusOK {
+					projTmp := projPath + ".tmp"
+					outProj, errCreate := os.Create(projTmp)
+					if errCreate == nil {
+						_, errCopy := io.Copy(outProj, respProj.Body)
+						outProj.Close()
+						respProj.Body.Close()
+						if errCopy == nil {
+							_ = os.Rename(projTmp, projPath)
+							fmt.Println("Successfully downloaded gemma-4-e2b-mmproj-BF16.gguf")
+						} else {
+							_ = os.Remove(projTmp)
+						}
+					} else {
+						respProj.Body.Close()
+					}
+				} else if errProj == nil {
+					respProj.Body.Close()
+				}
+			}
+		}
+
 		tmpPath := filepath.Join(modelsDir, targetModel.Filename+".tmp")
 		finalPath := filepath.Join(modelsDir, targetModel.Filename)
 
@@ -828,38 +883,47 @@ func (s *SettingsApp) DownloadModel(id string) {
 	}()
 }
 
-func (s *SettingsApp) SetActiveModel(filename string) error {
+func (s *SettingsApp) SetActiveModel(id string) error {
 	var targetModel *WhisperModelInfo
 	for i := range AvailableModels {
-		if AvailableModels[i].Filename == filename {
+		if AvailableModels[i].ID == id {
 			targetModel = &AvailableModels[i]
 			break
 		}
 	}
 	if targetModel == nil {
-		return fmt.Errorf("unknown model: %s", filename)
+		return fmt.Errorf("unknown model ID: %s", id)
 	}
 
 	// For the conformer model (.zip), verify the extracted folder exists.
 	// For all other models, ensure the binary file is in the data folder.
-	if err := s.ensureModelInDataFolder(filename); err != nil {
+	if err := s.ensureModelInDataFolder(targetModel.Filename); err != nil {
 		return err
 	}
 
 	cfg := loadConfig()
-	isConformerActive := filename == "indicconformer.int8.onnx" || filename == "indicconformer.fp32.onnx"
+	isConformerActive := targetModel.Filename == "indicconformer.int8.onnx" || targetModel.Filename == "indicconformer.fp32.onnx"
+	isGemmaAudioActive := targetModel.Filename == "gemma-4-E2B-it-UD-Q4_K_XL.gguf" && targetModel.ModelType == "whisper"
 	if targetModel.ModelType == "llm" {
 		isConfigConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+		isConfigGemmaAudioActive := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 		if isConfigConformerActive && targetModel.ID != "gemma4-e2b" && targetModel.ID != "sarvam-1-3b" {
 			return fmt.Errorf("Only Gemma and Sarvam are selectable with the Malayalam Conformer model")
 		}
-		cfg.LLMActiveModel = filename
+		if isConfigGemmaAudioActive && targetModel.ID != "gemma4-e2b" {
+			return fmt.Errorf("Only Gemma is selectable with the Gemma Direct Audio STT model")
+		}
+		cfg.LLMActiveModel = targetModel.Filename
 	} else if isConformerActive {
-		cfg.ActiveModel = filename
+		cfg.ActiveModel = targetModel.Filename
+		// Automatically switch active LLM to Gemma
+		cfg.LLMActiveModel = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	} else if isGemmaAudioActive {
+		cfg.ActiveModel = targetModel.Filename
 		// Automatically switch active LLM to Gemma
 		cfg.LLMActiveModel = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 	} else {
-		cfg.ActiveModel = filename
+		cfg.ActiveModel = targetModel.Filename
 	}
 	return saveConfig(cfg)
 }

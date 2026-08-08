@@ -13,6 +13,8 @@ import "C"
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -924,6 +926,15 @@ func (a *App) ensureActiveModel() {
 		activeModel = "ggml-tiny.en.bin"
 	}
 
+	if activeModel == "gemma-4-e2b-mmproj-BF16.gguf" || activeModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf" {
+		activeModel = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+		if cfg.ActiveModel != activeModel {
+			cfg.ActiveModel = activeModel
+			_ = saveConfig(cfg)
+		}
+		return
+	}
+
 	if cfg.BilingualRoutingEnabled {
 		a.ensureWhisperLoaded(cfg, cfg.BilingualWhisperModel)
 		return
@@ -1150,8 +1161,36 @@ func (a *App) transcribe() {
 	// rawResult holds the unmodified Whisper output; result may be overwritten by LLM.
 	rawResult := result
 
+	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 	var llmTimeUs int64
-	if !isBlank && !whisperFailed && cfg.LLMEnabled {
+	if isGemmaAudioSTT && result != "" {
+		runtime.EventsEmit(a.ctx, "recording-state", "refining")
+		a.llmMutex.Lock()
+		port := a.llmPort
+		a.llmMutex.Unlock()
+
+		if port > 0 {
+			llmStart := time.Now()
+			url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
+			var prompt string
+			if cfg.LLMEnabled {
+				translitMappings, _ := GetTransliterations()
+				manglishEnabled := cfg.ManglishEnabled
+				onlyMalayalam := containsMalayalam(result) && !manglishEnabled
+				prompt = getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5)
+			} else {
+				prompt = "You are a precise editor for speech-to-text dictation. The user speaks Malayalam and English. You are given a sequence of transcribed audio chunks joined together. Review the text and fix any grammatical flow issues, punctuation, or missing words/incomplete words at the chunk boundaries. Do not rewrite the text, do not translate it, and do not add any comments. Output ONLY the polished Malayalam or English text."
+			}
+			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
+			llmTimeUs = time.Since(llmStart).Microseconds()
+			if err != nil {
+				fmt.Printf("Gemma consolidation failed: %v. Using joined chunks.\n", err)
+			} else {
+				fmt.Println("Gemma consolidation succeeded.")
+				result = refinedText
+			}
+		}
+	} else if !isBlank && !whisperFailed && cfg.LLMEnabled {
 		runtime.EventsEmit(a.ctx, "recording-state", "refining")
 		a.llmMutex.Lock()
 		port := a.llmPort
@@ -1643,12 +1682,18 @@ func (a *App) startLLMServer(cfg Config) {
 		a.llmPort = 0
 	}
 
-	if cfg.LLMActiveModel == "" {
+	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	activeLLM := cfg.LLMActiveModel
+	if isGemmaAudioSTT {
+		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	}
+
+	if activeLLM == "" {
 		fmt.Println("Cannot start llama-server: no active LLM model set in config")
 		return
 	}
 
-	modelPath := filepath.Join(a.getModelsDir(), cfg.LLMActiveModel)
+	modelPath := filepath.Join(a.getModelsDir(), activeLLM)
 	if _, err := os.Stat(modelPath); err != nil {
 		fmt.Printf("Cannot start llama-server: model file %s does not exist\n", modelPath)
 		return
@@ -1737,6 +1782,13 @@ func (a *App) startLLMServer(cfg Config) {
 		"--chat-template-kwargs", `{"enable_thinking": false}`,
 	}
 
+	// Load mmproj if exists
+	mmprojName := "gemma-4-e2b-mmproj-BF16.gguf"
+	mmprojPath := filepath.Join(a.getModelsDir(), mmprojName)
+	if _, err := os.Stat(mmprojPath); err == nil {
+		args = append(args, "--mmproj", mmprojPath)
+	}
+
 	fmt.Printf("Starting llama-server: %s %s (GPU device index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
 	cmd := exec.Command(exePath, args...)
 
@@ -1799,7 +1851,8 @@ func (a *App) syncLLMServerState(cfg Config) {
 	runningCfg := a.runningLLMConfig
 	a.llmMutex.Unlock()
 
-	shouldRun := cfg.LLMEnabled
+	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	shouldRun := cfg.LLMEnabled || isGemmaAudioSTT
 
 	if isRunning && !shouldRun {
 		a.stopLLMServer()
@@ -1807,8 +1860,18 @@ func (a *App) syncLLMServerState(cfg Config) {
 	}
 
 	if shouldRun {
+		targetLLM := cfg.LLMActiveModel
+		if isGemmaAudioSTT {
+			targetLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+		}
+
+		runningLLM := runningCfg.LLMActiveModel
+		if runningCfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf" {
+			runningLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+		}
+
 		configChanged := !isRunning ||
-			runningCfg.LLMActiveModel != cfg.LLMActiveModel ||
+			runningLLM != targetLLM ||
 			runningCfg.ProcessingEngine != cfg.ProcessingEngine ||
 			runningCfg.SelectedGPU != cfg.SelectedGPU ||
 			runningCfg.LLMContextSize != cfg.LLMContextSize
@@ -1972,6 +2035,16 @@ func (a *App) transcribeChunk(chunk []float32) string {
 		whisperBuf = boosted
 	}
 
+	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	if isGemmaAudioSTT {
+		text, err := a.transcribeAudioWithGemma(whisperBuf)
+		if err != nil {
+			fmt.Println("Background Gemma chunk transcription failed:", err)
+			return ""
+		}
+		return text
+	}
+
 	isConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
 	if cfg.BilingualRoutingEnabled {
 		a.mutex.Lock()
@@ -2023,3 +2096,150 @@ func cleanSoundTags(text string) string {
 	cleaned = regexp.MustCompile(`\s+`).ReplaceAllString(cleaned, " ")
 	return strings.TrimSpace(cleaned)
 }
+
+type LLMContentItem struct {
+	Type       string                 `json:"type"`
+	Text       string                 `json:"text,omitempty"`
+	InputAudio *LLMInputAudioContent  `json:"input_audio,omitempty"`
+}
+
+type LLMInputAudioContent struct {
+	Data   string `json:"data"`
+	Format string `json:"format"`
+}
+
+type LLMMultimodalMessage struct {
+	Role    string           `json:"role"`
+	Content []LLMContentItem `json:"content"`
+}
+
+type LLMMultimodalRequest struct {
+	Model    string                 `json:"model"`
+	Messages []LLMMultimodalMessage `json:"messages"`
+}
+
+func encodeAudioToBase64Wav(samples []float32) (string, error) {
+	buf := new(bytes.Buffer)
+
+	const (
+		sampleRate    = 16000
+		numChannels   = 1
+		bitsPerSample = 16
+		audioFmtPCM   = 1
+	)
+
+	numSamples := len(samples)
+	dataSize := uint32(numSamples * 2)
+	byteRate := uint32(sampleRate * numChannels * bitsPerSample / 8)
+	blockAlign := uint16(numChannels * bitsPerSample / 8)
+
+	write := func(v interface{}) {
+		binary.Write(buf, binary.LittleEndian, v)
+	}
+
+	buf.WriteString("RIFF")
+	write(uint32(36 + dataSize))
+	buf.WriteString("WAVE")
+
+	buf.WriteString("fmt ")
+	write(uint32(16))
+	write(uint16(audioFmtPCM))
+	write(uint16(numChannels))
+	write(uint32(sampleRate))
+	write(byteRate)
+	write(blockAlign)
+	write(uint16(bitsPerSample))
+
+	buf.WriteString("data")
+	write(dataSize)
+	for _, s := range samples {
+		if s > 1.0 {
+			s = 1.0
+		} else if s < -1.0 {
+			s = -1.0
+		}
+		write(int16(s * 32767))
+	}
+
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}
+
+func (a *App) transcribeAudioWithGemma(samples []float32) (string, error) {
+	a.llmMutex.Lock()
+	port := a.llmPort
+	a.llmMutex.Unlock()
+
+	if port == 0 {
+		return "", fmt.Errorf("llama-server is not ready")
+	}
+
+	b64Data, err := encodeAudioToBase64Wav(samples)
+	if err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
+
+	reqBody := LLMMultimodalRequest{
+		Model: "local-model",
+		Messages: []LLMMultimodalMessage{
+			{
+				Role: "user",
+				Content: []LLMContentItem{
+					{
+						Type: "input_audio",
+						InputAudio: &LLMInputAudioContent{
+							Data:   b64Data,
+							Format: "wav",
+						},
+					},
+					{
+						Type: "text",
+						Text: "You are a precise speech transcriber. The user speaks Malayalam and English. Transcribe this audio chunk exactly into either Malayalam or English script (depending on what is spoken). Output ONLY the raw transcription text. Do not translate. Do not write explanations, comments, or tags.",
+					},
+				},
+			},
+		},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{
+		Timeout: 45 * time.Second,
+	}
+
+	resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("llama-server returned HTTP %d", resp.StatusCode)
+	}
+
+	var llmResp LLMResponse
+	if err := json.NewDecoder(resp.Body).Decode(&llmResp); err != nil {
+		return "", err
+	}
+
+	if len(llmResp.Choices) == 0 {
+		return "", fmt.Errorf("empty response from llama-server")
+	}
+
+	text := strings.TrimSpace(llmResp.Choices[0].Message.Content)
+	return cleanSoundTags(text), nil
+}
+
+func containsMalayalam(s string) bool {
+	for _, r := range s {
+		if r >= 0x0D00 && r <= 0x0D7F {
+			return true
+		}
+	}
+	return false
+}
+
