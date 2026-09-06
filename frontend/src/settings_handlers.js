@@ -772,15 +772,16 @@ const MODEL_FAMILIES_DEF = [
 // Track selected variant ID per family card in UI
 const selectedVariantPerFamily = {};
 
-export async function setupModelsSettings() {
-  const modelsDownloadedEnglish = document.getElementById('modelsDownloadedEnglish');
-  const modelsDownloadedMulti = document.getElementById('modelsDownloadedMulti');
-  const modelsAvailable = document.getElementById('modelsAvailable');
-  const groupDownloadedEnglish = document.getElementById('groupDownloadedEnglish');
-  const groupDownloadedMulti = document.getElementById('groupDownloadedMulti');
-  const groupDownloadMore = document.getElementById('groupDownloadMore');
+// Selected sub-category (e.g. 'en' vs 'multi') per family
+const selectedSubCategoryPerFamily = {};
 
-  if (!modelsDownloadedEnglish && !document.getElementById('modelListWhisper')) return;
+export async function setupModelsSettings() {
+  const modelsDownloadedSTT = document.getElementById('modelsDownloadedSTT');
+  const modelsDownloadedLLM = document.getElementById('modelsDownloadedLLM');
+  const modelsAvailableSTT = document.getElementById('modelsAvailableSTT');
+  const modelsAvailableLLM = document.getElementById('modelsAvailableLLM');
+
+  if (!modelsDownloadedSTT && !document.getElementById('modelsDownloadedEnglish')) return;
 
   const renderModels = async () => {
     if (!window.go?.main?.SettingsApp) return;
@@ -789,101 +790,204 @@ export async function setupModelsSettings() {
       const modelMap = {};
       allModels.forEach(m => { modelMap[m.id] = m; });
 
-      // Identify downloaded models
-      const downloadedEnglishModels = [];
-      const downloadedMultiModels = [];
-      const availableModels = [];
-
-      allModels.forEach(m => {
-        if (m.is_downloaded || m.is_downloading) {
-          const isMulti = m.id.includes('multilingual') || m.id.includes('indic') || m.id.includes('sarvam');
-          if (isMulti) {
-            downloadedMultiModels.push(m);
-          } else {
-            downloadedEnglishModels.push(m);
-          }
-        } else {
-          availableModels.push(m);
-        }
-      });
-
       // Clear containers
-      if (modelsDownloadedEnglish) modelsDownloadedEnglish.innerHTML = '';
-      if (modelsDownloadedMulti) modelsDownloadedMulti.innerHTML = '';
-      if (modelsAvailable) modelsAvailable.innerHTML = '';
+      if (modelsDownloadedSTT) modelsDownloadedSTT.innerHTML = '';
+      if (modelsDownloadedLLM) modelsDownloadedLLM.innerHTML = '';
+      if (modelsAvailableSTT) modelsAvailableSTT.innerHTML = '';
+      if (modelsAvailableLLM) modelsAvailableLLM.innerHTML = '';
 
-      // Helper to render individual downloaded model row
-      const renderDownloadedModelItem = (m) => {
-        const item = document.createElement('div');
-        item.className = 'model-family-card';
+      // Helper to render family card
+      // mode: 'downloaded' | 'available'
+      const renderFamilyCard = (fam, mode) => {
+        // Filter variants based on mode
+        const relevantVariants = fam.variants.filter(v => {
+          const m = modelMap[v.id];
+          if (!m) return false;
+          if (mode === 'downloaded') {
+            return m.is_downloaded || m.is_downloading;
+          } else {
+            return !m.is_downloaded && !m.is_downloading;
+          }
+        });
 
-        let iconSvg = MODEL_FAMILY_ICONS.openai;
-        let providerName = 'OpenAI';
-        if (m.id.startsWith('indic-conformer')) {
-          iconSvg = MODEL_FAMILY_ICONS.indic;
-          providerName = 'AI4Bharat';
-        } else if (m.id === 's1-mini') {
-          iconSvg = MODEL_FAMILY_ICONS.superwhisper;
-          providerName = 'Superwhisper';
-        } else if (m.id.startsWith('gemma4')) {
-          iconSvg = MODEL_FAMILY_ICONS.google;
-          providerName = 'Google';
-        } else if (m.id.startsWith('qwen')) {
-          iconSvg = MODEL_FAMILY_ICONS.qwen;
-          providerName = 'Alibaba';
-        } else if (m.id.startsWith('smollm')) {
-          iconSvg = MODEL_FAMILY_ICONS.hf;
-          providerName = 'HuggingFace';
-        } else if (m.id.startsWith('sarvam')) {
-          iconSvg = MODEL_FAMILY_ICONS.sarvam;
-          providerName = 'Sarvam AI';
+        if (relevantVariants.length === 0) return null;
+
+        // Check if this family has both English and Multilingual variants
+        const hasEn = relevantVariants.some(v => v.id.includes('.en') || v.label.includes('(EN)'));
+        const hasMulti = relevantVariants.some(v => v.id.includes('multilingual') || v.id.includes('multi') || v.label.includes('(Multi)') || v.id.includes('indic') || v.id.includes('sarvam'));
+        const isMultiLayer = hasEn && hasMulti;
+
+        // Determine active sub-category ('en' or 'multi') if multi-layered
+        let currentSubCat = selectedSubCategoryPerFamily[fam.familyId + '_' + mode];
+        if (!currentSubCat || (currentSubCat === 'en' && !hasEn) || (currentSubCat === 'multi' && !hasMulti)) {
+          // Default to active model's category, or first available
+          const activeV = relevantVariants.find(v => modelMap[v.id]?.is_active);
+          if (activeV && (activeV.id.includes('multi') || activeV.id.includes('indic') || activeV.id.includes('sarvam'))) {
+            currentSubCat = 'multi';
+          } else if (hasEn) {
+            currentSubCat = 'en';
+          } else {
+            currentSubCat = 'multi';
+          }
+          selectedSubCategoryPerFamily[fam.familyId + '_' + mode] = currentSubCat;
         }
 
-        const statusClass = m.is_active ? 'active' : 'downloaded';
-        const statusText = m.is_active ? 'Active' : 'Downloaded';
+        // Visible variants for current sub-category
+        let visibleVariants = relevantVariants;
+        if (isMultiLayer) {
+          if (currentSubCat === 'en') {
+            visibleVariants = relevantVariants.filter(v => v.id.includes('.en') || v.label.includes('(EN)'));
+          } else {
+            visibleVariants = relevantVariants.filter(v => v.id.includes('multilingual') || v.id.includes('multi') || v.label.includes('(Multi)') || v.id.includes('indic') || v.id.includes('sarvam'));
+          }
+          if (visibleVariants.length === 0) visibleVariants = relevantVariants;
+        }
+
+        // Selected variant in this family
+        let selectedId = selectedVariantPerFamily[fam.familyId + '_' + mode];
+        if (!selectedId || !visibleVariants.some(v => v.id === selectedId)) {
+          // Pick active variant if any, or first
+          const activeM = visibleVariants.find(v => modelMap[v.id]?.is_active);
+          selectedId = (activeM || visibleVariants[0]).id;
+          selectedVariantPerFamily[fam.familyId + '_' + mode] = selectedId;
+        }
+
+        const currentModel = modelMap[selectedId] || modelMap[visibleVariants[0].id];
+        if (!currentModel) return null;
+
+        const statusText = currentModel.is_active ? 'Active' : currentModel.is_disabled ? 'Unavailable' : currentModel.is_downloaded ? 'Downloaded' : 'Available';
+        const statusClass = currentModel.is_active ? 'active' : currentModel.is_disabled ? 'unavailable' : currentModel.is_downloaded ? 'downloaded' : 'available';
 
         let actionHtml = '';
-        if (m.is_downloading) {
+        if (currentModel.is_downloading) {
           actionHtml = `
             <div class="model-progress-container" style="min-width: 140px;">
               <div class="model-progress-bar-bg">
-                <div class="model-progress-bar-fill" id="bar-${m.id}" style="width: ${m.download_progress}%"></div>
+                <div class="model-progress-bar-fill" id="bar-${currentModel.id}" style="width: ${currentModel.download_progress}%"></div>
               </div>
-              <div class="model-progress-text" id="text-${m.id}">Downloading... ${m.download_progress}%</div>
+              <div class="model-progress-text" id="text-${currentModel.id}">Downloading... ${currentModel.download_progress}%</div>
             </div>
           `;
-        } else if (m.is_active) {
-          actionHtml = `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>`;
-        } else {
+        } else if (currentModel.is_downloaded) {
           actionHtml = `
-            <button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${m.id}">Activate</button>
-            <button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>
+            ${currentModel.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" ${currentModel.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${currentModel.id}">Activate</button>`}
+            ${!currentModel.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${currentModel.filename}">Delete</button>` : ''}
+          `;
+        } else {
+          actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${currentModel.is_disabled ? 'disabled' : ''} data-id="${currentModel.id}">Download</button>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'model-family-card';
+
+        // 2-layer category row if applicable
+        let layer1Html = '';
+        if (isMultiLayer) {
+          layer1Html = `
+            <div class="model-variant-selector-row">
+              <span class="model-variant-selector-label">Language</span>
+              <div class="model-variant-segmented-btn-group">
+                <button type="button" class="model-variant-btn ${currentSubCat === 'en' ? 'active' : ''}" data-cat="en">English</button>
+                <button type="button" class="model-variant-btn ${currentSubCat === 'multi' ? 'active' : ''}" data-cat="multi">Multilingual</button>
+              </div>
+            </div>
           `;
         }
 
-        item.innerHTML = `
+        // Layer 2 / single-layer variants row
+        let layer2Html = '';
+        if (visibleVariants.length > 1 || isMultiLayer) {
+          layer2Html = `
+            <div class="model-variant-selector-row">
+              ${isMultiLayer ? `<span class="model-variant-selector-label">Size</span>` : ''}
+              <div class="model-variant-segmented-btn-group">
+                ${visibleVariants.map(v => {
+                  const isSelected = v.id === currentModel.id;
+                  const mInstance = modelMap[v.id];
+                  const isActive = mInstance?.is_active;
+                  const dotBadge = mode === 'downloaded' && isActive ? ' • Active' : '';
+                  // Clean variant label for display (e.g. Tiny instead of Tiny (EN))
+                  const cleanLabel = isMultiLayer ? v.label.replace(/\s*\((EN|Multi)\)/i, '') : v.label;
+                  return `
+                    <button type="button" class="model-variant-btn ${isSelected ? 'active' : ''}" data-id="${v.id}">
+                      ${cleanLabel}${dotBadge}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
           <div class="model-family-header">
             <div class="model-family-identity">
-              <div class="model-provider-icon">
-                ${iconSvg}
+              <div class="model-provider-icon ${fam.iconClass}">
+                ${MODEL_FAMILY_ICONS[fam.iconKey] || ''}
               </div>
               <div class="model-family-title-wrap">
                 <div class="model-family-name-row">
-                  <span class="model-family-name">${m.name}</span>
-                  <span class="model-family-provider-tag">${providerName}</span>
+                  <span class="model-family-name">${fam.name}</span>
+                  <span class="model-family-provider-tag">${fam.provider}</span>
                   <span class="model-status-pill ${statusClass}">${statusText}</span>
                 </div>
-                <div class="model-family-desc">${m.speed_description || ''} • ${m.size_mb} MB • ${m.speed_label}</div>
+                <div class="model-family-desc">${fam.description}</div>
               </div>
             </div>
-            <div class="model-variant-actions">
-              ${actionHtml}
+          </div>
+
+          <div class="model-variant-selector-wrapper">
+            <div class="model-variant-toolbar">
+              ${layer1Html}
+              ${layer2Html}
+            </div>
+
+            <div class="model-variant-details-bar">
+              <div class="model-variant-meta">
+                <span class="model-variant-pill">${currentModel.size_mb} MB</span>
+                <span class="model-variant-pill">${currentModel.speed_label}</span>
+                <span class="model-variant-pill">${currentModel.speed_description}</span>
+                <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${currentModel.filename}</span>
+              </div>
+              <div class="model-variant-actions">
+                ${actionHtml}
+              </div>
             </div>
           </div>
         `;
 
-        // Activate Action
-        item.querySelectorAll('.activate-btn').forEach(btn => {
+        // Sub-category layer click handler
+        card.querySelectorAll('.model-variant-btn[data-cat]').forEach(btn => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            selectedSubCategoryPerFamily[fam.familyId + '_' + mode] = btn.dataset.cat;
+            delete selectedVariantPerFamily[fam.familyId + '_' + mode];
+            renderModels();
+          };
+        });
+
+        // Variant selector click handler
+        card.querySelectorAll('.model-variant-btn[data-id]').forEach(btn => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            selectedVariantPerFamily[fam.familyId + '_' + mode] = btn.dataset.id;
+            renderModels();
+          };
+        });
+
+        // Download action
+        card.querySelectorAll('.download-btn').forEach(btn => {
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+            await window.go.main.SettingsApp.DownloadModel(btn.dataset.id);
+            renderModels();
+          };
+        });
+
+        // Activate action
+        card.querySelectorAll('.activate-btn').forEach(btn => {
           btn.onclick = async (e) => {
             e.stopPropagation();
             btn.disabled = true;
@@ -898,14 +1002,14 @@ export async function setupModelsSettings() {
           };
         });
 
-        // Delete Action
-        item.querySelectorAll('.delete-btn').forEach(btn => {
+        // Delete action
+        card.querySelectorAll('.delete-btn').forEach(btn => {
           btn.onclick = async (e) => {
             e.stopPropagation();
             const filename = btn.dataset.filename;
             showCustomConfirm({
               title: 'Delete Model',
-              message: `Are you sure you want to delete ${m.name}?`,
+              message: `Are you sure you want to delete ${currentModel.name}?`,
               confirmText: 'Delete',
               onConfirm: async () => {
                 btn.disabled = true;
@@ -921,123 +1025,61 @@ export async function setupModelsSettings() {
           };
         });
 
-        return item;
+        return card;
       };
 
-      // Populate English downloaded models
-      if (modelsDownloadedEnglish) {
-        if (downloadedEnglishModels.length === 0) {
-          modelsDownloadedEnglish.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 12px 0;">No English models downloaded yet.</div>`;
-        } else {
-          downloadedEnglishModels.forEach(m => {
-            modelsDownloadedEnglish.appendChild(renderDownloadedModelItem(m));
-          });
+      // ── RENDER TOP: DOWNLOADED MODELS ─────────────────────────────────────
+      // 1. Downloaded Speech to Text
+      let sttDownloadedCount = 0;
+      MODEL_FAMILIES_DEF.filter(f => f.type === 'whisper').forEach(fam => {
+        const card = renderFamilyCard(fam, 'downloaded');
+        if (card) {
+          modelsDownloadedSTT?.appendChild(card);
+          sttDownloadedCount++;
         }
+      });
+      if (sttDownloadedCount === 0 && modelsDownloadedSTT) {
+        modelsDownloadedSTT.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 10px 0;">No speech to text models downloaded yet. Choose one below to download.</div>`;
       }
 
-      // Populate Multilingual downloaded models
-      if (modelsDownloadedMulti) {
-        if (downloadedMultiModels.length === 0) {
-          modelsDownloadedMulti.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 12px 0;">No multilingual models downloaded yet.</div>`;
-        } else {
-          downloadedMultiModels.forEach(m => {
-            modelsDownloadedMulti.appendChild(renderDownloadedModelItem(m));
-          });
+      // 2. Downloaded Text Refinement
+      let llmDownloadedCount = 0;
+      MODEL_FAMILIES_DEF.filter(f => f.type === 'llm').forEach(fam => {
+        const card = renderFamilyCard(fam, 'downloaded');
+        if (card) {
+          modelsDownloadedLLM?.appendChild(card);
+          llmDownloadedCount++;
         }
+      });
+      if (llmDownloadedCount === 0 && modelsDownloadedLLM) {
+        modelsDownloadedLLM.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 10px 0;">No text refinement models downloaded yet. Choose one below to download.</div>`;
       }
 
-      // Populate Available to Download: grouped by Family with variant selector
-      if (modelsAvailable) {
-        // Find families that have at least one non-downloaded model
-        MODEL_FAMILIES_DEF.forEach(fam => {
-          const undownloadedVariants = fam.variants.filter(v => {
-            const m = modelMap[v.id];
-            return m && !m.is_downloaded && !m.is_downloading;
-          });
+      // ── RENDER BOTTOM: AVAILABLE TO DOWNLOAD ──────────────────────────────
+      // 1. Available Speech to Text
+      let sttAvailableCount = 0;
+      MODEL_FAMILIES_DEF.filter(f => f.type === 'whisper').forEach(fam => {
+        const card = renderFamilyCard(fam, 'available');
+        if (card) {
+          modelsAvailableSTT?.appendChild(card);
+          sttAvailableCount++;
+        }
+      });
+      if (sttAvailableCount === 0 && modelsAvailableSTT) {
+        modelsAvailableSTT.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 10px 0;">All speech to text models are downloaded.</div>`;
+      }
 
-          if (undownloadedVariants.length === 0) return;
-
-          let selectedId = selectedVariantPerFamily[fam.familyId];
-          if (!selectedId || !undownloadedVariants.some(v => v.id === selectedId)) {
-            selectedId = undownloadedVariants[0].id;
-            selectedVariantPerFamily[fam.familyId] = selectedId;
-          }
-
-          const currentModel = modelMap[selectedId] || modelMap[undownloadedVariants[0].id];
-          if (!currentModel) return;
-
-          const card = document.createElement('div');
-          card.className = 'model-family-card';
-
-          const actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${currentModel.is_disabled ? 'disabled' : ''} data-id="${currentModel.id}">Download</button>`;
-
-          card.innerHTML = `
-            <div class="model-family-header">
-              <div class="model-family-identity">
-                <div class="model-provider-icon ${fam.iconClass}">
-                  ${MODEL_FAMILY_ICONS[fam.iconKey] || ''}
-                </div>
-                <div class="model-family-title-wrap">
-                  <div class="model-family-name-row">
-                    <span class="model-family-name">${fam.name}</span>
-                    <span class="model-family-provider-tag">${fam.provider}</span>
-                    <span class="model-status-pill available">Available</span>
-                  </div>
-                  <div class="model-family-desc">${fam.description}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="model-variant-selector-wrapper">
-              <div class="model-variant-toolbar">
-                <div class="model-variant-segmented-btn-group">
-                  ${undownloadedVariants.map(v => {
-                    const isSelected = v.id === currentModel.id;
-                    return `
-                      <button type="button" class="model-variant-btn ${isSelected ? 'active' : ''}" data-family="${fam.familyId}" data-id="${v.id}">
-                        ${v.label}
-                      </button>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-
-              <div class="model-variant-details-bar">
-                <div class="model-variant-meta">
-                  <span class="model-variant-pill">${currentModel.size_mb} MB</span>
-                  <span class="model-variant-pill">${currentModel.speed_label}</span>
-                  <span class="model-variant-pill">${currentModel.speed_description}</span>
-                  <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${currentModel.filename}</span>
-                </div>
-                <div class="model-variant-actions">
-                  ${actionHtml}
-                </div>
-              </div>
-            </div>
-          `;
-
-          // Variant toggle
-          card.querySelectorAll('.model-variant-btn').forEach(btn => {
-            btn.onclick = (e) => {
-              e.stopPropagation();
-              selectedVariantPerFamily[fam.familyId] = btn.dataset.id;
-              renderModels();
-            };
-          });
-
-          // Download action
-          card.querySelectorAll('.download-btn').forEach(btn => {
-            btn.onclick = async (e) => {
-              e.stopPropagation();
-              btn.disabled = true;
-              btn.textContent = 'Starting...';
-              await window.go.main.SettingsApp.DownloadModel(btn.dataset.id);
-              renderModels();
-            };
-          });
-
-          modelsAvailable.appendChild(card);
-        });
+      // 2. Available Text Refinement
+      let llmAvailableCount = 0;
+      MODEL_FAMILIES_DEF.filter(f => f.type === 'llm').forEach(fam => {
+        const card = renderFamilyCard(fam, 'available');
+        if (card) {
+          modelsAvailableLLM?.appendChild(card);
+          llmAvailableCount++;
+        }
+      });
+      if (llmAvailableCount === 0 && modelsAvailableLLM) {
+        modelsAvailableLLM.innerHTML = `<div style="font-size: 13px; color: var(--text-muted); padding: 10px 0;">All text refinement models are downloaded.</div>`;
       }
 
     } catch (err) {

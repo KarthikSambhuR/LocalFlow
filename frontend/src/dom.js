@@ -175,17 +175,26 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-models">
-      <div class="setting-group" id="groupDownloadedEnglish" style="margin-bottom: 24px;">
-        <label>English</label>
-        <div id="modelsDownloadedEnglish"></div>
+      <!-- TOP: DOWNLOADED MODELS -->
+      <div class="setting-group" id="groupDownloadedSTT" style="margin-bottom: 24px;">
+        <label>Speech to Text</label>
+        <div id="modelsDownloadedSTT"></div>
       </div>
-      <div class="setting-group" id="groupDownloadedMulti" style="margin-bottom: 24px;">
-        <label>Multilingual</label>
-        <div id="modelsDownloadedMulti"></div>
+      <div class="setting-group" id="groupDownloadedLLM" style="margin-bottom: 32px;">
+        <label>Text Refinement</label>
+        <div id="modelsDownloadedLLM"></div>
       </div>
-      <div class="setting-group" id="groupDownloadMore" style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
-        <label>Available to Download</label>
-        <div id="modelsAvailable"></div>
+
+      <!-- BOTTOM: AVAILABLE TO DOWNLOAD -->
+      <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
+        <div class="setting-group" id="groupAvailableSTT" style="margin-bottom: 24px;">
+          <label>Download Speech to Text Models</label>
+          <div id="modelsAvailableSTT"></div>
+        </div>
+        <div class="setting-group" id="groupAvailableLLM">
+          <label>Download Text Refinement Models</label>
+          <div id="modelsAvailableLLM"></div>
+        </div>
       </div>
     </div>
     <div class="section" id="sec-settings">
