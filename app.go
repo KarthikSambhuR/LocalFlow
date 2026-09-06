@@ -1826,11 +1826,13 @@ func (a *App) startLLMServer(cfg Config) {
 		"--jinja",
 	}
 
-	// Load mmproj if exists
-	mmprojName := "gemma-4-e2b-mmproj-BF16.gguf"
-	mmprojPath := filepath.Join(a.getModelsDir(), mmprojName)
-	if _, err := os.Stat(mmprojPath); err == nil {
-		args = append(args, "--mmproj", mmprojPath)
+	// Load mmproj if exists and using Gemma multimodal model
+	if isGemmaAudioSTT || strings.Contains(strings.ToLower(activeLLM), "gemma") {
+		mmprojName := "gemma-4-e2b-mmproj-BF16.gguf"
+		mmprojPath := filepath.Join(a.getModelsDir(), mmprojName)
+		if _, err := os.Stat(mmprojPath); err == nil {
+			args = append(args, "--mmproj", mmprojPath)
+		}
 	}
 
 	fmt.Printf("Starting llama-server: %s %s (GPU device index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
