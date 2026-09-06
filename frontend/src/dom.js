@@ -172,11 +172,10 @@ settingsModal.innerHTML = `
     </div>
     <div class="section" id="sec-settings">
       <div class="setting-group">
-        <label>Audio Settings</label>
+        <label>Audio</label>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Playback Amplifier</span>
-            <span class="setting-desc">Boost volume of history playback</span>
+            <span class="setting-title">Playback Volume</span>
           </div>
           <div style="display: flex; align-items: center; gap: 12px;">
             <input type="range" id="ampSlider" min="1" max="10" step="0.5" value="1" class="brutal-slider">
@@ -185,8 +184,8 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Boost Whisper Input</span>
-            <span class="setting-desc">Apply amp gain heavily to the microphone feed prior to AI transcription</span>
+            <span class="setting-title">Mic Gain Boost</span>
+            <span class="setting-desc">Boost microphone input gain</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="boostToggle">
@@ -195,8 +194,7 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Processing Engine</span>
-            <span class="setting-desc">Use Vulkan acceleration when your GPU and drivers support it</span>
+            <span class="setting-title">Engine</span>
           </div>
           <div class="engine-toggle" role="group" aria-label="Processing engine">
             <button type="button" class="engine-option active" id="engineCpuBtn" data-engine="cpu">CPU</button>
@@ -206,7 +204,6 @@ settingsModal.innerHTML = `
         <div class="setting-item" id="gpuSelectionItem" style="display: none;">
           <div class="setting-info">
             <span class="setting-title">Graphics Device</span>
-            <span class="setting-desc">Select which GPU device to accelerate transcription</span>
           </div>
           <div class="custom-dropdown" id="gpuDropdown">
             <button class="dropdown-trigger">
@@ -220,8 +217,7 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Input Microphone</span>
-            <span class="setting-desc">Choose which audio device dictates to AI transcription</span>
+            <span class="setting-title">Microphone</span>
           </div>
           <div class="custom-dropdown" id="micDropdown">
             <button class="dropdown-trigger">
@@ -235,8 +231,8 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Bilingual Routing (English/Malayalam)</span>
-            <span class="setting-desc">Automatically route speech to English Whisper or Malayalam Conformer depending on which language you speak</span>
+            <span class="setting-title">Bilingual Routing</span>
+            <span class="setting-desc">Auto-switch between English and Malayalam</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="bilingualRoutingToggle">
@@ -245,8 +241,7 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item bilingual-setting" id="bilingualWhisperModelSelection" style="display: none;">
           <div class="setting-info">
-            <span class="setting-title">Bilingual Whisper Model</span>
-            <span class="setting-desc">Choose which Whisper model to use for English speech</span>
+            <span class="setting-title">English Model</span>
           </div>
           <div class="custom-dropdown" id="bilingualWhisperDropdown">
             <button class="dropdown-trigger">
@@ -259,8 +254,7 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item bilingual-setting" id="bilingualConformerModelSelection" style="display: none;">
           <div class="setting-info">
-            <span class="setting-title">Bilingual Conformer Model</span>
-            <span class="setting-desc">Choose which Conformer model to use for Malayalam speech</span>
+            <span class="setting-title">Malayalam Model</span>
           </div>
           <div class="custom-dropdown" id="bilingualConformerDropdown">
             <button class="dropdown-trigger">
@@ -274,11 +268,11 @@ settingsModal.innerHTML = `
         <div id="modelListWhisper" style="margin-top: 20px;"></div>
       </div>
       <div class="setting-group">
-        <label>LLM Refinement (llama.cpp)</label>
+        <label>AI Refinement</label>
         <div class="setting-item">
           <div class="setting-info">
             <span class="setting-title">Enable Refinement</span>
-            <span class="setting-desc">Improve grammar and formatting using a local LLM server</span>
+            <span class="setting-desc">Grammar, punctuation and format cleanup</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="llmEnabledToggle">
@@ -287,8 +281,8 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item llm-choice-setting" id="llmThinkingSelection">
           <div class="setting-info">
-            <span class="setting-title">Enable Thinking / Reasoning</span>
-            <span class="setting-desc">Allow reasoning models (like Gemma 4 E2B) to output thinking steps. Turn off for faster, direct answers.</span>
+            <span class="setting-title">Reasoning Steps</span>
+            <span class="setting-desc">Enable chain-of-thought output</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="llmThinkingToggle">
@@ -297,8 +291,8 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item llm-choice-setting" id="llmManglishSelection">
           <div class="setting-info">
-            <span class="setting-title">Convert Malayalam to Manglish</span>
-            <span class="setting-desc">Transliterate Malayalam text to English letters (Latin script) using refinement</span>
+            <span class="setting-title">Transliterate to Manglish</span>
+            <span class="setting-desc">Convert Malayalam speech to Latin script</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="llmManglishToggle">
@@ -307,59 +301,56 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item llm-choice-setting" id="llmModeSelection">
           <div class="setting-info">
-            <span class="setting-title">Refinement strength</span>
-            <span class="setting-desc">Choose how freely LocalFlow can change your original wording.</span>
+            <span class="setting-title">Refinement Strength</span>
           </div>
           <div class="llm-choice-grid llm-mode-grid" id="llmModeOptions" role="group" aria-label="Refinement strength">
             <button type="button" class="llm-choice" data-value="minimal" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Minimal</strong><span>Proofread</span></span>
-              <span>Fixes clear transcription, spelling, capitalization, and punctuation errors only.</span>
+              <span class="llm-choice-heading"><strong>Minimal</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Proofread</span>
             </button>
             <button type="button" class="llm-choice" data-value="low" aria-pressed="true">
-              <span class="llm-choice-heading"><strong>Low</strong><span>Clean up</span></span>
-              <span>Removes obvious stutters and filler while keeping your wording and structure.</span>
+              <span class="llm-choice-heading"><strong>Low</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Clean filler</span>
             </button>
             <button type="button" class="llm-choice" data-value="medium" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Medium</strong><span>Clarify</span></span>
-              <span>Lightly rephrases awkward sentences and improves flow without changing detail.</span>
+              <span class="llm-choice-heading"><strong>Medium</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Clarify</span>
             </button>
             <button type="button" class="llm-choice" data-value="high" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>High</strong><span>Polish</span></span>
-              <span>Freely restructures the transcript into a polished, readable version.</span>
+              <span class="llm-choice-heading"><strong>High</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Full polish</span>
             </button>
           </div>
         </div>
         <div class="setting-item llm-choice-setting" id="llmToneSelection">
           <div class="setting-info">
-            <span class="setting-title">Tone</span>
-            <span class="setting-desc">Set the writing style. Refinement strength still limits how much wording can change.</span>
+            <span class="setting-title">Writing Tone</span>
           </div>
           <div class="llm-choice-grid llm-tone-grid" id="llmToneOptions" role="group" aria-label="Refinement tone">
             <button type="button" class="llm-choice" data-value="auto" aria-pressed="true">
-              <span class="llm-choice-heading"><strong>Auto</strong><span>Keep my voice</span></span>
-              <span>Preserves the natural tone and level of formality in your transcript.</span>
+              <span class="llm-choice-heading"><strong>Auto</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Natural voice</span>
             </button>
             <button type="button" class="llm-choice" data-value="casual" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Casual</strong><span>Friendly</span></span>
-              <span>Uses warm, relaxed, conversational phrasing.</span>
+              <span class="llm-choice-heading"><strong>Casual</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Conversational</span>
             </button>
             <button type="button" class="llm-choice" data-value="concise" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Concise</strong><span>Direct</span></span>
-              <span>Trims avoidable wordiness while keeping useful context.</span>
+              <span class="llm-choice-heading"><strong>Concise</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Direct</span>
             </button>
             <button type="button" class="llm-choice" data-value="professional" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Professional</strong><span>Work-ready</span></span>
-              <span>Uses polished, precise, workplace-appropriate phrasing.</span>
+              <span class="llm-choice-heading"><strong>Work</strong></span>
+              <span class="setting-desc" style="font-size: 12px;">Professional</span>
             </button>
           </div>
         </div>
         <div class="setting-item llm-choice-setting" id="llmContextSizeSelection">
           <div class="setting-info">
             <span class="setting-title">Context Window</span>
-            <span class="setting-desc">Max tokens the model reads at once. Higher values use more RAM.</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
-            <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="flex: 1; width: 100%;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="width: 140px;">
             <span id="llmContextLabel" class="badge">4K</span>
           </div>
         </div>
@@ -369,8 +360,7 @@ settingsModal.innerHTML = `
         <label>Startup</label>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Start LocalFlow on system startup</span>
-            <span class="setting-desc">Automatically launch application when you log in</span>
+            <span class="setting-title">Launch on Startup</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="startupToggle">
@@ -379,8 +369,8 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item" id="startMinimizedItem">
           <div class="setting-info">
-            <span class="setting-title">Start minimized</span>
-            <span class="setting-desc">Launch in the tray instead of opening Home</span>
+            <span class="setting-title">Start Minimized</span>
+            <span class="setting-desc">Open in system tray</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="startMinimizedToggle">
@@ -393,7 +383,6 @@ settingsModal.innerHTML = `
         <div class="setting-item">
           <div class="setting-info">
             <span class="setting-title">Theme</span>
-            <span class="setting-desc">Toggle interface appearance</span>
           </div>
           <div class="custom-dropdown" id="themeDropdown">
             <button class="dropdown-trigger">
@@ -411,8 +400,7 @@ settingsModal.innerHTML = `
         <label>Trigger Keybind</label>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Active Combination</span>
-            <span class="setting-desc">Click the button to remap your hotkeys</span>
+            <span class="setting-title">Shortcut</span>
           </div>
           <button id="remapBtn" class="kbd-btn">
             <kbd id="k1Label">Ctrl</kbd> <span class="kbd-plus">+</span> <kbd id="k2Label">Win</kbd>
@@ -420,8 +408,8 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Use Copilot Key</span>
-            <span class="setting-desc">Use the dedicated Copilot key on your keyboard as trigger</span>
+            <span class="setting-title">Copilot Key</span>
+            <span class="setting-desc">Use keyboard Copilot key</span>
           </div>
           <label class="toggle-switch">
             <input type="checkbox" id="copilotKeyToggle">
@@ -430,11 +418,10 @@ settingsModal.innerHTML = `
         </div>
       </div>
       <div class="setting-group">
-        <label>Storage & Cache</label>
+        <label>Storage</label>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Audio Files Lifespan</span>
-            <span class="setting-desc">How long audio recordings (.wav) are kept on disk</span>
+            <span class="setting-title">Audio Retention</span>
           </div>
           <div class="custom-dropdown" id="audioRetentionDropdown">
             <button class="dropdown-trigger">
@@ -453,8 +440,7 @@ settingsModal.innerHTML = `
         </div>
         <div class="setting-item">
           <div class="setting-info">
-            <span class="setting-title">Transcription Lifespan</span>
-            <span class="setting-desc">How long dictation text is kept (analytics are kept forever)</span>
+            <span class="setting-title">Transcription Retention</span>
           </div>
           <div class="custom-dropdown" id="transcriptionRetentionDropdown">
             <button class="dropdown-trigger">
@@ -474,11 +460,10 @@ settingsModal.innerHTML = `
         <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div class="setting-info">
-              <span class="setting-title">Data Storage Directory</span>
-              <span class="setting-desc">Folder where database, cache, and all audio files are saved</span>
+              <span class="setting-title">Storage Directory</span>
             </div>
             <button id="selectFolderBtn" class="kbd-btn" style="padding: 6px 12px; font-weight: 500;">
-              Change Folder
+              Change
             </button>
           </div>
           <div id="dataFolderDesc" style="font-family: monospace; font-size: 11px; background: var(--bg-sidebar); border: 1px dashed var(--border); padding: 8px 12px; border-radius: 6px; color: var(--text-secondary); word-break: break-all; margin-top: 4px;">

@@ -670,7 +670,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'OpenAI',
     iconKey: 'openai',
     iconClass: 'provider-openai',
-    description: 'Gold-standard multilingual speech-to-text with various size and accuracy tradeoffs.',
+    description: 'Speech-to-text with English and multilingual variants.',
     variantMatcher: (m) => m.model_type === 'whisper' && m.id.startsWith('tiny') || m.id.startsWith('base') || m.id.startsWith('small') || m.id.startsWith('medium') || m.id.startsWith('large'),
     variants: [
       { label: 'Tiny (EN)', id: 'tiny' },
@@ -690,7 +690,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'AI4Bharat',
     iconKey: 'indic',
     iconClass: 'provider-indic',
-    description: 'State-of-the-art Malayalam Conformer STT built on ONNX with fast inference.',
+    description: 'Malayalam speech recognition built on ONNX.',
     variantMatcher: (m) => m.id.startsWith('indic-conformer'),
     variants: [
       { label: '120M INT8 (Fast)', id: 'indic-conformer-120m-int8' },
@@ -704,7 +704,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Superwhisper',
     iconKey: 'superwhisper',
     iconClass: 'provider-super',
-    description: 'Superwhisper 0.6B specialized text normalizer. Resolves self-corrections, removes filler words, and formats numbers.',
+    description: 'Specialized normalizer for filler words, stutters and numbers.',
     variantMatcher: (m) => m.id === 's1-mini',
     variants: [
       { label: '0.6B Q4_K_M', id: 's1-mini' }
@@ -717,7 +717,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Google',
     iconKey: 'google',
     iconClass: 'provider-google',
-    description: 'Google Gemma 4 E2B model for high-intelligence context preservation, reasoning, and grammar refinement.',
+    description: 'High-intelligence reasoning and grammar refinement.',
     variantMatcher: (m) => m.id.startsWith('gemma4'),
     variants: [
       { label: 'E2B Refinement', id: 'gemma4-e2b' },
@@ -731,7 +731,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Alibaba',
     iconKey: 'qwen',
     iconClass: 'provider-qwen',
-    description: 'Ultra-fast and lightweight LLM for real-time formatting, capitalization, and stutter removal.',
+    description: 'Ultra-fast and lightweight LLM for real-time formatting.',
     variantMatcher: (m) => m.id === 'qwen3-0.6b',
     variants: [
       { label: '0.6B Q4_K_XL', id: 'qwen3-0.6b' }
@@ -744,7 +744,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'HuggingFace',
     iconKey: 'hf',
     iconClass: 'provider-hf',
-    description: 'Extremely lightweight 135M model running on any CPU with zero lag for instant grammar fixes.',
+    description: 'Compact 135M model running on CPU with minimal RAM.',
     variantMatcher: (m) => m.id === 'smollm2-135m',
     variants: [
       { label: '135M Q8_0', id: 'smollm2-135m' }
@@ -757,7 +757,7 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Sarvam AI',
     iconKey: 'sarvam',
     iconClass: 'provider-sarvam',
-    description: 'Bilingual English and Malayalam text refinement model optimized for Indic languages.',
+    description: 'Bilingual English and Malayalam text refinement.',
     variantMatcher: (m) => m.id === 'sarvam-1-3b',
     variants: [
       { label: '1 3B Q4_K_M', id: 'sarvam-1-3b' }

@@ -145,8 +145,7 @@
 }
 
 .dropdown-trigger:hover {
-  border-color: var(--border-active);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(238, 254, 255, 0.2);
 }
 
 .dropdown-trigger svg {
@@ -236,14 +235,12 @@
 .nav-item:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
-  border-color: var(--border);
 }
 
 .nav-item.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--border-active);
-  box-shadow: var(--shadow-glow);
+  background: rgba(238, 254, 255, 0.08);
+  color: var(--text-primary);
+  border-color: transparent;
 }
 
 .nav-item svg { stroke-width: 2px; }

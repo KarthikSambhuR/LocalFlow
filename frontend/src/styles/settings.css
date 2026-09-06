@@ -21,12 +21,12 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 24px;
+  padding: 20px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: all 0.2s ease;
-  margin-bottom: 16px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  margin-bottom: 12px;
   position: relative;
   overflow: visible;
   z-index: 0;
@@ -37,18 +37,18 @@
 }
 
 .setting-item:hover {
-  border-color: var(--border-active);
-  transform: translateY(-1px);
+  background: var(--bg-card-hover);
+  border-color: rgba(238, 254, 255, 0.14);
 }
 
 .setting-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .setting-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -56,13 +56,13 @@
 .setting-desc {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .llm-choice-setting {
   display: none;
   align-items: stretch;
-  gap: 20px;
+  gap: 16px;
 }
 
 .llm-choice-setting.visible {
@@ -85,26 +85,24 @@
 
 .llm-choice {
   min-width: 0;
-  min-height: 116px;
-  padding: 14px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-sidebar);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .llm-choice:hover {
-  border-color: var(--border-active);
   background: var(--bg-card-hover);
-  transform: translateY(-1px);
+  border-color: rgba(238, 254, 255, 0.16);
 }
 
 .llm-choice.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: rgba(238, 254, 255, 0.25);
+  background: rgba(238, 254, 255, 0.07);
   color: var(--text-primary);
 }
 
@@ -177,7 +175,7 @@ kbd {
 }
 
 .kbd-btn:hover {
-  border-color: var(--border-active);
+  border-color: rgba(238, 254, 255, 0.2);
 }
 
 .kbd-btn.recording {
@@ -187,15 +185,15 @@ kbd {
 }
 
 .badge {
-  background: var(--accent-soft);
-  color: var(--accent);
-  padding: 6px 14px;
+  background: rgba(238, 254, 255, 0.08);
+  color: var(--text-primary);
+  padding: 5px 12px;
   border-radius: 9999px;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: none;
-  letter-spacing: 0.05em;
-  border: 1px solid rgba(170, 255, 212, 0.25);
+  letter-spacing: 0.03em;
+  border: 1px solid var(--border);
   width: fit-content;
 }
 
@@ -226,7 +224,7 @@ kbd {
 }
 
 .brutal-select:hover {
-  border-color: var(--border-active);
+  border-color: rgba(238, 254, 255, 0.2);
 }
 
 .brutal-select option {
@@ -242,8 +240,8 @@ kbd {
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 50px;
-  height: 28px;
+  width: 48px;
+  height: 26px;
   cursor: pointer;
 }
 
@@ -257,9 +255,9 @@ kbd {
   position: absolute;
   inset: 0;
   background: var(--bg-sidebar);
-  border: 1.5px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: 9999px;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .toggle-track::after {
@@ -267,16 +265,16 @@ kbd {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--text-muted);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease;
 }
 
 .toggle-switch input:checked + .toggle-track {
-  background: var(--accent-soft);
-  border-color: var(--border-active);
+  background: #252826;
+  border-color: rgba(238, 254, 255, 0.15);
 }
 
 .toggle-switch input:checked + .toggle-track::after {
@@ -359,16 +357,16 @@ kbd {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 18px 20px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  gap: 12px;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .model-family-card:hover {
-  border-color: rgba(238, 254, 255, 0.15);
   background: var(--bg-card-hover);
+  border-color: rgba(238, 254, 255, 0.14);
 }
 
 .model-family-header {
@@ -381,20 +379,20 @@ kbd {
 .model-family-identity {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
 }
 
 .model-provider-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   background: #ffffff;
-  padding: 6px;
+  padding: 5px;
   box-sizing: border-box;
 }
 
@@ -418,7 +416,7 @@ kbd {
 .model-family-title-wrap {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
@@ -429,7 +427,7 @@ kbd {
 }
 
 .model-family-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -442,17 +440,15 @@ kbd {
 
 .model-family-desc {
   font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
-/* Super clean minimal variant bar */
+/* Super clean minimal variant bar without hard divider */
 .model-variant-selector-wrapper {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
 }
 
 .model-variant-toolbar {
@@ -463,15 +459,6 @@ kbd {
   gap: 8px;
 }
 
-.model-variant-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-/* Match the exact clean .engine-toggle style */
 .model-variant-segmented-btn-group {
   display: inline-flex;
   gap: 3px;
@@ -502,7 +489,7 @@ kbd {
 
 .model-variant-btn.active {
   background: var(--bg-card);
-  color: var(--accent);
+  color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
@@ -513,7 +500,6 @@ kbd {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding-top: 2px;
 }
 
 .model-variant-meta {

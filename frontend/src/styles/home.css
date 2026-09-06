@@ -307,8 +307,7 @@
 }
 
 .stat-card:hover {
-  border-color: var(--border-active);
-  box-shadow: var(--shadow-glow);
+  background: var(--bg-card-hover);
 }
 
 .stat-card h3 {
@@ -346,7 +345,7 @@
 }
 
 .home-stat-card:hover {
-  border-color: var(--border-active);
+  background: var(--bg-card-hover);
   transform: translateY(-2px);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
