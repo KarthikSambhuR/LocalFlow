@@ -226,38 +226,97 @@ func CheckAndRunUninstall() {
 }
 
 func getInstallLocation() (string, error) {
+	// 1. Check HKLM
 	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.QUERY_VALUE)
-	if err != nil {
-		return "", err
+	if err == nil {
+		val, _, errVal := k.GetStringValue("InstallLocation")
+		k.Close()
+		if errVal == nil && val != "" {
+			return val, nil
+		}
 	}
-	defer k.Close()
 
-	val, _, err := k.GetStringValue("InstallLocation")
-	return val, err
+	// 2. Check HKCU
+	kUser, errUser := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.QUERY_VALUE)
+	if errUser == nil {
+		val, _, errVal := kUser.GetStringValue("InstallLocation")
+		kUser.Close()
+		if errVal == nil && val != "" {
+			return val, nil
+		}
+	}
+
+	// 3. Check default Program Files
+	defaultDir := `C:\Program Files\LocalFlow`
+	if _, errStat := os.Stat(filepath.Join(defaultDir, "LocalFlow.exe")); errStat == nil {
+		return defaultDir, nil
+	}
+
+	return "", fmt.Errorf("could not detect LocalFlow installation directory")
 }
 
 func CheckAndRunSilentUpdate() {
+	var targetDirOverride string
+	isSilentUpdate := false
+
 	for _, arg := range os.Args[1:] {
 		if arg == "--silent-update" {
-			err := PerformSilentUpdateDirect()
-			if err != nil {
-				os.Exit(1)
-			}
-			os.Exit(0)
+			isSilentUpdate = true
+		} else if strings.HasPrefix(arg, "--target-dir=") {
+			targetDirOverride = strings.Trim(strings.TrimPrefix(arg, "--target-dir="), `"`)
 		}
+	}
+
+	if isSilentUpdate {
+		err := PerformSilentUpdateDirect(targetDirOverride)
+		if err != nil {
+			showMessageBox("LocalFlow Update Error", fmt.Sprintf("Failed to apply update: %v", err), 0x00000010) // MB_ICONERROR
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 }
 
-func PerformSilentUpdateDirect() error {
-	// 1. Get install location from registry
-	targetDir, err := getInstallLocation()
-	if err != nil || targetDir == "" {
-		return fmt.Errorf("could not find install location: %w", err)
+func extractFileWithRetry(filePath string, file *zip.File) error {
+	var lastErr error
+	for attempt := 0; attempt < 8; attempt++ {
+		outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+		if err == nil {
+			inFile, errOpen := file.Open()
+			if errOpen != nil {
+				outFile.Close()
+				return fmt.Errorf("failed to open zip entry %s: %w", file.Name, errOpen)
+			}
+			_, copyErr := io.Copy(outFile, inFile)
+			inFile.Close()
+			outFile.Close()
+			if copyErr == nil {
+				return nil
+			}
+			lastErr = copyErr
+		} else {
+			lastErr = err
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("failed writing %s after retries: %w", filePath, lastErr)
+}
+
+func PerformSilentUpdateDirect(targetDirOverride string) error {
+	// 1. Resolve install location (prioritize explicit argument, then registry/default)
+	targetDir := targetDirOverride
+	if targetDir == "" {
+		var err error
+		targetDir, err = getInstallLocation()
+		if err != nil || targetDir == "" {
+			return fmt.Errorf("could not find install location: %w", err)
+		}
 	}
 
-	// 2. Terminate any running LocalFlow instances to free file locks
+	// 2. Terminate running LocalFlow and background helper processes to release file locks
 	_ = exec.Command("taskkill", "/f", "/im", "LocalFlow.exe").Run()
-	time.Sleep(1 * time.Second) // Wait for process locks to release
+	_ = exec.Command("taskkill", "/f", "/im", "llama-server.exe").Run()
+	time.Sleep(1500 * time.Millisecond) // Wait for process locks to release
 
 	// 3. Read embedded zip payload
 	payload, err := GetPayloadZip()
@@ -270,7 +329,7 @@ func PerformSilentUpdateDirect() error {
 		return err
 	}
 
-	// 4. Extract and overwrite files
+	// 4. Extract and overwrite files with retry handling for locked files
 	for _, file := range zipReader.File {
 		filePath := filepath.Join(targetDir, file.Name)
 		if file.FileInfo().IsDir() {
@@ -280,24 +339,13 @@ func PerformSilentUpdateDirect() error {
 
 		_ = os.MkdirAll(filepath.Dir(filePath), 0755)
 
-		outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
-		if err != nil {
-			return err
-		}
-
-		inFile, err := file.Open()
-		if err != nil {
-			outFile.Close()
-			return err
-		}
-
-		_, err = io.Copy(outFile, inFile)
-		inFile.Close()
-		outFile.Close()
-		if err != nil {
+		if err := extractFileWithRetry(filePath, file); err != nil {
 			return err
 		}
 	}
+
+	// Update registry display version if registered
+	_ = registerUninstaller(targetDir)
 
 	// 5. Clean up: delete the update installer and state file from TEMP
 	selfPath, _ := os.Executable()
@@ -562,7 +610,7 @@ func registerUninstaller(installDir string) error {
 	defer k.Close()
 
 	k.SetStringValue("DisplayName", "LocalFlow")
-	k.SetStringValue("DisplayVersion", "1.0.0")
+	k.SetStringValue("DisplayVersion", "1.3.0")
 	k.SetStringValue("Publisher", "KarthikSambhuR")
 	k.SetStringValue("UninstallString", fmt.Sprintf(`"%s" --uninstall`, filepath.Join(installDir, "uninstall.exe")))
 	k.SetStringValue("InstallLocation", installDir)

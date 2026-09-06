@@ -68,14 +68,13 @@ func main() {
 		}
 	}
 
-	// 1. Check if there is a pending update installer to apply
+	// Check and clean any leftover update installer in TEMP if running normally
 	updatePath := filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe")
 	if _, err := os.Stat(updatePath); err == nil {
-		// Launch the update in silent mode and exit
-		cmd := exec.Command(updatePath, "--silent-update")
-		if err := cmd.Start(); err == nil {
-			os.Exit(0)
-		}
+		// Clean up leftover downloaded installer from TEMP once the app is already up to date
+		_ = os.Remove(updatePath)
+		_ = os.Remove(filepath.Join(os.Getenv("TEMP"), "LocalFlowSetup-Update.exe.tmp"))
+		_ = os.Remove(filepath.Join(os.Getenv("TEMP"), "localflow_update_state.json"))
 	}
 
 	// Initialize database to check setup status

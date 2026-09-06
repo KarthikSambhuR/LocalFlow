@@ -80,18 +80,6 @@ func StartBackgroundUpdateCheck(ctx context.Context) {
 	// Wait a moment for the system to settle
 	time.Sleep(3 * time.Second)
 
-	// Check if update file already exists (previously downloaded completely)
-	if _, err := os.Stat(getTempUpdatePath()); err == nil {
-		state := readUpdateState()
-		if state.Status == "downloaded" {
-			wailsRuntime.EventsEmit(ctx, "update-downloaded")
-			return
-		}
-		writeUpdateState("downloaded", state.Version, 100)
-		wailsRuntime.EventsEmit(ctx, "update-downloaded")
-		return
-	}
-
 	url := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", GithubRepo)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -115,15 +103,35 @@ func StartBackgroundUpdateCheck(ctx context.Context) {
 		return
 	}
 
+	// If current version is already >= release version, clean any leftover downloaded update
 	if !isNewerVersion(AppVersion, release.TagName) {
 		writeUpdateState("idle", "", 0)
+		_ = os.Remove(getTempUpdatePath())
+		_ = os.Remove(getTempUpdateTmpPath())
 		return
 	}
 
-	// Find the installer asset
+	// If we already have the complete update installer for this exact version, signal downloaded
+	if _, err := os.Stat(getTempUpdatePath()); err == nil {
+		state := readUpdateState()
+		if state.Version == release.TagName && state.Status == "downloaded" {
+			wailsRuntime.EventsEmit(ctx, "update-downloaded")
+			return
+		}
+		if state.Version == release.TagName {
+			writeUpdateState("downloaded", release.TagName, 100)
+			wailsRuntime.EventsEmit(ctx, "update-downloaded")
+			return
+		}
+		// File belongs to a different or stale release, delete it
+		_ = os.Remove(getTempUpdatePath())
+	}
+
+	// Find the installer asset flexibly (e.g. LocalFlowSetup.exe, LocalFlow-Setup.exe, LocalFlow-amd64-installer.exe)
 	var downloadURL string
 	for _, asset := range release.Assets {
-		if strings.ToLower(asset.Name) == "localflowsetup.exe" {
+		name := strings.ToLower(asset.Name)
+		if strings.HasSuffix(name, ".exe") && (strings.Contains(name, "setup") || strings.Contains(name, "installer") || strings.Contains(name, "localflow")) {
 			downloadURL = asset.BrowserDownloadURL
 			break
 		}
@@ -226,13 +234,21 @@ func triggerInstallUpdateAndRestart() error {
 		return fmt.Errorf("update installer not found: %w", err)
 	}
 
+	currentExe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not resolve current executable path: %w", err)
+	}
+	currentDir := filepath.Dir(currentExe)
+
 	// Launch the installer with elevation via ShellExecuteW (runas verb triggers UAC prompt)
+	// Pass --silent-update and --target-dir so the installer updates the correct installation
 	shell32 := syscall.NewLazyDLL("shell32.dll")
 	shellExecuteW := shell32.NewProc("ShellExecuteW")
 
 	verb, _ := syscall.UTF16PtrFromString("runas")
 	file, _ := syscall.UTF16PtrFromString(updatePath)
-	args, _ := syscall.UTF16PtrFromString("--silent-update")
+	argStr := fmt.Sprintf(`--silent-update --target-dir="%s"`, currentDir)
+	args, _ := syscall.UTF16PtrFromString(argStr)
 	dir, _ := syscall.UTF16PtrFromString(filepath.Dir(updatePath))
 
 	ret, _, _ := shellExecuteW.Call(
