@@ -622,7 +622,7 @@ settingsModal.innerHTML = `
         </div>
 
         <!-- Section 1: Transliteration Tone & Phrasing Examples -->
-        <div class="personalization-card" id="manglishPanel">
+        <div class="personalization-card open" id="manglishPanel">
           <div class="personalization-card-header" id="manglishPanelHeader" role="button" tabindex="0" aria-expanded="true">
             <div class="personalization-card-title-group">
               <div class="personalization-card-badge">Style Guide</div>
@@ -638,7 +638,7 @@ settingsModal.innerHTML = `
             </div>
           </div>
 
-          <div class="personalization-card-body open" id="manglishPanelBody">
+          <div class="personalization-card-body" id="manglishPanelBody">
             <div class="examples-grid">
               
               <!-- Example 1 -->
