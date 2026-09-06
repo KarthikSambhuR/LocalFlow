@@ -227,24 +227,20 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-settings">
-      <div class="settings-grid-layout">
+    <div class="section" id="sec-settings">
+      <div class="settings-container">
         
-        <!-- AUDIO & INPUT CARD -->
-        <div class="settings-card">
-          <div class="settings-card-header">
-            <div class="settings-card-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
-            </div>
-            <div>
-              <div class="settings-card-title">Audio & Engine</div>
-              <div class="settings-card-subtitle">Microphone, acceleration engine, and volume</div>
-            </div>
+        <!-- AUDIO & ACCELERATION -->
+        <div class="settings-group-section">
+          <div class="settings-section-header">
+            <span class="settings-section-tag">Audio & Acceleration</span>
+            <p class="settings-section-desc">Configure audio input devices, processing engines, and mic gain</p>
           </div>
-          <div class="settings-card-body">
+          <div class="settings-card">
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Microphone</span>
-                <span class="setting-desc">Speech input device</span>
+                <span class="setting-desc">Speech input capture device</span>
               </div>
               <div class="custom-dropdown" id="micDropdown">
                 <button class="dropdown-trigger">
@@ -260,7 +256,7 @@ settingsModal.innerHTML = `
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Processing Engine</span>
-                <span class="setting-desc">Acceleration backend</span>
+                <span class="setting-desc">Acceleration backend for whisper & models</span>
               </div>
               <div class="engine-toggle" role="group" aria-label="Processing engine">
                 <button type="button" class="engine-option active" id="engineCpuBtn" data-engine="cpu">CPU</button>
@@ -271,7 +267,7 @@ settingsModal.innerHTML = `
             <div class="setting-row" id="gpuSelectionItem" style="display: none;">
               <div class="setting-info">
                 <span class="setting-title">Graphics Device</span>
-                <span class="setting-desc">Target GPU accelerator</span>
+                <span class="setting-desc">Target GPU accelerator for inference</span>
               </div>
               <div class="custom-dropdown" id="gpuDropdown">
                 <button class="dropdown-trigger">
@@ -287,7 +283,7 @@ settingsModal.innerHTML = `
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Playback Volume</span>
-                <span class="setting-desc">History audio level</span>
+                <span class="setting-desc">History audio preview volume multiplier</span>
               </div>
               <div style="display: flex; align-items: center; gap: 12px;">
                 <input type="range" id="ampSlider" min="1" max="10" step="0.5" value="1" class="brutal-slider" style="width: 120px;">
@@ -298,7 +294,7 @@ settingsModal.innerHTML = `
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Mic Gain Boost</span>
-                <span class="setting-desc">Pre-amplify quiet microphone input</span>
+                <span class="setting-desc">Pre-amplify quiet microphone recordings</span>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="boostToggle">
@@ -308,21 +304,16 @@ settingsModal.innerHTML = `
           </div>
         </div>
 
-        <!-- BILINGUAL ROUTING CARD -->
-        <div class="settings-card">
-          <div class="settings-card-header">
-            <div class="settings-card-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            </div>
-            <div>
-              <div class="settings-card-title">Bilingual Routing</div>
-              <div class="settings-card-subtitle">Auto-switch speech between English and Malayalam</div>
-            </div>
+        <!-- BILINGUAL ROUTING -->
+        <div class="settings-group-section">
+          <div class="settings-section-header">
+            <span class="settings-section-tag">Bilingual Routing</span>
+            <p class="settings-section-desc">Auto-detect speech and switch between English and Malayalam</p>
           </div>
-          <div class="settings-card-body">
+          <div class="settings-card">
             <div class="setting-row">
               <div class="setting-info">
-                <span class="setting-title">Automatic Routing</span>
+                <span class="setting-title">Automatic Language Routing</span>
                 <span class="setting-desc">Route speech to Whisper or Conformer based on detected language</span>
               </div>
               <label class="toggle-switch">
@@ -334,7 +325,7 @@ settingsModal.innerHTML = `
             <div class="setting-row bilingual-setting" id="bilingualWhisperModelSelection" style="display: none;">
               <div class="setting-info">
                 <span class="setting-title">English Model</span>
-                <span class="setting-desc">Selected model for English audio</span>
+                <span class="setting-desc">Active model for English speech</span>
               </div>
               <div class="custom-dropdown" id="bilingualWhisperDropdown">
                 <button class="dropdown-trigger">
@@ -349,7 +340,7 @@ settingsModal.innerHTML = `
             <div class="setting-row bilingual-setting" id="bilingualConformerModelSelection" style="display: none;">
               <div class="setting-info">
                 <span class="setting-title">Malayalam Model</span>
-                <span class="setting-desc">Selected model for Malayalam audio</span>
+                <span class="setting-desc">Active model for Malayalam speech</span>
               </div>
               <div class="custom-dropdown" id="bilingualConformerDropdown">
                 <button class="dropdown-trigger">
@@ -363,18 +354,13 @@ settingsModal.innerHTML = `
           </div>
         </div>
 
-        <!-- AI REFINEMENT CARD -->
-        <div class="settings-card full-width">
-          <div class="settings-card-header">
-            <div class="settings-card-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-            </div>
-            <div>
-              <div class="settings-card-title">AI Refinement & Intelligence</div>
-              <div class="settings-card-subtitle">Local LLM punctuation, grammar correction, and tone customization</div>
-            </div>
+        <!-- AI REFINEMENT & INTELLIGENCE -->
+        <div class="settings-group-section">
+          <div class="settings-section-header">
+            <span class="settings-section-tag">AI Refinement & Intelligence</span>
+            <p class="settings-section-desc">Local LLM punctuation, grammar correction, and tone customization</p>
           </div>
-          <div class="settings-card-body">
+          <div class="settings-card">
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Enable Refinement</span>
@@ -471,22 +457,17 @@ settingsModal.innerHTML = `
           </div>
         </div>
 
-        <!-- APP BEHAVIOR & KEYBIND CARD -->
-        <div class="settings-card">
-          <div class="settings-card-header">
-            <div class="settings-card-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M8 12h.001M12 12h.001M16 12h.001M7 16h10"/></svg>
-            </div>
-            <div>
-              <div class="settings-card-title">Trigger & Shortcuts</div>
-              <div class="settings-card-subtitle">Global dictation hotkeys and hardware buttons</div>
-            </div>
+        <!-- HOTKEYS & SYSTEM BEHAVIOR -->
+        <div class="settings-group-section">
+          <div class="settings-section-header">
+            <span class="settings-section-tag">Hotkeys & System</span>
+            <p class="settings-section-desc">Global triggers, system startup, and application theme</p>
           </div>
-          <div class="settings-card-body">
+          <div class="settings-card">
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Dictation Keybind</span>
-                <span class="setting-desc">Hold or press to dictate</span>
+                <span class="setting-desc">Hold or press shortcut to trigger speech dictation</span>
               </div>
               <button id="remapBtn" class="kbd-btn">
                 <kbd id="k1Label">Ctrl</kbd> <span class="kbd-plus">+</span> <kbd id="k2Label">Win</kbd>
@@ -496,32 +477,18 @@ settingsModal.innerHTML = `
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Dedicated Copilot Key</span>
-                <span class="setting-desc">Use Windows Copilot key as trigger</span>
+                <span class="setting-desc">Trigger dictation directly via Windows Copilot key</span>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="copilotKeyToggle">
                 <span class="toggle-track"></span>
               </label>
             </div>
-          </div>
-        </div>
 
-        <!-- SYSTEM & APPEARANCE CARD -->
-        <div class="settings-card">
-          <div class="settings-card-header">
-            <div class="settings-card-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
-            </div>
-            <div>
-              <div class="settings-card-title">System & Startup</div>
-              <div class="settings-card-subtitle">Startup behavior and application theme</div>
-            </div>
-          </div>
-          <div class="settings-card-body">
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Launch on Startup</span>
-                <span class="setting-desc">Auto-start with Windows</span>
+                <span class="setting-desc">Start LocalFlow automatically when Windows boots</span>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="startupToggle">
@@ -532,7 +499,7 @@ settingsModal.innerHTML = `
             <div class="setting-row" id="startMinimizedItem">
               <div class="setting-info">
                 <span class="setting-title">Start Minimized</span>
-                <span class="setting-desc">Launch directly to system tray</span>
+                <span class="setting-desc">Launch silently to the Windows system tray</span>
               </div>
               <label class="toggle-switch">
                 <input type="checkbox" id="startMinimizedToggle">
@@ -543,7 +510,7 @@ settingsModal.innerHTML = `
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Theme</span>
-                <span class="setting-desc">Interface appearance</span>
+                <span class="setting-desc">Interface appearance style</span>
               </div>
               <div class="custom-dropdown" id="themeDropdown">
                 <button class="dropdown-trigger">
@@ -559,18 +526,13 @@ settingsModal.innerHTML = `
           </div>
         </div>
 
-        <!-- STORAGE & RETENTION CARD -->
-        <div class="settings-card full-width">
-          <div class="settings-card-header">
-            <div class="settings-card-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-            </div>
-            <div>
-              <div class="settings-card-title">Storage & History Retention</div>
-              <div class="settings-card-subtitle">Manage audio cache files, transcripts, and storage location</div>
-            </div>
+        <!-- STORAGE & RETENTION -->
+        <div class="settings-group-section">
+          <div class="settings-section-header">
+            <span class="settings-section-tag">Storage & Retention</span>
+            <p class="settings-section-desc">Manage local audio recordings, history retention, and database cache</p>
           </div>
-          <div class="settings-card-body">
+          <div class="settings-card">
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Audio Retention</span>
