@@ -175,13 +175,17 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-models">
-      <div class="setting-group">
-        <label>Speech Recognition (STT)</label>
-        <div id="modelListWhisper"></div>
+      <div class="setting-group" id="groupDownloadedEnglish" style="margin-bottom: 24px;">
+        <label>English</label>
+        <div id="modelsDownloadedEnglish"></div>
       </div>
-      <div class="setting-group" style="margin-top: 28px;">
-        <label>AI Refinement & Normalization (LLM)</label>
-        <div id="modelListLLM"></div>
+      <div class="setting-group" id="groupDownloadedMulti" style="margin-bottom: 24px;">
+        <label>Multilingual</label>
+        <div id="modelsDownloadedMulti"></div>
+      </div>
+      <div class="setting-group" id="groupDownloadMore" style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
+        <label>Available to Download</label>
+        <div id="modelsAvailable"></div>
       </div>
     </div>
     <div class="section" id="sec-settings">
