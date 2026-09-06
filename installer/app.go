@@ -610,7 +610,7 @@ func registerUninstaller(installDir string) error {
 	defer k.Close()
 
 	k.SetStringValue("DisplayName", "LocalFlow")
-	k.SetStringValue("DisplayVersion", "1.3.0")
+	k.SetStringValue("DisplayVersion", "1.4.0")
 	k.SetStringValue("Publisher", "KarthikSambhuR")
 	k.SetStringValue("UninstallString", fmt.Sprintf(`"%s" --uninstall`, filepath.Join(installDir, "uninstall.exe")))
 	k.SetStringValue("InstallLocation", installDir)
