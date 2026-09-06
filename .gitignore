@@ -1,4 +1,6 @@
 build/bin
+build/New Folder/
+fonts/
 frontend/node_modules
 frontend/dist
 .gitignore
