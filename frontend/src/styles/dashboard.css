@@ -223,11 +223,11 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
   color: var(--text-secondary);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.2s ease;
@@ -237,16 +237,45 @@
   background: var(--bg-card-hover);
   color: var(--text-primary);
   border-color: var(--border);
+  transform: translateX(2px);
 }
 
 .nav-item.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--text-primary);
   border-color: var(--border-active);
-  box-shadow: var(--shadow-glow);
+  box-shadow: 0 2px 12px rgba(170, 255, 212, 0.08);
 }
 
-.nav-item svg { stroke-width: 2px; }
+.nav-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.nav-icon-badge svg {
+  width: 16px;
+  height: 16px;
+  stroke: #ffffff !important;
+  stroke-width: 2.2px;
+}
+
+.nav-icon-orange { background: linear-gradient(135deg, #FF6B4A, #FF4500); }
+.nav-icon-blue   { background: linear-gradient(135deg, #3B82F6, #1D4ED8); }
+.nav-icon-purple { background: linear-gradient(135deg, #A855F7, #7E22CE); }
+.nav-icon-pink   { background: linear-gradient(135deg, #EC4899, #BE185D); }
+.nav-icon-cyan   { background: linear-gradient(135deg, #06B6D4, #0891B2); }
+.nav-icon-emerald{ background: linear-gradient(135deg, #10B981, #059669); }
+
+.nav-item:hover .nav-icon-badge {
+  transform: scale(1.05);
+}
 
 .sidebar-footer {
   margin-top: auto;

@@ -648,111 +648,257 @@ export async function setupDataFolderSettings() {
   });
 }
 
+// SVG Provider Icons for Model Families
+const MODEL_FAMILY_ICONS = {
+  openai: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 0 0-8.2 15.7l1.7-.9A8 8 0 1 1 12 20v2a10 10 0 0 0 0-20z"/><circle cx="12" cy="12" r="4"/><path d="M12 8v4l3 3"/></svg>`,
+  indic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M3 12h18"/><circle cx="12" cy="12" r="4"/></svg>`,
+  google: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  superwhisper: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>`,
+  qwen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>`,
+  hf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`,
+  sarvam: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`
+};
+
+// Family Definitions that group models together
+const MODEL_FAMILIES_DEF = [
+  {
+    familyId: 'whisper',
+    type: 'whisper',
+    name: 'OpenAI Whisper',
+    provider: 'OpenAI',
+    iconKey: 'openai',
+    iconClass: 'provider-openai',
+    description: 'Gold-standard multilingual speech-to-text with various size and accuracy tradeoffs.',
+    variantMatcher: (m) => m.model_type === 'whisper' && m.id.startsWith('tiny') || m.id.startsWith('base') || m.id.startsWith('small') || m.id.startsWith('medium') || m.id.startsWith('large'),
+    variants: [
+      { label: 'Tiny (EN)', id: 'tiny' },
+      { label: 'Base (EN)', id: 'base' },
+      { label: 'Small (EN)', id: 'small' },
+      { label: 'Medium (EN)', id: 'medium' },
+      { label: 'Turbo (EN)', id: 'large-turbo' },
+      { label: 'Tiny (Multi)', id: 'tiny-multilingual' },
+      { label: 'Base (Multi)', id: 'base-multilingual' },
+      { label: 'Small (Multi)', id: 'small-multilingual' },
+    ]
+  },
+  {
+    familyId: 'indic-conformer',
+    type: 'whisper',
+    name: 'Indic Conformer',
+    provider: 'AI4Bharat',
+    iconKey: 'indic',
+    iconClass: 'provider-indic',
+    description: 'State-of-the-art Malayalam Conformer STT built on ONNX with fast inference.',
+    variantMatcher: (m) => m.id.startsWith('indic-conformer'),
+    variants: [
+      { label: '120M INT8 (Fast)', id: 'indic-conformer-120m-int8' },
+      { label: '120M FP32 (Full)', id: 'indic-conformer-120m-fp32' }
+    ]
+  },
+  {
+    familyId: 's1-mini',
+    type: 'llm',
+    name: 'S1-mini Normalizer',
+    provider: 'Superwhisper',
+    iconKey: 'superwhisper',
+    iconClass: 'provider-super',
+    description: 'Superwhisper 0.6B specialized text normalizer. Resolves self-corrections, removes filler words, and formats numbers.',
+    variantMatcher: (m) => m.id === 's1-mini',
+    variants: [
+      { label: '0.6B Q4_K_M', id: 's1-mini' }
+    ]
+  },
+  {
+    familyId: 'gemma4',
+    type: 'llm',
+    name: 'Gemma 4 E2B',
+    provider: 'Google',
+    iconKey: 'google',
+    iconClass: 'provider-google',
+    description: 'Google Gemma 4 E2B model for high-intelligence context preservation, reasoning, and grammar refinement.',
+    variantMatcher: (m) => m.id.startsWith('gemma4'),
+    variants: [
+      { label: 'E2B Refinement', id: 'gemma4-e2b' },
+      { label: 'Direct Audio STT', id: 'gemma4-e2b-audio' }
+    ]
+  },
+  {
+    familyId: 'qwen3',
+    type: 'llm',
+    name: 'Qwen 3 0.6B',
+    provider: 'Alibaba',
+    iconKey: 'qwen',
+    iconClass: 'provider-qwen',
+    description: 'Ultra-fast and lightweight LLM for real-time formatting, capitalization, and stutter removal.',
+    variantMatcher: (m) => m.id === 'qwen3-0.6b',
+    variants: [
+      { label: '0.6B Q4_K_XL', id: 'qwen3-0.6b' }
+    ]
+  },
+  {
+    familyId: 'smollm2',
+    type: 'llm',
+    name: 'SmolLM2 135M',
+    provider: 'HuggingFace',
+    iconKey: 'hf',
+    iconClass: 'provider-hf',
+    description: 'Extremely lightweight 135M model running on any CPU with zero lag for instant grammar fixes.',
+    variantMatcher: (m) => m.id === 'smollm2-135m',
+    variants: [
+      { label: '135M Q8_0', id: 'smollm2-135m' }
+    ]
+  },
+  {
+    familyId: 'sarvam',
+    type: 'llm',
+    name: 'Sarvam 1 3B',
+    provider: 'Sarvam AI',
+    iconKey: 'sarvam',
+    iconClass: 'provider-sarvam',
+    description: 'Bilingual English and Malayalam text refinement model optimized for Indic languages.',
+    variantMatcher: (m) => m.id === 'sarvam-1-3b',
+    variants: [
+      { label: '1 3B Q4_K_M', id: 'sarvam-1-3b' }
+    ]
+  }
+];
+
+// Track selected variant ID per family card in UI
+const selectedVariantPerFamily = {};
+
 export async function setupModelsSettings() {
   const modelListWhisper = document.getElementById('modelListWhisper');
   const modelListLLM = document.getElementById('modelListLLM');
   if (!modelListWhisper || !modelListLLM) return;
 
-  let whisperExpanded = false;
-  let llmExpanded = false;
-
   const renderModels = async () => {
     if (!window.go?.main?.SettingsApp) return;
     try {
       const allModels = await window.go.main.SettingsApp.GetModelsList() || [];
+      const modelMap = {};
+      allModels.forEach(m => { modelMap[m.id] = m; });
+
       modelListWhisper.innerHTML = '';
       modelListLLM.innerHTML = '';
-      modelListWhisper.className = 'model-list model-list-expanded';
-      modelListLLM.className = 'model-list model-list-expanded';
 
-      const renderPanel = (type, title, isExpanded, setExpanded) => {
-        const models = allModels.filter(m => m.model_type === type || (type === 'whisper' && !m.model_type));
-        const activeModel = models.find(m => m.is_active);
-        const downloadedModels = models.filter(m => m.is_downloaded);
-        const downloadedCount = downloadedModels.length;
+      const renderFamilyCard = (fam) => {
+        // Collect model instances for this family
+        const availableVariantModels = fam.variants.map(v => modelMap[v.id]).filter(Boolean);
+        if (availableVariantModels.length === 0) return null;
 
-        const panel = document.createElement('div');
-        panel.className = `models-panel ${isExpanded ? 'open' : ''}`;
-        panel.style.marginBottom = '20px';
-        panel.innerHTML = `
-          <button class="models-panel-header" type="button" aria-expanded="${isExpanded}">
-            <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(${isExpanded ? '90deg' : '0deg'});"><polyline points="9 18 15 12 9 6"/></svg>
-            <span class="models-panel-title">${title}</span>
-            <div class="models-panel-meta">
-              <span class="badge" style="font-size: 11px; padding: 4px 10px; text-transform: none; font-weight: 700; width: auto;">${activeModel ? activeModel.name : 'No model active'}</span>
-              <span class="badge ghost" style="font-size: 11px; padding: 4px 10px; text-transform: none; font-weight: 700; width: auto;">${downloadedCount}/${models.length} downloaded</span>
+        // Default selected variant: active one if any, or downloaded, or first
+        let selectedId = selectedVariantPerFamily[fam.familyId];
+        if (!selectedId || !modelMap[selectedId]) {
+          const activeM = availableVariantModels.find(m => m.is_active);
+          const dlM = availableVariantModels.find(m => m.is_downloaded);
+          selectedId = (activeM || dlM || availableVariantModels[0]).id;
+          selectedVariantPerFamily[fam.familyId] = selectedId;
+        }
+
+        const currentModel = modelMap[selectedId] || availableVariantModels[0];
+        const statusText = currentModel.is_active ? 'Active' : currentModel.is_disabled ? 'Unavailable' : currentModel.is_downloaded ? 'Downloaded' : 'Available';
+        const statusClass = currentModel.is_active ? 'active' : currentModel.is_disabled ? 'unavailable' : currentModel.is_downloaded ? 'downloaded' : 'available';
+
+        let actionHtml = '';
+        if (currentModel.is_downloading) {
+          actionHtml = `
+            <div class="model-progress-container" style="min-width: 140px;">
+              <div class="model-progress-bar-bg">
+                <div class="model-progress-bar-fill" id="bar-${currentModel.id}" style="width: ${currentModel.download_progress}%"></div>
+              </div>
+              <div class="model-progress-text" id="text-${currentModel.id}">Downloading... ${currentModel.download_progress}%</div>
             </div>
-          </button>
-          <div class="models-panel-body">
-            ${models.map(m => {
-              const statusText = m.is_active ? 'Active' : m.is_disabled ? 'Unavailable' : m.is_downloaded ? 'Downloaded' : 'Available';
-              const statusClass = m.is_active ? 'active' : m.is_disabled ? 'unavailable' : m.is_downloaded ? 'downloaded' : 'available';
-              let actionHtml = '';
-              if (m.is_downloading) {
-                actionHtml = `
-                  <div class="model-progress-container">
-                    <div class="model-progress-bar-bg">
-                      <div class="model-progress-bar-fill" id="bar-${m.id}" style="width: ${m.download_progress}%"></div>
-                    </div>
-                    <div class="model-progress-text" id="text-${m.id}">Downloading... ${m.download_progress}%</div>
-                  </div>
-                `;
-              } else if (m.is_downloaded) {
-                actionHtml = `
-                  ${m.is_active ? '' : `<button class="kbd-btn activate-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${m.id}">Activate</button>`}
-                  ${downloadedCount > 1 && !m.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${m.filename}">Delete</button>` : ''}
-                `;
-              } else {
-                actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${m.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${m.id}">Download</button>`;
-              }
+          `;
+        } else if (currentModel.is_downloaded) {
+          actionHtml = `
+            ${currentModel.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" ${currentModel.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${currentModel.id}">Activate</button>`}
+            ${!currentModel.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${currentModel.filename}">Delete</button>` : ''}
+          `;
+        } else {
+          actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${currentModel.is_disabled ? 'disabled' : ''} data-id="${currentModel.id}">Download</button>`;
+        }
 
-              return `
-                <div class="model-row ${m.is_disabled ? 'disabled' : ''}">
-                  <div class="model-row-main">
-                    <div class="model-name-line">
-                      <span class="model-name">${m.name}</span>
-                      <span class="model-status-pill ${statusClass}" ${m.is_disabled ? 'title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''}>${statusText}</span>
-                    </div>
-                    <div class="model-desc">${m.description}</div>
-                    <div class="model-row-specs">
-                      <span>${m.size_mb} MB</span>
-                      <span>${m.speed_label}</span>
-                      <span>${m.speed_description}</span>
-                    </div>
-                    <div class="model-filename">${m.filename}</div>
-                  </div>
-                  <div class="model-row-actions">
-                    ${actionHtml}
-                  </div>
+        const card = document.createElement('div');
+        card.className = 'model-family-card';
+        card.innerHTML = `
+          <div class="model-family-header">
+            <div class="model-family-identity">
+              <div class="model-provider-icon ${fam.iconClass}">
+                ${MODEL_FAMILY_ICONS[fam.iconKey] || ''}
+              </div>
+              <div class="model-family-title-wrap">
+                <div class="model-family-name-row">
+                  <span class="model-family-name">${fam.name}</span>
+                  <span class="model-family-provider-tag">${fam.provider}</span>
+                  <span class="model-status-pill ${statusClass}">${statusText}</span>
                 </div>
-              `;
-            }).join('')}
+                <div class="model-family-desc">${fam.description}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="model-variant-selector-wrapper">
+            <div class="model-variant-toolbar">
+              <span class="model-variant-label">Variants & Sizes</span>
+              <div class="model-variant-segmented-btn-group">
+                ${fam.variants.map(v => {
+                  const mInstance = modelMap[v.id];
+                  if (!mInstance) return '';
+                  const isSelected = v.id === currentModel.id;
+                  const isDl = mInstance.is_downloaded;
+                  const isActive = mInstance.is_active;
+                  const dotBadge = isActive ? ' • Active' : isDl ? ' • ✓' : '';
+                  return `
+                    <button type="button" class="model-variant-btn ${isSelected ? 'active' : ''}" data-family="${fam.familyId}" data-id="${v.id}">
+                      ${v.label}${dotBadge}
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+
+            <div class="model-variant-details-bar">
+              <div class="model-variant-meta">
+                <span class="model-variant-pill">${currentModel.size_mb} MB</span>
+                <span class="model-variant-pill">${currentModel.speed_label}</span>
+                <span class="model-variant-pill">${currentModel.speed_description}</span>
+                <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${currentModel.filename}</span>
+              </div>
+              <div class="model-variant-actions">
+                ${actionHtml}
+              </div>
+            </div>
           </div>
         `;
 
-        const header = panel.querySelector('.models-panel-header');
-        header.onclick = () => {
-          setExpanded(!isExpanded);
-          renderModels();
-        };
-
-        panel.querySelectorAll('.download-btn').forEach((downloadBtn) => {
-          downloadBtn.onclick = async (event) => {
-            event.stopPropagation();
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = 'Starting...';
-            await window.go.main.SettingsApp.DownloadModel(downloadBtn.dataset.id);
+        // Variant toggle buttons
+        card.querySelectorAll('.model-variant-btn').forEach(btn => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            selectedVariantPerFamily[fam.familyId] = btn.dataset.id;
             renderModels();
           };
         });
 
-        panel.querySelectorAll('.activate-btn').forEach((activateBtn) => {
-          activateBtn.onclick = async (event) => {
-            event.stopPropagation();
-            activateBtn.disabled = true;
-            activateBtn.textContent = 'Activating...';
+        // Download Action
+        card.querySelectorAll('.download-btn').forEach(btn => {
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+            await window.go.main.SettingsApp.DownloadModel(btn.dataset.id);
+            renderModels();
+          };
+        });
+
+        // Activate Action
+        card.querySelectorAll('.activate-btn').forEach(btn => {
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            btn.disabled = true;
+            btn.textContent = 'Activating...';
             try {
-              await window.go.main.SettingsApp.SetActiveModel(activateBtn.dataset.id);
+              await window.go.main.SettingsApp.SetActiveModel(btn.dataset.id);
               window.dispatchEvent(new CustomEvent('active-model-changed'));
             } catch (err) {
               alert(err);
@@ -761,19 +907,21 @@ export async function setupModelsSettings() {
           };
         });
 
-        panel.querySelectorAll('.delete-btn').forEach((deleteBtn) => {
-          deleteBtn.onclick = async (event) => {
-            event.stopPropagation();
-            const model = models.find(m => m.filename === deleteBtn.dataset.filename);
+        // Delete Action
+        card.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            const filename = btn.dataset.filename;
+            const m = allModels.find(x => x.filename === filename);
             showCustomConfirm({
               title: 'Delete Model',
-              message: `Are you sure you want to delete ${model?.name || 'this model'}?`,
+              message: `Are you sure you want to delete ${m?.name || 'this model'}?`,
               confirmText: 'Delete',
               onConfirm: async () => {
-                deleteBtn.disabled = true;
-                deleteBtn.textContent = 'Deleting...';
+                btn.disabled = true;
+                btn.textContent = 'Deleting...';
                 try {
-                  await window.go.main.SettingsApp.DeleteModel(deleteBtn.dataset.filename);
+                  await window.go.main.SettingsApp.DeleteModel(filename);
                 } catch (err) {
                   alert(err);
                 }
@@ -783,15 +931,22 @@ export async function setupModelsSettings() {
           };
         });
 
-        if (type === 'whisper') {
-          modelListWhisper.appendChild(panel);
-        } else {
-          modelListLLM.appendChild(panel);
-        }
+        return card;
       };
 
-      renderPanel('whisper', 'Speech Recognition Models', whisperExpanded, (val) => whisperExpanded = val);
-      renderPanel('llm', 'Grammar & Formatting Models', llmExpanded, (val) => llmExpanded = val);
+      // Render Speech Recognition Families into modelListWhisper
+      const whisperFamilies = MODEL_FAMILIES_DEF.filter(f => f.type === 'whisper');
+      whisperFamilies.forEach(fam => {
+        const card = renderFamilyCard(fam);
+        if (card) modelListWhisper.appendChild(card);
+      });
+
+      // Render LLM Refinement Families into modelListLLM
+      const llmFamilies = MODEL_FAMILIES_DEF.filter(f => f.type === 'llm');
+      llmFamilies.forEach(fam => {
+        const card = renderFamilyCard(fam);
+        if (card) modelListLLM.appendChild(card);
+      });
 
     } catch (err) {
       console.error(err);
