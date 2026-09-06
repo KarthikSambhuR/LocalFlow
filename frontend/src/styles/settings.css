@@ -626,7 +626,7 @@ kbd {
 }
 
 .model-variant-btn {
-  padding: 5px 12px;
+  padding: 6px 14px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -635,18 +635,21 @@ kbd {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
 }
 
 .model-variant-btn:hover {
   color: var(--text-primary);
+  background: rgba(238, 254, 255, 0.04);
 }
 
 .model-variant-btn.active {
   background: var(--bg-card);
   color: var(--text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Minimal specs row */
@@ -665,6 +668,7 @@ kbd {
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--text-muted);
+  transition: opacity 0.18s ease;
 }
 
 .model-variant-meta span:not(:last-child)::after {

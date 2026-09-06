@@ -900,7 +900,7 @@ export async function setupModelsSettings() {
           layer2Html = `
             <div class="model-variant-selector-row">
               ${isMultiLayer ? `<span class="model-variant-selector-label">Size</span>` : ''}
-              <div class="model-variant-segmented-btn-group">
+              <div class="model-variant-segmented-btn-group layer2-btn-group">
                 ${visibleVariants.map(v => {
                   const isSelected = v.id === currentModel.id;
                   const mInstance = modelMap[v.id];
@@ -956,13 +956,165 @@ export async function setupModelsSettings() {
           </div>
         `;
 
+        // Update card content in-place without tearing down DOM
+        const updateCardView = () => {
+          // Re-calculate visible variants for currentSubCat
+          let vis = relevantVariants;
+          if (isMultiLayer) {
+            if (currentSubCat === 'en') {
+              vis = relevantVariants.filter(v => v.id.includes('.en') || v.label.includes('(EN)'));
+            } else {
+              vis = relevantVariants.filter(v => v.id.includes('multilingual') || v.id.includes('multi') || v.label.includes('(Multi)') || v.id.includes('indic') || v.id.includes('sarvam'));
+            }
+            if (vis.length === 0) vis = relevantVariants;
+          }
+
+          // Active variant
+          let selId = selectedVariantPerFamily[fam.familyId + '_' + mode];
+          if (!selId || !vis.some(v => v.id === selId)) {
+            const activeM = vis.find(v => modelMap[v.id]?.is_active);
+            selId = (activeM || vis[0]).id;
+            selectedVariantPerFamily[fam.familyId + '_' + mode] = selId;
+          }
+
+          const model = modelMap[selId] || modelMap[vis[0].id];
+          if (!model) return;
+
+          // Update pill
+          const pill = card.querySelector('.model-status-pill');
+          if (pill) {
+            const sText = model.is_active ? 'Active' : model.is_disabled ? 'Unavailable' : model.is_downloaded ? 'Downloaded' : 'Available';
+            const sClass = model.is_active ? 'active' : model.is_disabled ? 'unavailable' : model.is_downloaded ? 'downloaded' : 'available';
+            pill.className = `model-status-pill ${sClass}`;
+            pill.textContent = sText;
+          }
+
+          // Update Layer 1 buttons active state
+          card.querySelectorAll('.model-variant-btn[data-cat]').forEach(b => {
+            b.classList.toggle('active', b.dataset.cat === currentSubCat);
+          });
+
+          // Update Layer 2 buttons: if options changed, re-render Layer 2
+          const layer2Group = card.querySelector('.layer2-btn-group');
+          if (layer2Group) {
+            layer2Group.innerHTML = vis.map(v => {
+              const isSelected = v.id === model.id;
+              const mInstance = modelMap[v.id];
+              const isActive = mInstance?.is_active;
+              const dotBadge = mode === 'downloaded' && isActive ? ' • Active' : '';
+              const cleanLabel = isMultiLayer ? v.label.replace(/\s*\((EN|Multi)\)/i, '') : v.label;
+              return `
+                <button type="button" class="model-variant-btn ${isSelected ? 'active' : ''}" data-id="${v.id}">
+                  ${cleanLabel}${dotBadge}
+                </button>
+              `;
+            }).join('');
+
+            layer2Group.querySelectorAll('.model-variant-btn[data-id]').forEach(btn => {
+              btn.onclick = (e) => {
+                e.stopPropagation();
+                selectedVariantPerFamily[fam.familyId + '_' + mode] = btn.dataset.id;
+                updateCardView();
+              };
+            });
+          }
+
+          // Update details bar meta
+          const metaContainer = card.querySelector('.model-variant-meta');
+          if (metaContainer) {
+            metaContainer.style.opacity = '0.5';
+            metaContainer.innerHTML = `
+              <span class="model-variant-pill">${model.size_mb} MB</span>
+              <span class="model-variant-pill">${model.speed_label}</span>
+              <span class="model-variant-pill">${model.speed_description}</span>
+              <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${model.filename}</span>
+            `;
+            requestAnimationFrame(() => { metaContainer.style.opacity = '1'; });
+          }
+
+          // Update actions
+          const actionsContainer = card.querySelector('.model-variant-actions');
+          if (actionsContainer) {
+            let actHtml = '';
+            if (model.is_downloading) {
+              actHtml = `
+                <div class="model-progress-container" style="min-width: 140px;">
+                  <div class="model-progress-bar-bg">
+                    <div class="model-progress-bar-fill" id="bar-${model.id}" style="width: ${model.download_progress}%"></div>
+                  </div>
+                  <div class="model-progress-text" id="text-${model.id}">Downloading... ${model.download_progress}%</div>
+                </div>
+              `;
+            } else if (model.is_downloaded) {
+              actHtml = `
+                ${model.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" ${model.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${model.id}">Activate</button>`}
+                ${!model.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${model.filename}">Delete</button>` : ''}
+              `;
+            } else {
+              actHtml = `<button class="kbd-btn download-btn model-action-btn" ${model.is_disabled ? 'disabled' : ''} data-id="${model.id}">Download</button>`;
+            }
+            actionsContainer.innerHTML = actHtml;
+            bindActionButtons();
+          }
+        };
+
+        const bindActionButtons = () => {
+          card.querySelectorAll('.download-btn').forEach(btn => {
+            btn.onclick = async (e) => {
+              e.stopPropagation();
+              btn.disabled = true;
+              btn.textContent = 'Starting...';
+              await window.go.main.SettingsApp.DownloadModel(btn.dataset.id);
+              renderModels();
+            };
+          });
+
+          card.querySelectorAll('.activate-btn').forEach(btn => {
+            btn.onclick = async (e) => {
+              e.stopPropagation();
+              btn.disabled = true;
+              btn.textContent = 'Activating...';
+              try {
+                await window.go.main.SettingsApp.SetActiveModel(btn.dataset.id);
+                window.dispatchEvent(new CustomEvent('active-model-changed'));
+              } catch (err) {
+                alert(err);
+              }
+              renderModels();
+            };
+          });
+
+          card.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.onclick = async (e) => {
+              e.stopPropagation();
+              const filename = btn.dataset.filename;
+              showCustomConfirm({
+                title: 'Delete Model',
+                message: `Are you sure you want to delete this model?`,
+                confirmText: 'Delete',
+                onConfirm: async () => {
+                  btn.disabled = true;
+                  btn.textContent = 'Deleting...';
+                  try {
+                    await window.go.main.SettingsApp.DeleteModel(filename);
+                  } catch (err) {
+                    alert(err);
+                  }
+                  renderModels();
+                }
+              });
+            };
+          });
+        };
+
         // Sub-category layer click handler
         card.querySelectorAll('.model-variant-btn[data-cat]').forEach(btn => {
           btn.onclick = (e) => {
             e.stopPropagation();
-            selectedSubCategoryPerFamily[fam.familyId + '_' + mode] = btn.dataset.cat;
+            currentSubCat = btn.dataset.cat;
+            selectedSubCategoryPerFamily[fam.familyId + '_' + mode] = currentSubCat;
             delete selectedVariantPerFamily[fam.familyId + '_' + mode];
-            renderModels();
+            updateCardView();
           };
         });
 
@@ -971,59 +1123,11 @@ export async function setupModelsSettings() {
           btn.onclick = (e) => {
             e.stopPropagation();
             selectedVariantPerFamily[fam.familyId + '_' + mode] = btn.dataset.id;
-            renderModels();
+            updateCardView();
           };
         });
 
-        // Download action
-        card.querySelectorAll('.download-btn').forEach(btn => {
-          btn.onclick = async (e) => {
-            e.stopPropagation();
-            btn.disabled = true;
-            btn.textContent = 'Starting...';
-            await window.go.main.SettingsApp.DownloadModel(btn.dataset.id);
-            renderModels();
-          };
-        });
-
-        // Activate action
-        card.querySelectorAll('.activate-btn').forEach(btn => {
-          btn.onclick = async (e) => {
-            e.stopPropagation();
-            btn.disabled = true;
-            btn.textContent = 'Activating...';
-            try {
-              await window.go.main.SettingsApp.SetActiveModel(btn.dataset.id);
-              window.dispatchEvent(new CustomEvent('active-model-changed'));
-            } catch (err) {
-              alert(err);
-            }
-            renderModels();
-          };
-        });
-
-        // Delete action
-        card.querySelectorAll('.delete-btn').forEach(btn => {
-          btn.onclick = async (e) => {
-            e.stopPropagation();
-            const filename = btn.dataset.filename;
-            showCustomConfirm({
-              title: 'Delete Model',
-              message: `Are you sure you want to delete ${currentModel.name}?`,
-              confirmText: 'Delete',
-              onConfirm: async () => {
-                btn.disabled = true;
-                btn.textContent = 'Deleting...';
-                try {
-                  await window.go.main.SettingsApp.DeleteModel(filename);
-                } catch (err) {
-                  alert(err);
-                }
-                renderModels();
-              }
-            });
-          };
-        });
+        bindActionButtons();
 
         return card;
       };
