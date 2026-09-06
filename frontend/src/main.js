@@ -121,6 +121,8 @@ function switchSection(target) {
     setupDictionary();
   } else if (target === 'manglish') {
     setupManglishPersonalization();
+  } else if (target === 'models') {
+    setupModelsSettings();
   }
 }
 

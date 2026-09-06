@@ -384,9 +384,9 @@ kbd {
 }
 
 .model-provider-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -394,6 +394,7 @@ kbd {
   background: #ffffff;
   padding: 5px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .brand-logo-img {
@@ -403,14 +404,19 @@ kbd {
   display: block;
 }
 
-/* For vector logos, keep a clean background */
-.provider-google,
-.provider-super,
-.provider-qwen,
-.provider-hf,
-.provider-sarvam {
+.provider-google {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
+}
+
+.provider-super {
+  background: #000000;
+  padding: 2px;
+}
+
+.provider-sarvam {
+  background: #ffffff;
+  padding: 2px;
 }
 
 .model-family-title-wrap {
