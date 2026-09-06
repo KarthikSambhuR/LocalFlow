@@ -73,7 +73,7 @@
 }
 
 .settings-card:hover {
-  border-color: rgba(238, 254, 255, 0.12);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 
 .settings-card-icon {
@@ -223,23 +223,22 @@
 .llm-choice {
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 12px;
-  background: var(--bg-sidebar);
+  background: rgba(238, 254, 255, 0.03);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .llm-choice:hover {
-  background: var(--bg-card-hover);
-  border-color: rgba(238, 254, 255, 0.16);
+  background: rgba(238, 254, 255, 0.06);
+  color: var(--text-primary);
 }
 
 .llm-choice.active {
-  border-color: rgba(238, 254, 255, 0.25);
-  background: rgba(238, 254, 255, 0.07);
+  background: rgba(238, 254, 255, 0.1);
   color: var(--text-primary);
 }
 
@@ -299,9 +298,9 @@ kbd {
 }
 
 .kbd-btn {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border);
-  padding: 8px 16px;
+  background: rgba(238, 254, 255, 0.05);
+  border: none;
+  padding: 8px 18px;
   border-radius: 9999px;
   display: flex;
   align-items: center;
@@ -312,17 +311,17 @@ kbd {
 }
 
 .kbd-btn:hover {
-  border-color: rgba(238, 254, 255, 0.2);
+  background: rgba(238, 254, 255, 0.1);
 }
 
 .kbd-btn.recording {
   background: var(--accent-soft);
-  border-color: var(--accent);
+  color: var(--accent);
   animation: pulse-border 1.5s infinite;
 }
 
 .badge {
-  background: rgba(238, 254, 255, 0.08);
+  background: rgba(238, 254, 255, 0.06);
   color: var(--text-primary);
   padding: 5px 12px;
   border-radius: 9999px;
@@ -330,14 +329,14 @@ kbd {
   font-weight: 700;
   text-transform: none;
   letter-spacing: 0.03em;
-  border: 1px solid var(--border);
+  border: none;
   width: fit-content;
 }
 
 .badge.ghost {
-  background: var(--bg-sidebar);
-  color: var(--text-primary);
-  border-color: var(--border);
+  background: rgba(238, 254, 255, 0.03);
+  color: var(--text-muted);
+  border: none;
 }
 
 .brutal-select {
@@ -425,7 +424,7 @@ kbd {
   gap: 4px;
   padding: 4px;
   background: var(--bg-sidebar);
-  border: 1.5px solid var(--border);
+  border: none;
   border-radius: 8px;
 }
 
@@ -621,7 +620,7 @@ kbd {
   gap: 3px;
   padding: 3px;
   background: var(--bg-sidebar);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 8px;
   flex-wrap: wrap;
 }
@@ -774,8 +773,8 @@ kbd {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: rgba(238, 254, 255, 0.06);
-  border: 1px solid var(--border);
+  background: rgba(238, 254, 255, 0.05);
+  border: none;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 800;
@@ -836,18 +835,17 @@ kbd {
 
 .example-box {
   background: var(--bg-sidebar);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 14px;
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: background 0.2s ease;
 }
 
 .example-box:hover {
-  border-color: rgba(238, 254, 255, 0.15);
-  background: rgba(238, 254, 255, 0.02);
+  background: rgba(238, 254, 255, 0.03);
 }
 
 .example-box-header {
@@ -916,19 +914,19 @@ kbd {
   align-items: center;
   gap: 8px;
   padding: 10px 22px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
+  background: var(--accent);
+  color: #090909;
+  border: none;
+  border-radius: 9999px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .personalization-save-btn:hover:not(:disabled) {
-  background: var(--accent);
-  color: #090909;
+  opacity: 0.92;
+  transform: translateY(-1px);
 }
 
 /* Word-Level Mapping Bar */
@@ -937,7 +935,7 @@ kbd {
   align-items: flex-end;
   gap: 12px;
   background: var(--bg-sidebar);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 14px;
   padding: 16px 18px;
 }
@@ -971,13 +969,13 @@ kbd {
   align-items: center;
   gap: 6px;
   height: 42px;
-  padding: 0 20px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
+  padding: 0 22px;
+  background: var(--accent);
+  color: #090909;
+  border: none;
+  border-radius: 9999px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s ease;
@@ -985,8 +983,8 @@ kbd {
 }
 
 .personalization-add-btn:hover {
-  background: var(--accent);
-  color: #090909;
+  opacity: 0.92;
+  transform: translateY(-1px);
 }
 
 /* Mappings List Container */
@@ -994,15 +992,15 @@ kbd {
   display: flex;
   flex-direction: column;
   background: var(--bg-sidebar);
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 14px;
   overflow: hidden;
 }
 
 .mappings-list-header {
   padding: 12px 18px;
-  background: rgba(238, 254, 255, 0.03);
-  border-bottom: 1px solid var(--border);
+  background: rgba(238, 254, 255, 0.02);
+  border-bottom: 1px solid rgba(238, 254, 255, 0.03);
   font-size: 12px;
   font-weight: 700;
   color: var(--text-secondary);
@@ -1030,8 +1028,8 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: rgba(238, 254, 255, 0.05);
+  border: none;
   padding: 6px 14px;
   border-radius: 9999px;
   font-size: 13.5px;
@@ -1042,8 +1040,7 @@ kbd {
 }
 
 .dict-chip:hover {
-  background: var(--bg-card-hover);
-  border-color: rgba(238, 254, 255, 0.2);
+  background: rgba(238, 254, 255, 0.1);
   transform: translateY(-1px);
 }
 
