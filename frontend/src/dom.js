@@ -227,7 +227,6 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-settings">
-    <div class="section" id="sec-settings">
       <div class="settings-container">
         
         <!-- AUDIO & ACCELERATION -->
