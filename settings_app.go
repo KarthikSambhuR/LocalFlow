@@ -463,6 +463,18 @@ var AvailableModels = []WhisperModelInfo{
 		ModelType:        "llm",
 	},
 	{
+		ID:               "s1-mini",
+		Name:             "S1-mini (Superwhisper Normalizer)",
+		Filename:         "s1-mini-q4_k_m.gguf",
+		URL:              "https://huggingface.co/superwhisper/s1-mini-GGUF/resolve/main/s1-mini-q4_k_m.gguf?download=true",
+		SizeMB:           462,
+		SpeedLabel:       "Specialized ASR Normalizer",
+		SpeedDescription: "94.8% token accuracy text normalizer built specifically for dictation",
+		Description:      "A specialized 0.6B model by Superwhisper for cleaning speech-to-text transcripts, resolving self-corrections, removing fillers, and formatting dates/numbers/punctuation.",
+		Language:         "english",
+		ModelType:        "llm",
+	},
+	{
 		ID:               "qwen3-0.6b",
 		Name:             "Qwen 3 0.6B (Refinement)",
 		Filename:         "Qwen3-0.6B-UD-Q4_K_XL.gguf",

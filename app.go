@@ -1506,24 +1506,60 @@ If any word is not correctly transcribed, fix it based on the context of the ent
 Return only the polished transcript. Do not include the <transcription_text> or </transcription_text> tags in your output. Do not include explanations, labels, quotation marks, conversational filler like "Sure", markdown fences, or commentary.`
 }
 
+func buildS1MiniPrompt(rawText string, mode string, tone string) (systemPrompt string, userContent string) {
+	systemPrompt = "You are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text."
+
+	// Map refinement strength to S1-mini Styling: minimal -> casual, low -> semi-casual, medium -> semi-formal, high -> formal
+	styling := "semi-formal"
+	switch normalizeLLMRefinementMode(mode) {
+	case "minimal":
+		styling = "casual"
+	case "low":
+		styling = "semi-casual"
+	case "medium":
+		styling = "semi-formal"
+	case "high":
+		styling = "formal"
+	}
+
+	structure := "prose"
+	context := "general"
+
+	userContent = fmt.Sprintf("[Styling: %s] [Structure: %s] [Context: %s]\n%s", styling, structure, context, strings.TrimSpace(rawText))
+	return systemPrompt, userContent
+}
+
 func refineTextWithLLM(text string, serverUrl string, systemPrompt string, enableThinking bool) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return "", fmt.Errorf("cannot refine empty text")
 	}
 
-	wrappedText := fmt.Sprintf("<transcription_text>\n%s\n</transcription_text>", text)
+	cfg := loadConfig()
+	isS1Mini := cfg.LLMActiveModel == "s1-mini-q4_k_m.gguf"
+
+	var userMsg string
+	var sysMsg string
+	temp := float32(0.1)
+
+	if isS1Mini {
+		sysMsg, userMsg = buildS1MiniPrompt(text, cfg.LLMRefinementMode, cfg.LLMTone)
+		temp = 0.0 // S1-mini requires greedy decoding
+	} else {
+		sysMsg = systemPrompt
+		userMsg = fmt.Sprintf("<transcription_text>\n%s\n</transcription_text>", text)
+	}
 
 	reqBody := LLMRequest{
 		Model: "local-model",
 		Messages: []LLMMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: wrappedText},
+			{Role: "system", Content: sysMsg},
+			{Role: "user", Content: userMsg},
 		},
-		Temperature: 0.1,
+		Temperature: temp,
 		MaxTokens:   2048,
 		ChatTemplateKwargs: map[string]any{
-			"enable_thinking": enableThinking,
+			"enable_thinking": enableThinking && !isS1Mini,
 		},
 	}
 
