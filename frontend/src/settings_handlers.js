@@ -1311,24 +1311,24 @@ export async function setupDictionary() {
 
     container.innerHTML = '';
     if (words.length === 0) {
-      container.innerHTML = '<div style="padding: 20px; text-align: center; font-size: 13px; color: var(--text-muted); font-style: italic;">No custom vocabulary added yet. Add some above!</div>';
+      container.innerHTML = '<div style="padding: 24px; text-align: center; font-size: 13px; color: var(--text-muted); font-style: italic; width: 100%;">No custom vocabulary added yet. Type a term above to teach Whisper!</div>';
       return;
     }
     words.forEach(word => {
-      const row = document.createElement('div');
-      row.className = 'dict-row-item';
-      row.innerHTML = `
-        <span class="dict-word-text">${escapeHtml(word)}</span>
-        <button class="dict-row-delete-btn" title="Delete word">
+      const chip = document.createElement('div');
+      chip.className = 'dict-chip';
+      chip.innerHTML = `
+        <span class="dict-chip-text" title="${escapeHtml(word)}">${escapeHtml(word)}</span>
+        <button class="dict-chip-delete-btn" title="Remove keyword">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
-      row.querySelector('.dict-row-delete-btn').onclick = async (e) => {
+      chip.querySelector('.dict-chip-delete-btn').onclick = async (e) => {
         e.stopPropagation();
         await window.go.main.SettingsApp.DeleteDictionaryWord(word);
         loadWords();
       };
-      container.appendChild(row);
+      container.appendChild(chip);
     });
   };
 

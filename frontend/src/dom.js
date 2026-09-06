@@ -194,8 +194,8 @@ settingsModal.innerHTML = `
               <div class="mappings-list-header">
                 <span>Active Vocabulary</span>
               </div>
-              <div id="dictWordsList" class="mappings-list-body">
-                <!-- Words listed as row items with delete button -->
+              <div id="dictWordsList" class="dict-chips-grid">
+                <!-- Words listed as interactive pill chips -->
               </div>
             </div>
           </div>

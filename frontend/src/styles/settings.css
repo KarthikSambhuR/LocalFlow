@@ -1000,6 +1000,71 @@ kbd {
   overflow-y: auto;
 }
 
+/* Dictionary Chip Grid / Word Cloud */
+.dict-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 18px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.dict-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.dict-chip:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(238, 254, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.dict-chip-text {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dict-chip-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(238, 254, 255, 0.08);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+  transition: all 0.15s ease;
+}
+
+.dict-chip-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  transform: scale(1.15);
+}
+
+.dict-chip-delete-btn svg {
+  width: 10px;
+  height: 10px;
+}
+
 @media (max-width: 768px) {
   .mapping-creator-bar {
     flex-direction: column;
@@ -1015,3 +1080,4 @@ kbd {
     gap: 12px;
   }
 }
+
