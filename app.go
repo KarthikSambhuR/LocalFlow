@@ -306,7 +306,14 @@ func (a *App) listenToKeyboard() {
 				isRecording = false
 				acceptingUntil = time.Time{}
 				a.audioBuffer = nil
+				a.streamingActive = false
 				a.mutex.Unlock()
+
+				if wasRecording && device != nil {
+					if err := device.Stop(); err != nil {
+						fmt.Println("Error stopping audio device on cancel:", err)
+					}
+				}
 
 				lCtrlPressed = false
 				lWinPressed = false
@@ -464,7 +471,7 @@ func (a *App) listenToKeyboard() {
 } // close func
 
 func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyEvent {
-	events := make(chan keyEvent, 32)
+	events := make(chan keyEvent, 256)
 	pressed := make(map[uint16]bool)
 	var winDown bool
 	var winOwned bool
