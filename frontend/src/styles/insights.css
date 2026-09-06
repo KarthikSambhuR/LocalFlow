@@ -178,7 +178,7 @@
   white-space: nowrap;
   z-index: 1000;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Urbanist', sans-serif;
 }
 
 .custom-tooltip.visible {

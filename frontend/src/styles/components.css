@@ -115,7 +115,7 @@
 }
 
 .empty-state h4 {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-size: 18px;
   font-weight: 800;
   color: var(--text-primary);
@@ -240,7 +240,7 @@
 }
 
 .model-name {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-weight: 700;
   font-size: 16px;
   color: var(--text-primary);
@@ -298,7 +298,7 @@
 
 .model-filename {
   color: var(--text-muted);
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -376,7 +376,7 @@
 .model-progress-text {
   font-size: 11px;
   color: var(--text-muted);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Urbanist', sans-serif;
 }
 
 .model-buttons {
@@ -424,7 +424,7 @@
 }
 
 .onboarding-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-size: 30px;
   font-weight: 800;
   color: var(--text-primary);
@@ -466,7 +466,7 @@
 .onboarding-progress-status {
   font-size: 11px;
   color: var(--text-muted);
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-weight: 600;
 }
 
@@ -485,7 +485,7 @@
   padding: 14px 24px;
   color: var(--text-primary);
   font-size: 15px;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   outline: none;
   transition: all 0.2s ease;
   text-align: center;
@@ -502,7 +502,7 @@
   border: none;
   border-radius: 9999px;
   padding: 14px 28px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-weight: 800;
   font-size: 15px;
   cursor: pointer;
@@ -559,7 +559,7 @@
   padding: 10px 14px;
   color: var(--text-primary);
   font-size: 13px;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   outline: none;
   transition: all 0.2s ease;
 }
@@ -576,7 +576,7 @@
   padding: 10px 14px;
   color: var(--text-primary);
   font-size: 13px;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   outline: none;
   transition: all 0.2s ease;
 }

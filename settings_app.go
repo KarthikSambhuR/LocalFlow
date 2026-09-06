@@ -1087,21 +1087,12 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 		_ = os.MkdirAll(fontsDir, 0755)
 		_ = os.MkdirAll(modelsDir, 0755)
 
-		// 1. Download Poppins Regular Font
-		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 0, "Downloading Poppins Regular font...")
-		poppinsRegularURL := "https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Regular.ttf"
-		poppinsRegularPath := filepath.Join(fontsDir, "Poppins-Regular.ttf")
-		if err := downloadFileDirect(poppinsRegularURL, poppinsRegularPath); err != nil {
-			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download Poppins Regular font: %v", err))
-			return
-		}
-
-		// 2. Download Poppins Bold Font
-		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 10, "Downloading Poppins Bold font...")
-		poppinsBoldURL := "https://github.com/google/fonts/raw/main/ofl/poppins/Poppins-Bold.ttf"
-		poppinsBoldPath := filepath.Join(fontsDir, "Poppins-Bold.ttf")
-		if err := downloadFileDirect(poppinsBoldURL, poppinsBoldPath); err != nil {
-			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download Poppins Bold font: %v", err))
+		// 1. Download Urbanist Variable Font
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 0, "Downloading Urbanist font...")
+		urbanistURL := "https://raw.githubusercontent.com/google/fonts/main/ofl/urbanist/Urbanist%5Bwght%5D.ttf"
+		urbanistPath := filepath.Join(fontsDir, "Urbanist-Variable.ttf")
+		if err := downloadFileDirect(urbanistURL, urbanistPath); err != nil {
+			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download Urbanist font: %v", err))
 			return
 		}
 
