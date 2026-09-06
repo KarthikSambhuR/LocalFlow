@@ -1822,7 +1822,8 @@ func (a *App) startLLMServer(cfg Config) {
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
 		"-c", fmt.Sprintf("%d", cfg.LLMContextSize),
-		"--chat-template-kwargs", `{"enable_thinking": false}`,
+		"--reasoning", "off",
+		"--jinja",
 	}
 
 	// Load mmproj if exists
@@ -1840,12 +1841,25 @@ func (a *App) startLLMServer(cfg Config) {
 		CreationFlags: 0x08000000,
 	}
 
-	if cfg.ProcessingEngine == "vulkan" {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GGML_VK_VISIBLE_DEVICES=%d", gpuIndex))
+	env := os.Environ()
+	// Ensure lib/dll directory is in PATH for llama-server dependencies
+	dllDir := filepath.Dir(exePath)
+	if !strings.HasSuffix(strings.ToLower(dllDir), "dll") {
+		candidateDll := filepath.Join(dllDir, "dll")
+		if _, err := os.Stat(candidateDll); err == nil {
+			dllDir = candidateDll
+		}
 	}
+	currentPath := os.Getenv("PATH")
+	env = append(env, fmt.Sprintf("PATH=%s;%s", dllDir, currentPath))
 
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	if cfg.ProcessingEngine == "vulkan" {
+		env = append(env, fmt.Sprintf("GGML_VK_VISIBLE_DEVICES=%d", gpuIndex))
+	}
+	cmd.Env = env
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	err = cmd.Start()
 	if err != nil {
