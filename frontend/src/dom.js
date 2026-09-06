@@ -142,36 +142,65 @@ settingsModal.innerHTML = `
       <div class="insights-wrap" id="insightsRoot"></div>
     </div>
     <div class="section" id="sec-dictionary">
-      <div class="dict-layout" style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
-        <div class="section-kicker" style="margin-bottom: 0;">Dictionary & Keywords</div>
+      <div class="personalization-layout">
         
-        <!-- Token Progress Bar -->
-        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <div class="setting-info">
-              <span class="setting-title" style="font-size: 15px;">Whisper Context Usage</span>
-              <span class="setting-desc" style="font-size: 12px;">Prompt tokens used by custom vocabulary. Whisper supports up to 224 context tokens.</span>
+        <!-- Intro Banner -->
+        <div class="personalization-intro-card">
+          <div class="personalization-intro-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+              <path d="M6 6h10M6 10h10"/>
+            </svg>
+          </div>
+          <div class="personalization-intro-content">
+            <h2 class="personalization-intro-title">Custom Vocabulary & Keywords</h2>
+            <p class="personalization-intro-desc">
+              Prime speech recognition with domain names, jargon, acronyms, and specialized technical terms. Whisper biases towards these phrases during transcription.
+            </p>
+          </div>
+        </div>
+
+        <!-- Token Usage & Word Manager Card -->
+        <div class="personalization-card">
+          <div class="personalization-card-header no-collapse">
+            <div class="personalization-card-title-group">
+              <div class="personalization-card-badge">Context Budget</div>
+              <div>
+                <h3 class="personalization-card-title">Whisper Context Usage</h3>
+                <p class="personalization-card-subtitle">Custom keywords share Whisper's 224-token prompt context window.</p>
+              </div>
             </div>
             <span id="dictTokenBadge" class="badge">0 / 224 tokens</span>
           </div>
-          <div class="model-progress-bar-bg" style="height: 8px; width: 100%;">
-            <div id="dictTokenProgress" class="model-progress-bar-fill" style="width: 0%; transition: width 0.3s ease;"></div>
-          </div>
-        </div>
 
-        <!-- Word List like Todo list -->
-        <div class="todo-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
-          <div style="display: flex; gap: 12px; width: 100%;">
-            <input type="text" id="dictWordInput" class="brutal-input" style="flex: 1; height: 42px; box-sizing: border-box; border-radius: 12px;" placeholder="Add a custom word or phrase..." />
-            <button id="addDictWordBtn" class="kbd-btn" style="padding: 0 24px; font-weight: 700; height: 42px; box-sizing: border-box; border-radius: 12px; background: var(--accent-soft); color: var(--accent); border-color: var(--accent);">Add</button>
-          </div>
+          <div class="personalization-card-body open">
+            <div class="model-progress-bar-bg" style="height: 6px; width: 100%; border-radius: 9999px;">
+              <div id="dictTokenProgress" class="model-progress-bar-fill" style="width: 0%; transition: width 0.3s ease;"></div>
+            </div>
 
-          <div class="dict-todo-list-wrapper" style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-sidebar); width: 100%;">
-            <div id="dictWordsList" style="display: flex; flex-direction: column; gap: 0; max-height: 400px; overflow-y: auto;">
-              <!-- Words listed as row items with delete checkbox/button -->
+            <!-- Add Keyword Input Bar -->
+            <div class="mapping-creator-bar" style="align-items: center; margin-top: 4px;">
+              <div class="mapping-input-col">
+                <input type="text" id="dictWordInput" class="brutal-input personalization-input" placeholder="Add a custom word, brand name, or technical phrase..." />
+              </div>
+              <button id="addDictWordBtn" class="kbd-btn personalization-add-btn">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Keyword
+              </button>
+            </div>
+
+            <!-- Existing Keywords List Container -->
+            <div class="mappings-list-container">
+              <div class="mappings-list-header">
+                <span>Active Vocabulary</span>
+              </div>
+              <div id="dictWordsList" class="mappings-list-body">
+                <!-- Words listed as row items with delete button -->
+              </div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
     <div class="section" id="sec-models">
@@ -612,74 +641,145 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-manglish">
-      <div class="setting-group">
-        <label>Personalization</label>
-        <div class="models-panel" id="manglishPanel">
-          <button class="models-panel-header" type="button" aria-expanded="false" id="manglishPanelHeader">
-            <svg class="models-panel-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="manglishPanelChevron" style="transform: rotate(0deg); transition: transform 0.2s ease;"><polyline points="9 18 15 12 9 6"/></svg>
-            <span class="models-panel-title">Malayalam to Manglish Custom Transliteration Examples</span>
-          </button>
-          
-          <div class="models-panel-body" id="manglishPanelBody">
-            <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 20px; border: 0; background: transparent; margin-bottom: 0;">
-              <div class="setting-info" style="margin-bottom: 8px;">
-                <span class="setting-title">Custom Transliteration Examples</span>
-                <span class="setting-desc">Personalize how Malayalam phrases are transliterated into Manglish. These examples will train the LLM refinement model on your spelling preferences. Fill out the boxes in Manglish:</span>
+      <div class="personalization-layout">
+        
+        <!-- Header Banner / Intro -->
+        <div class="personalization-intro-card">
+          <div class="personalization-intro-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"/>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+          </div>
+          <div class="personalization-intro-content">
+            <h2 class="personalization-intro-title">Language Personalization & Transliteration</h2>
+            <p class="personalization-intro-desc">
+              Teach the refinement AI your personal writing habits, phrasing style, and word-by-word transliteration preferences from Malayalam into Manglish.
+            </p>
+          </div>
+        </div>
+
+        <!-- Section 1: Transliteration Tone & Phrasing Examples -->
+        <div class="personalization-card" id="manglishPanel">
+          <div class="personalization-card-header" id="manglishPanelHeader" role="button" tabindex="0" aria-expanded="true">
+            <div class="personalization-card-title-group">
+              <div class="personalization-card-badge">Style Guide</div>
+              <div>
+                <h3 class="personalization-card-title">Transliteration Style & Phrasing Examples</h3>
+                <p class="personalization-card-subtitle">Provide your preferred Latin script spelling for common Malayalam phrases. The model will adapt to match your rhythm.</p>
               </div>
+            </div>
+            <div class="personalization-chevron-wrap">
+              <svg class="models-panel-chevron" id="manglishPanelChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(90deg); transition: transform 0.2s ease;">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="personalization-card-body open" id="manglishPanelBody">
+            <div class="examples-grid">
               
-              <div style="display: flex; flex-direction: column; gap: 20px;">
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">ഹലോ സുഖമാണോ എന്ത് ചെയ്യുന്നു</div>
-                  <input type="text" id="manglishEx1" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Hello, sukhamano enth cheyyunnu?" />
+              <!-- Example 1 -->
+              <div class="example-box">
+                <div class="example-box-header">
+                  <span class="example-num">01</span>
+                  <span class="example-malayalam-prompt">ഹലോ സുഖമാണോ എന്ത് ചെയ്യുന്നു</span>
                 </div>
-
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">എനിക്ക് നാളെ വരാൻ പറ്റില്ല</div>
-                  <input type="text" id="manglishEx2" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Enik naale varaan pattilla." />
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">നീ നാളെ കോളേജിൽ വരുന്നുണ്ടോ? നമുക്ക് ഒരുമിച്ച് പോകാം.</div>
-                  <input type="text" id="manglishEx3" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Nee naale collegil varunnundo? Namukku orumichu pokam." />
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">ഞാൻ ആ കാര്യം അവളോട് പറഞ്ഞു, പക്ഷെ അവൾക്ക് മനസ്സിലായില്ല.</div>
-                  <input type="text" id="manglishEx4" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla." />
-                </div>
-
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                  <div style="font-weight: 700; font-size: 13px; color: var(--text-secondary);">നീ ആ ഫയൽ എനിക്ക് വാട്സാപ്പിൽ അയച്ചു തരുമോ? ഞാൻ ഇപ്പോഴേ ഡൗൺലോഡ് ചെയ്യാം.</div>
-                  <input type="text" id="manglishEx5" class="brutal-input" style="height: 42px; border-radius: 12px; box-sizing: border-box;" placeholder="e.g. Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam." />
-                </div>
+                <input type="text" id="manglishEx1" class="brutal-input personalization-input" placeholder="e.g. Hello, sukhamano enth cheyyunnu?" />
               </div>
 
-              <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
-                <button id="saveManglishExBtn" class="kbd-btn" style="padding: 10px 24px; font-weight: 700; border-radius: 12px;">Save Preferences</button>
+              <!-- Example 2 -->
+              <div class="example-box">
+                <div class="example-box-header">
+                  <span class="example-num">02</span>
+                  <span class="example-malayalam-prompt">എനിക്ക് നാളെ വരാൻ പറ്റില്ല</span>
+                </div>
+                <input type="text" id="manglishEx2" class="brutal-input personalization-input" placeholder="e.g. Enik naale varaan pattilla." />
               </div>
-        </div>
-      </div>
-      <div class="setting-group" style="margin-top: 24px;">
-        <label>Custom Word Mappings</label>
-        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 12px; padding: 20px;">
-          <div class="setting-info" style="margin-bottom: 0;">
-            <span class="setting-title" style="font-size: 15px;">Word-Level Transliteration Mappings</span>
-            <span class="setting-desc" style="font-size: 12px;">Map specific Malayalam words to your preferred Latin/Manglish spelling when refining (e.g. ഹലോ to Hello).</span>
-          </div>
-        </div>
-        <div class="todo-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
-          <div style="display: flex; gap: 12px; width: 100%;">
-            <input type="text" id="translitMalInput" class="brutal-input" style="flex: 1; height: 42px; box-sizing: border-box; border-radius: 12px;" placeholder="Malayalam word (e.g. ഹലോ)" />
-            <input type="text" id="translitEngInput" class="brutal-input" style="flex: 1; height: 42px; box-sizing: border-box; border-radius: 12px;" placeholder="Preferred spelling (e.g. Hello)" />
-            <button id="addTranslitBtn" class="kbd-btn" style="padding: 0 24px; font-weight: 700; height: 42px; box-sizing: border-box; border-radius: 12px; background: var(--accent-soft); color: var(--accent); border-color: var(--accent);">Add</button>
-          </div>
 
-          <div class="dict-todo-list-wrapper" style="border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg-sidebar); width: 100%;">
-            <div id="translitWordsList" style="display: flex; flex-direction: column; gap: 0; max-height: 400px; overflow-y: auto;">
-              <!-- Dynamic entries -->
+              <!-- Example 3 -->
+              <div class="example-box">
+                <div class="example-box-header">
+                  <span class="example-num">03</span>
+                  <span class="example-malayalam-prompt">നീ നാളെ കോളേജിൽ വരുന്നുണ്ടോ? നമുക്ക് ഒരുമിച്ച് പോകാം.</span>
+                </div>
+                <input type="text" id="manglishEx3" class="brutal-input personalization-input" placeholder="e.g. Nee naale collegil varunnundo? Namukku orumichu pokam." />
+              </div>
+
+              <!-- Example 4 -->
+              <div class="example-box">
+                <div class="example-box-header">
+                  <span class="example-num">04</span>
+                  <span class="example-malayalam-prompt">ഞാൻ ആ കാര്യം അവളോട് പറഞ്ഞു, പക്ഷെ അവൾക്ക് മനസ്സിലായില്ല.</span>
+                </div>
+                <input type="text" id="manglishEx4" class="brutal-input personalization-input" placeholder="e.g. Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla." />
+              </div>
+
+              <!-- Example 5 -->
+              <div class="example-box">
+                <div class="example-box-header">
+                  <span class="example-num">05</span>
+                  <span class="example-malayalam-prompt">നീ ആ ഫയൽ എനിക്ക് വാട്സാപ്പിൽ അയച്ചു തരുമോ? ഞാൻ ഇപ്പോഴേ ഡൗൺലോഡ് ചെയ്യാം.</span>
+                </div>
+                <input type="text" id="manglishEx5" class="brutal-input personalization-input" placeholder="e.g. Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam." />
+              </div>
+
+            </div>
+
+            <div class="personalization-actions">
+              <span class="personalization-tip">Note: Use Latin/English script characters only.</span>
+              <button id="saveManglishExBtn" class="kbd-btn personalization-save-btn">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Save Preferences
+              </button>
             </div>
           </div>
         </div>
+
+        <!-- Section 2: Exact Word-Level Transliteration Mappings -->
+        <div class="personalization-card">
+          <div class="personalization-card-header no-collapse">
+            <div class="personalization-card-title-group">
+              <div class="personalization-card-badge">Dictionary Mappings</div>
+              <div>
+                <h3 class="personalization-card-title">Word-Level Transliteration Rules</h3>
+                <p class="personalization-card-subtitle">Force exact word replacements during refinement (e.g. rewrite "ഹലോ" directly into "Hello").</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="personalization-card-body open">
+            <!-- Add New Mapping Bar -->
+            <div class="mapping-creator-bar">
+              <div class="mapping-input-col">
+                <label class="mapping-input-label">Malayalam Word</label>
+                <input type="text" id="translitMalInput" class="brutal-input personalization-input" placeholder="e.g. ഹലോ" />
+              </div>
+              <div class="mapping-arrow-indicator">
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </div>
+              <div class="mapping-input-col">
+                <label class="mapping-input-label">Preferred Latin Spelling</label>
+                <input type="text" id="translitEngInput" class="brutal-input personalization-input" placeholder="e.g. Hello" />
+              </div>
+              <button id="addTranslitBtn" class="kbd-btn personalization-add-btn">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Rule
+              </button>
+            </div>
+
+            <!-- Existing Mappings List -->
+            <div class="mappings-list-container">
+              <div class="mappings-list-header">
+                <span>Configured Word Rules</span>
+              </div>
+              <div id="translitWordsList" class="mappings-list-body">
+                <!-- Dynamic entries -->
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
     </div>

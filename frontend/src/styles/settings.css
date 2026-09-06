@@ -663,3 +663,355 @@ kbd {
   align-items: center;
   gap: 8px;
 }
+
+/* ══════════════════════════════════════
+   PERSONALIZATION SECTION STYLES
+   ══════════════════════════════════════ */
+.personalization-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 960px;
+  margin-bottom: 40px;
+}
+
+.personalization-intro-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(238, 254, 255, 0.03) 0%, rgba(170, 255, 212, 0.03) 100%);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px 24px;
+}
+
+.personalization-intro-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.personalization-intro-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.personalization-intro-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.personalization-intro-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.personalization-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.personalization-card:hover {
+  border-color: rgba(238, 254, 255, 0.14);
+}
+
+.personalization-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.personalization-card-header.no-collapse {
+  cursor: default;
+}
+
+.personalization-card-header:not(.no-collapse):hover {
+  background: rgba(238, 254, 255, 0.02);
+}
+
+.personalization-card-title-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.personalization-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(238, 254, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.personalization-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.personalization-card-subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.personalization-chevron-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(238, 254, 255, 0.04);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.personalization-card-body {
+  display: none;
+  padding: 0 24px 24px 24px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.personalization-card-body.open,
+.personalization-card.open .personalization-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 22px;
+}
+
+/* Examples Grid */
+.examples-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.example-box {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.example-box:hover {
+  border-color: rgba(238, 254, 255, 0.15);
+  background: rgba(238, 254, 255, 0.02);
+}
+
+.example-box-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.example-num {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+}
+
+.example-malayalam-prompt {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.personalization-input {
+  width: 100%;
+  height: 42px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 14px;
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 500;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.personalization-input:focus {
+  border-color: rgba(238, 254, 255, 0.3);
+  background: rgba(238, 254, 255, 0.04);
+}
+
+.personalization-input::placeholder {
+  color: rgba(238, 254, 255, 0.25);
+  font-size: 12.5px;
+}
+
+.personalization-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.personalization-tip {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.personalization-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.personalization-save-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #090909;
+}
+
+/* Word-Level Mapping Bar */
+.mapping-creator-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.mapping-input-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mapping-input-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.mapping-arrow-indicator {
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.personalization-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  margin-bottom: 0;
+}
+
+.personalization-add-btn:hover {
+  background: var(--accent);
+  color: #090909;
+}
+
+/* Mappings List Container */
+.mappings-list-container {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.mappings-list-header {
+  padding: 12px 18px;
+  background: rgba(238, 254, 255, 0.03);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.03em;
+}
+
+.mappings-list-body {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .mapping-creator-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .mapping-arrow-indicator {
+    transform: rotate(90deg);
+    margin: 4px auto;
+  }
+  .personalization-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
