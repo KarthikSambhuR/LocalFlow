@@ -17,6 +17,127 @@
   padding-left: 4px;
 }
 
+.settings-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  max-width: 960px;
+  margin-bottom: 40px;
+}
+
+.settings-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+  position: relative;
+  overflow: visible;
+  z-index: 1;
+}
+
+.settings-card:has(.custom-dropdown.open) {
+  z-index: 30;
+}
+
+.settings-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.settings-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(238, 254, 255, 0.14);
+}
+
+.settings-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.settings-card-subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+.settings-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(238, 254, 255, 0.04);
+  position: relative;
+  gap: 16px;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+.setting-row:first-child {
+  padding-top: 4px;
+}
+
+.setting-row:has(.custom-dropdown.open) {
+  z-index: 40;
+}
+
+.setting-row-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(238, 254, 255, 0.04);
+}
+
+.setting-row-stacked:last-child {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+@media (max-width: 900px) {
+  .settings-grid-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-card.full-width {
+    grid-column: 1;
+  }
+}
+
 .setting-item {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -48,13 +169,13 @@
 }
 
 .setting-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .setting-desc {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
 }

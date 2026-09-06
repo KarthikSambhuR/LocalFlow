@@ -198,312 +198,417 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-settings">
-      <div class="setting-group">
-        <label>Audio</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Playback Volume</span>
+      <div class="settings-grid-layout">
+        
+        <!-- AUDIO & INPUT CARD -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="settings-card-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+            </div>
+            <div>
+              <div class="settings-card-title">Audio & Engine</div>
+              <div class="settings-card-subtitle">Microphone, acceleration engine, and volume</div>
+            </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <input type="range" id="ampSlider" min="1" max="10" step="0.5" value="1" class="brutal-slider">
-            <span id="ampValue" class="badge">1.0x</span>
-          </div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Mic Gain Boost</span>
-            <span class="setting-desc">Boost microphone input gain</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="boostToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Engine</span>
-          </div>
-          <div class="engine-toggle" role="group" aria-label="Processing engine">
-            <button type="button" class="engine-option active" id="engineCpuBtn" data-engine="cpu">CPU</button>
-            <button type="button" class="engine-option" id="engineVulkanBtn" data-engine="vulkan">Vulkan</button>
-          </div>
-        </div>
-        <div class="setting-item" id="gpuSelectionItem" style="display: none;">
-          <div class="setting-info">
-            <span class="setting-title">Graphics Device</span>
-          </div>
-          <div class="custom-dropdown" id="gpuDropdown">
-            <button class="dropdown-trigger">
-              <span id="gpuLabel">Default</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu" id="gpuDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
-              <div class="dropdown-item active" data-value="Default">Default</div>
+          <div class="settings-card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Microphone</span>
+                <span class="setting-desc">Speech input device</span>
+              </div>
+              <div class="custom-dropdown" id="micDropdown">
+                <button class="dropdown-trigger">
+                  <span id="micLabel">Default</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu" id="micDropdownMenu" style="min-width: 200px; max-width: 320px; max-height: 250px; overflow-y: auto;">
+                  <div class="dropdown-item active" data-value="Default">Default</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Processing Engine</span>
+                <span class="setting-desc">Acceleration backend</span>
+              </div>
+              <div class="engine-toggle" role="group" aria-label="Processing engine">
+                <button type="button" class="engine-option active" id="engineCpuBtn" data-engine="cpu">CPU</button>
+                <button type="button" class="engine-option" id="engineVulkanBtn" data-engine="vulkan">Vulkan</button>
+              </div>
+            </div>
+
+            <div class="setting-row" id="gpuSelectionItem" style="display: none;">
+              <div class="setting-info">
+                <span class="setting-title">Graphics Device</span>
+                <span class="setting-desc">Target GPU accelerator</span>
+              </div>
+              <div class="custom-dropdown" id="gpuDropdown">
+                <button class="dropdown-trigger">
+                  <span id="gpuLabel">Default</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu" id="gpuDropdownMenu" style="min-width: 200px; max-width: 320px; max-height: 250px; overflow-y: auto;">
+                  <div class="dropdown-item active" data-value="Default">Default</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Playback Volume</span>
+                <span class="setting-desc">History audio level</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="ampSlider" min="1" max="10" step="0.5" value="1" class="brutal-slider" style="width: 120px;">
+                <span id="ampValue" class="badge">1.0x</span>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Mic Gain Boost</span>
+                <span class="setting-desc">Pre-amplify quiet microphone input</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="boostToggle">
+                <span class="toggle-track"></span>
+              </label>
             </div>
           </div>
         </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Microphone</span>
+
+        <!-- BILINGUAL ROUTING CARD -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="settings-card-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div>
+              <div class="settings-card-title">Bilingual Routing</div>
+              <div class="settings-card-subtitle">Auto-switch speech between English and Malayalam</div>
+            </div>
           </div>
-          <div class="custom-dropdown" id="micDropdown">
-            <button class="dropdown-trigger">
-              <span id="micLabel">Default</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu" id="micDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
-              <div class="dropdown-item active" data-value="Default">Default</div>
+          <div class="settings-card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Automatic Routing</span>
+                <span class="setting-desc">Route speech to Whisper or Conformer based on detected language</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="bilingualRoutingToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row bilingual-setting" id="bilingualWhisperModelSelection" style="display: none;">
+              <div class="setting-info">
+                <span class="setting-title">English Model</span>
+                <span class="setting-desc">Selected model for English audio</span>
+              </div>
+              <div class="custom-dropdown" id="bilingualWhisperDropdown">
+                <button class="dropdown-trigger">
+                  <span id="bilingualWhisperLabel">ggml-tiny.en.bin</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu" id="bilingualWhisperDropdownMenu" style="min-width: 200px; max-width: 320px; max-height: 250px; overflow-y: auto;">
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row bilingual-setting" id="bilingualConformerModelSelection" style="display: none;">
+              <div class="setting-info">
+                <span class="setting-title">Malayalam Model</span>
+                <span class="setting-desc">Selected model for Malayalam audio</span>
+              </div>
+              <div class="custom-dropdown" id="bilingualConformerDropdown">
+                <button class="dropdown-trigger">
+                  <span id="bilingualConformerLabel">indicconformer.int8.onnx</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu" id="bilingualConformerDropdownMenu" style="min-width: 200px; max-width: 320px; max-height: 250px; overflow-y: auto;">
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Bilingual Routing</span>
-            <span class="setting-desc">Auto-switch between English and Malayalam</span>
+
+        <!-- AI REFINEMENT CARD -->
+        <div class="settings-card full-width">
+          <div class="settings-card-header">
+            <div class="settings-card-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            </div>
+            <div>
+              <div class="settings-card-title">AI Refinement & Intelligence</div>
+              <div class="settings-card-subtitle">Local LLM punctuation, grammar correction, and tone customization</div>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="bilingualRoutingToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="setting-item bilingual-setting" id="bilingualWhisperModelSelection" style="display: none;">
-          <div class="setting-info">
-            <span class="setting-title">English Model</span>
-          </div>
-          <div class="custom-dropdown" id="bilingualWhisperDropdown">
-            <button class="dropdown-trigger">
-              <span id="bilingualWhisperLabel">ggml-tiny.en.bin</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu" id="bilingualWhisperDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
+          <div class="settings-card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Enable Refinement</span>
+                <span class="setting-desc">Process dictations through a local neural model</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="llmEnabledToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row llm-choice-setting" id="llmThinkingSelection">
+              <div class="setting-info">
+                <span class="setting-title">Reasoning Steps</span>
+                <span class="setting-desc">Enable chain-of-thought output on supported models</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="llmThinkingToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row llm-choice-setting" id="llmManglishSelection">
+              <div class="setting-info">
+                <span class="setting-title">Transliterate to Manglish</span>
+                <span class="setting-desc">Convert Malayalam speech to Latin characters</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="llmManglishToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row-stacked llm-choice-setting" id="llmModeSelection">
+              <div class="setting-info">
+                <span class="setting-title">Refinement Strength</span>
+                <span class="setting-desc">Determines how substantially phrasing may be edited</span>
+              </div>
+              <div class="llm-choice-grid llm-mode-grid" id="llmModeOptions" role="group" aria-label="Refinement strength">
+                <button type="button" class="llm-choice" data-value="minimal" aria-pressed="false">
+                  <span class="llm-choice-heading"><strong>Minimal</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Proofread errors only</span>
+                </button>
+                <button type="button" class="llm-choice" data-value="low" aria-pressed="true">
+                  <span class="llm-choice-heading"><strong>Low</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Remove stutters & fillers</span>
+                </button>
+                <button type="button" class="llm-choice" data-value="medium" aria-pressed="false">
+                  <span class="llm-choice-heading"><strong>Medium</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Clarify sentence flow</span>
+                </button>
+                <button type="button" class="llm-choice" data-value="high" aria-pressed="false">
+                  <span class="llm-choice-heading"><strong>High</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Full rewrite & polish</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row-stacked llm-choice-setting" id="llmToneSelection">
+              <div class="setting-info">
+                <span class="setting-title">Writing Tone</span>
+                <span class="setting-desc">Stylistic preference for refined transcription</span>
+              </div>
+              <div class="llm-choice-grid llm-tone-grid" id="llmToneOptions" role="group" aria-label="Refinement tone">
+                <button type="button" class="llm-choice" data-value="auto" aria-pressed="true">
+                  <span class="llm-choice-heading"><strong>Auto</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Preserve your voice</span>
+                </button>
+                <button type="button" class="llm-choice" data-value="casual" aria-pressed="false">
+                  <span class="llm-choice-heading"><strong>Casual</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Friendly & relaxed</span>
+                </button>
+                <button type="button" class="llm-choice" data-value="concise" aria-pressed="false">
+                  <span class="llm-choice-heading"><strong>Concise</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Direct & brief</span>
+                </button>
+                <button type="button" class="llm-choice" data-value="professional" aria-pressed="false">
+                  <span class="llm-choice-heading"><strong>Work</strong></span>
+                  <span class="setting-desc" style="font-size: 12px;">Polished & workplace-ready</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row llm-choice-setting" id="llmContextSizeSelection">
+              <div class="setting-info">
+                <span class="setting-title">Context Window</span>
+                <span class="setting-desc">Token limit for refinement memory</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="width: 140px;">
+                <span id="llmContextLabel" class="badge">4K</span>
+              </div>
             </div>
           </div>
         </div>
-        <div class="setting-item bilingual-setting" id="bilingualConformerModelSelection" style="display: none;">
-          <div class="setting-info">
-            <span class="setting-title">Malayalam Model</span>
+
+        <!-- APP BEHAVIOR & KEYBIND CARD -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="settings-card-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.001M10 8h.001M14 8h.001M18 8h.001M8 12h.001M12 12h.001M16 12h.001M7 16h10"/></svg>
+            </div>
+            <div>
+              <div class="settings-card-title">Trigger & Shortcuts</div>
+              <div class="settings-card-subtitle">Global dictation hotkeys and hardware buttons</div>
+            </div>
           </div>
-          <div class="custom-dropdown" id="bilingualConformerDropdown">
-            <button class="dropdown-trigger">
-              <span id="bilingualConformerLabel">indicconformer.int8.onnx</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu" id="bilingualConformerDropdownMenu" style="min-width: 200px; max-width: 400px; max-height: 250px; overflow-y: auto;">
+          <div class="settings-card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Dictation Keybind</span>
+                <span class="setting-desc">Hold or press to dictate</span>
+              </div>
+              <button id="remapBtn" class="kbd-btn">
+                <kbd id="k1Label">Ctrl</kbd> <span class="kbd-plus">+</span> <kbd id="k2Label">Win</kbd>
+              </button>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Dedicated Copilot Key</span>
+                <span class="setting-desc">Use Windows Copilot key as trigger</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="copilotKeyToggle">
+                <span class="toggle-track"></span>
+              </label>
             </div>
           </div>
         </div>
-      </div>
-      <div class="setting-group">
-        <label>AI Refinement</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Enable Refinement</span>
-            <span class="setting-desc">Grammar, punctuation and format cleanup</span>
+
+        <!-- SYSTEM & APPEARANCE CARD -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="settings-card-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+            </div>
+            <div>
+              <div class="settings-card-title">System & Startup</div>
+              <div class="settings-card-subtitle">Startup behavior and application theme</div>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="llmEnabledToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="setting-item llm-choice-setting" id="llmThinkingSelection">
-          <div class="setting-info">
-            <span class="setting-title">Reasoning Steps</span>
-            <span class="setting-desc">Enable chain-of-thought output</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="llmThinkingToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="setting-item llm-choice-setting" id="llmManglishSelection">
-          <div class="setting-info">
-            <span class="setting-title">Transliterate to Manglish</span>
-            <span class="setting-desc">Convert Malayalam speech to Latin script</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="llmManglishToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="setting-item llm-choice-setting" id="llmModeSelection">
-          <div class="setting-info">
-            <span class="setting-title">Refinement Strength</span>
-          </div>
-          <div class="llm-choice-grid llm-mode-grid" id="llmModeOptions" role="group" aria-label="Refinement strength">
-            <button type="button" class="llm-choice" data-value="minimal" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Minimal</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Proofread</span>
-            </button>
-            <button type="button" class="llm-choice" data-value="low" aria-pressed="true">
-              <span class="llm-choice-heading"><strong>Low</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Clean filler</span>
-            </button>
-            <button type="button" class="llm-choice" data-value="medium" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Medium</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Clarify</span>
-            </button>
-            <button type="button" class="llm-choice" data-value="high" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>High</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Full polish</span>
-            </button>
-          </div>
-        </div>
-        <div class="setting-item llm-choice-setting" id="llmToneSelection">
-          <div class="setting-info">
-            <span class="setting-title">Writing Tone</span>
-          </div>
-          <div class="llm-choice-grid llm-tone-grid" id="llmToneOptions" role="group" aria-label="Refinement tone">
-            <button type="button" class="llm-choice" data-value="auto" aria-pressed="true">
-              <span class="llm-choice-heading"><strong>Auto</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Natural voice</span>
-            </button>
-            <button type="button" class="llm-choice" data-value="casual" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Casual</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Conversational</span>
-            </button>
-            <button type="button" class="llm-choice" data-value="concise" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Concise</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Direct</span>
-            </button>
-            <button type="button" class="llm-choice" data-value="professional" aria-pressed="false">
-              <span class="llm-choice-heading"><strong>Work</strong></span>
-              <span class="setting-desc" style="font-size: 12px;">Professional</span>
-            </button>
-          </div>
-        </div>
-        <div class="setting-item llm-choice-setting" id="llmContextSizeSelection">
-          <div class="setting-info">
-            <span class="setting-title">Context Window</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="width: 140px;">
-            <span id="llmContextLabel" class="badge">4K</span>
-          </div>
-        </div>
-      </div>
-      <div class="setting-group">
-        <label>Startup</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Launch on Startup</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="startupToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="setting-item" id="startMinimizedItem">
-          <div class="setting-info">
-            <span class="setting-title">Start Minimized</span>
-            <span class="setting-desc">Open in system tray</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="startMinimizedToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-      </div>
-      <div class="setting-group">
-        <label>Appearance</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Theme</span>
-          </div>
-          <div class="custom-dropdown" id="themeDropdown">
-            <button class="dropdown-trigger">
-              <span id="themeLabel">Dark Mode</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu">
-              <div class="dropdown-item" data-value="light">Light Mode</div>
-              <div class="dropdown-item" data-value="dark">Dark Mode</div>
+          <div class="settings-card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Launch on Startup</span>
+                <span class="setting-desc">Auto-start with Windows</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="startupToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row" id="startMinimizedItem">
+              <div class="setting-info">
+                <span class="setting-title">Start Minimized</span>
+                <span class="setting-desc">Launch directly to system tray</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="startMinimizedToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Theme</span>
+                <span class="setting-desc">Interface appearance</span>
+              </div>
+              <div class="custom-dropdown" id="themeDropdown">
+                <button class="dropdown-trigger">
+                  <span id="themeLabel">Dark Mode</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu">
+                  <div class="dropdown-item" data-value="light">Light Mode</div>
+                  <div class="dropdown-item" data-value="dark">Dark Mode</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="setting-group">
-        <label>Trigger Keybind</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Shortcut</span>
+
+        <!-- STORAGE & RETENTION CARD -->
+        <div class="settings-card full-width">
+          <div class="settings-card-header">
+            <div class="settings-card-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            </div>
+            <div>
+              <div class="settings-card-title">Storage & History Retention</div>
+              <div class="settings-card-subtitle">Manage audio cache files, transcripts, and storage location</div>
+            </div>
           </div>
-          <button id="remapBtn" class="kbd-btn">
-            <kbd id="k1Label">Ctrl</kbd> <span class="kbd-plus">+</span> <kbd id="k2Label">Win</kbd>
-          </button>
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Copilot Key</span>
-            <span class="setting-desc">Use keyboard Copilot key</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="copilotKeyToggle">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-      </div>
-      <div class="setting-group">
-        <label>Storage</label>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Audio Retention</span>
-          </div>
-          <div class="custom-dropdown" id="audioRetentionDropdown">
-            <button class="dropdown-trigger">
-              <span id="audioRetentionLabel">7 Days</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu">
-              <div class="dropdown-item" data-value="1">1 Day</div>
-              <div class="dropdown-item" data-value="3">3 Days</div>
-              <div class="dropdown-item" data-value="7">7 Days</div>
-              <div class="dropdown-item" data-value="14">14 Days</div>
-              <div class="dropdown-item" data-value="30">30 Days</div>
-              <div class="dropdown-item" data-value="-1">Forever</div>
+          <div class="settings-card-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Audio Retention</span>
+                <span class="setting-desc">Lifespan of recorded WAV audio files on disk</span>
+              </div>
+              <div class="custom-dropdown" id="audioRetentionDropdown">
+                <button class="dropdown-trigger">
+                  <span id="audioRetentionLabel">7 Days</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu">
+                  <div class="dropdown-item" data-value="1">1 Day</div>
+                  <div class="dropdown-item" data-value="3">3 Days</div>
+                  <div class="dropdown-item" data-value="7">7 Days</div>
+                  <div class="dropdown-item" data-value="14">14 Days</div>
+                  <div class="dropdown-item" data-value="30">30 Days</div>
+                  <div class="dropdown-item" data-value="-1">Forever</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Transcription Retention</span>
+                <span class="setting-desc">Lifespan of dictation text history (stats preserved)</span>
+              </div>
+              <div class="custom-dropdown" id="transcriptionRetentionDropdown">
+                <button class="dropdown-trigger">
+                  <span id="transcriptionRetentionLabel">30 Days</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu">
+                  <div class="dropdown-item" data-value="7">7 Days</div>
+                  <div class="dropdown-item" data-value="14">14 Days</div>
+                  <div class="dropdown-item" data-value="30">30 Days</div>
+                  <div class="dropdown-item" data-value="90">90 Days</div>
+                  <div class="dropdown-item" data-value="180">180 Days</div>
+                  <div class="dropdown-item" data-value="-1">Forever</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-row" style="align-items: flex-start;">
+              <div class="setting-info" style="flex: 1;">
+                <span class="setting-title">Storage Directory</span>
+                <span class="setting-desc">Location of local database, cache and models</span>
+                <div id="dataFolderDesc" style="font-family: monospace; font-size: 11px; background: var(--bg-sidebar); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; color: var(--text-secondary); word-break: break-all; margin-top: 8px; max-width: 460px;">
+                  Default
+                </div>
+              </div>
+              <button id="selectFolderBtn" class="kbd-btn" style="padding: 8px 16px; font-weight: 600; margin-top: 2px;">
+                Change
+              </button>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Cache Maintenance</span>
+                <span class="setting-desc">Remove expired audio recordings and historical records</span>
+              </div>
+              <button id="purgeNowBtn" class="kbd-btn" style="padding: 8px 16px; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.25); color: #ef4444; font-weight: 600;">
+                Clean Cache Now
+              </button>
             </div>
           </div>
         </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Transcription Retention</span>
-          </div>
-          <div class="custom-dropdown" id="transcriptionRetentionDropdown">
-            <button class="dropdown-trigger">
-              <span id="transcriptionRetentionLabel">30 Days</span>
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div class="dropdown-menu">
-              <div class="dropdown-item" data-value="7">7 Days</div>
-              <div class="dropdown-item" data-value="14">14 Days</div>
-              <div class="dropdown-item" data-value="30">30 Days</div>
-              <div class="dropdown-item" data-value="90">90 Days</div>
-              <div class="dropdown-item" data-value="180">180 Days</div>
-              <div class="dropdown-item" data-value="-1">Forever</div>
-            </div>
-          </div>
-        </div>
-        <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="setting-info">
-              <span class="setting-title">Storage Directory</span>
-            </div>
-            <button id="selectFolderBtn" class="kbd-btn" style="padding: 6px 12px; font-weight: 500;">
-              Change
-            </button>
-          </div>
-          <div id="dataFolderDesc" style="font-family: monospace; font-size: 11px; background: var(--bg-sidebar); border: 1px dashed var(--border); padding: 8px 12px; border-radius: 6px; color: var(--text-secondary); word-break: break-all; margin-top: 4px;">
-            Default
-          </div>
-        </div>
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-title">Manual Cleanup</span>
-            <span class="setting-desc">Prune expired files and texts immediately</span>
-          </div>
-          <button id="purgeNowBtn" class="kbd-btn" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.4); color: #ef4444;">
-            Clean Cache Now
-          </button>
-        </div>
+
       </div>
     </div>
     <div class="section" id="sec-manglish">
