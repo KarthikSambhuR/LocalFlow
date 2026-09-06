@@ -1509,17 +1509,25 @@ Return only the polished transcript. Do not include the <transcription_text> or 
 func buildS1MiniPrompt(rawText string, mode string, tone string) (systemPrompt string, userContent string) {
 	systemPrompt = "You are a text normalizer for speech-to-text transcripts. The input begins with a control line specifying the styling, structure, and context settings; clean the transcript to match those settings and output only the cleaned text."
 
-	// Map refinement strength to S1-mini Styling: minimal -> casual, low -> semi-casual, medium -> semi-formal, high -> formal
+	// Map refinement strength and tone to S1-mini Styling:
+	// S1-mini styles:
+	// - 'casual': strictly lowercase, minimal punctuation (rarely what users want in dictation)
+	// - 'semi-casual': punctuated, but often keeps initial letter lowercase
+	// - 'semi-formal': proper sentence capitalization, punctuation, clean spacing
+	// - 'formal': polished grammar, professional sentence structure
 	styling := "semi-formal"
-	switch normalizeLLMRefinementMode(mode) {
-	case "minimal":
-		styling = "casual"
-	case "low":
-		styling = "semi-casual"
-	case "medium":
-		styling = "semi-formal"
-	case "high":
+	normMode := normalizeLLMRefinementMode(mode)
+	normTone := normalizeLLMTone(tone)
+
+	if normTone == "professional" || normMode == "high" {
 		styling = "formal"
+	} else if normMode == "minimal" || normMode == "low" || normMode == "medium" {
+		// Both minimal and low should produce proper capitalization and punctuation
+		if normTone == "casual" {
+			styling = "semi-casual"
+		} else {
+			styling = "semi-formal"
+		}
 	}
 
 	structure := "prose"
