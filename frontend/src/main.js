@@ -129,7 +129,7 @@ navItems.forEach(item => item.addEventListener('click', () => switchSection(item
 function setupWails() {
   window.runtime.EventsOn('recording-state', (status) => {
     settingsOverlay.classList.remove('active');
-    if (status === 'listening' || status === true) showModule();
+    if (status === 'listening' || status === 'initializing' || status === true) showModule();
     else if (status === 'refining') showRefining();
     else if (status === 'loading-model') showLoadingModel();
     else showProcessing();

@@ -86,10 +86,6 @@ func showWindowNoActivate() {
 	// This handles the case where the window was previously morphed for Settings
 	switchToOverlayWindow()
 
-	// Wait for the OS to commit the style changes before making the window visible
-	// Without this, the window can briefly flash in the Settings visual state
-	time.Sleep(100 * time.Millisecond)
-
 	hwnd := getHWND()
 	if hwnd == 0 {
 		return
