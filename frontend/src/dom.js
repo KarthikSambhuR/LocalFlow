@@ -103,7 +103,7 @@ settingsModal.innerHTML = `
           <span>Shortcut</span>
           <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
         </div>
-        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.4.0</div>
+        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.4.1</div>
       </div>
     </div>
     <div class="settings-content">
