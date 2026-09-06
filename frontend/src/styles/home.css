@@ -25,14 +25,12 @@
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-  background: var(--bg-card);
+  gap: 12px;
+  background: transparent;
+  border: none;
 }
 
-/* History List Rows */
+/* Individual Elevated History Cards */
 .history-card {
   display: flex;
   justify-content: space-between;
@@ -40,26 +38,25 @@
   gap: 24px;
   padding: 20px 24px;
   background: var(--bg-card);
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
-}
-
-.history-card:last-child {
-  border-bottom: 0;
 }
 
 .history-card:hover,
 .history-card.playing {
   background: var(--bg-card-hover);
+  border-color: rgba(238, 254, 255, 0.16);
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 
 .card-main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -70,9 +67,13 @@
 }
 
 .card-timestamp {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.03em;
 }
 
 .card-meta-badges {
@@ -81,13 +82,14 @@
   gap: 6px;
   font-size: 12px;
   color: var(--text-muted);
-  opacity: 0;
-  transition: opacity 0.25s ease;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
 }
 
 .history-card:hover .card-meta-badges,
 .history-card.playing .card-meta-badges {
   opacity: 1;
+  color: var(--text-secondary);
 }
 
 .meta-item-sep {
@@ -241,10 +243,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  opacity: 0;
-  transform: translateX(5px);
-  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.75;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .history-card:hover .card-controls,

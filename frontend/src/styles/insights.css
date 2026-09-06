@@ -28,17 +28,20 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 24px;
+  padding: 26px 28px;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 0;
 }
 
 .metric-card:hover {
   background: var(--bg-card-hover);
+  border-color: rgba(238, 254, 255, 0.16);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }
 
 .metric-card.wide {
@@ -46,18 +49,19 @@
 }
 
 .metric-number {
+  font-family: 'Urbanist', sans-serif;
   font-size: 46px;
   font-weight: 900;
-  color: var(--accent);
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 12px;
 }
 
 .metric-label {
-  color: var(--text-secondary);
-  font-size: 13px;
+  color: var(--text-muted);
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: .1em;
+  letter-spacing: .08em;
   text-transform: uppercase;
 }
 
