@@ -326,6 +326,7 @@ func (a *App) listenToKeyboard() {
 					go func() {
 						time.Sleep(650 * time.Millisecond)
 						runtime.WindowHide(a.ctx)
+						hideOverlayWindow()
 					}()
 				}
 				continue
@@ -798,11 +799,13 @@ func (a *App) transcribeOld() {
 			runtime.EventsEmit(a.ctx, "recording-done")
 			time.Sleep(650 * time.Millisecond) // Wait for pill hide animation
 			runtime.WindowHide(a.ctx)
+			hideOverlayWindow()
 		} else {
 			// Still hide the pill even on blank audio
 			runtime.EventsEmit(a.ctx, "recording-done")
 			time.Sleep(650 * time.Millisecond)
 			runtime.WindowHide(a.ctx)
+			hideOverlayWindow()
 		}
 	} else {
 		a.mutex.Unlock()
@@ -811,6 +814,7 @@ func (a *App) transcribeOld() {
 		runtime.EventsEmit(a.ctx, "recording-done")
 		time.Sleep(650 * time.Millisecond)
 		runtime.WindowHide(a.ctx)
+		hideOverlayWindow()
 	}
 }
 
@@ -1082,6 +1086,7 @@ func (a *App) transcribe() {
 		runtime.EventsEmit(a.ctx, "recording-done")
 		time.Sleep(650 * time.Millisecond)
 		runtime.WindowHide(a.ctx)
+		hideOverlayWindow()
 		return
 	}
 
@@ -1253,6 +1258,7 @@ func (a *App) transcribe() {
 	runtime.EventsEmit(a.ctx, "recording-done")
 	time.Sleep(650 * time.Millisecond)
 	runtime.WindowHide(a.ctx)
+	hideOverlayWindow()
 }
 
 func GetGPUDevicesList() []string {

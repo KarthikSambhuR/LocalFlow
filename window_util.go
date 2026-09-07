@@ -15,7 +15,9 @@ const (
 	wsExLayered       = uintptr(0x00080000)
 	wsExTransparent   = uintptr(0x00000020)
 	wsExNoActivate    = uintptr(0x08000000)
+	wsExAppWindow     = uintptr(0x00040000) // Forces window onto taskbar
 	wsExToolWindow    = uintptr(0x00000080) // Prevents taskbar icon
+	swHide            = uintptr(0)          // SW_HIDE
 	swShowNoActivate  = uintptr(4)          // SW_SHOWNOACTIVATE — shows without stealing focus
 
 	// Normal Window Styles
@@ -32,7 +34,8 @@ const (
 	swpNoMove         = uintptr(0x0002)
 	swpNoActivate     = uintptr(0x0010)
 	swpShowWindow     = uintptr(0x0040)
-	swpFlags          = swpNoSize | swpNoMove | swpNoActivate | swpShowWindow
+	swpFrameChanged   = uintptr(0x0020)     // Forces the window frame and taskbar presence to be updated
+	swpFlags          = swpNoSize | swpNoMove | swpNoActivate | swpShowWindow | swpFrameChanged
 )
 
 var (
@@ -58,15 +61,17 @@ func switchToSettingsWindow() {
 		return
 	}
 
-	// 1. Remove transparent/ghost styles (EXSTYLE)
+	// 1. Remove transparent/ghost styles (EXSTYLE) and add app window style
 	exStyle, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
-	newExStyle := exStyle & ^(wsExTransparent | wsExNoActivate | wsExToolWindow)
+	newExStyle := (exStyle & ^(wsExTransparent | wsExNoActivate | wsExToolWindow)) | wsExAppWindow
 	procSetWindowLongPtrW.Call(hwnd, gwlExStyle, newExStyle)
 
 	// 2. Add normal window borders/caption (STYLE)
 	style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlStyle)
 	newStyle := (style & ^wsPopup) | wsCaption | wsSysMenu | wsThickFrame | wsMinimizeBox | wsMaximizeBox
 	procSetWindowLongPtrW.Call(hwnd, gwlStyle, newStyle)
+
+	procSetWindowPos.Call(hwnd, 0, 0, 0, 0, 0, swpNoSize|swpNoMove|swpFrameChanged)
 }
 
 // switchToOverlayWindow morphs the window back into the invisible, fullscreen, click-through overlay.
@@ -76,15 +81,17 @@ func switchToOverlayWindow() {
 		return
 	}
 
-	// 1. Re-apply transparent/ghost styles (EXSTYLE)
+	// 1. Re-apply transparent/ghost styles (EXSTYLE) and strip WS_EX_APPWINDOW
 	exStyle, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
-	newExStyle := exStyle | wsExLayered | wsExTransparent | wsExNoActivate | wsExToolWindow | wsExTopmost
+	newExStyle := (exStyle & ^wsExAppWindow) | wsExLayered | wsExTransparent | wsExNoActivate | wsExToolWindow | wsExTopmost
 	procSetWindowLongPtrW.Call(hwnd, gwlExStyle, newExStyle)
 
 	// 2. Remove title bar/borders (STYLE)
 	style, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlStyle)
 	newStyle := (style & ^(wsCaption | wsSysMenu | wsThickFrame | wsMinimizeBox | wsMaximizeBox)) | wsPopup
 	procSetWindowLongPtrW.Call(hwnd, gwlStyle, newStyle)
+
+	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpNoSize|swpNoMove|swpNoActivate|swpFrameChanged)
 }
 
 // showWindowNoActivate makes the window visible WITHOUT stealing focus or
@@ -93,30 +100,45 @@ func switchToOverlayWindow() {
 // so opening Settings and then pressing the hotkey never shows settings again.
 func showWindowNoActivate() {
 	// Guarantee we are in overlay mode before showing the pill
-	// This handles the case where the window was previously morphed for Settings
 	switchToOverlayWindow()
 
 	hwnd := getHWND()
 	if hwnd == 0 {
 		return
 	}
+
+	// Ensure styles are set with frame changed before showing
+	applyOverlayStylesHWND(hwnd)
+
 	procShowWindow.Call(hwnd, swShowNoActivate)
 
-	// Explicitly bring window to the top of the Z-order with HWND_TOPMOST
+	// Explicitly bring window to the top of the Z-order with HWND_TOPMOST without activating
 	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpFlags)
-
-	// Apply overlay styles one more time after showing to be absolutely sure
-	applyOverlayStylesHWND(hwnd)
 }
 
-// applyOverlayStyles finds the window and applies click-through + no-activate styles.
-func applyOverlayStyles() {
-	time.Sleep(300 * time.Millisecond)
+// hideOverlayWindow hides the pill window using Win32 SW_HIDE to guarantee
+// no taskbar phantom entry is retained when the window is hidden.
+func hideOverlayWindow() {
 	hwnd := getHWND()
-	if hwnd == 0 {
-		return
+	if hwnd != 0 {
+		procShowWindow.Call(hwnd, swHide)
 	}
-	applyOverlayStylesHWND(hwnd)
+}
+
+// applyOverlayStyles finds the window and applies click-through + no-activate + no-taskbar styles.
+// It polls rapidly at startup to catch the window handle as soon as Wails registers it.
+func applyOverlayStyles() {
+	for i := 0; i < 40; i++ {
+		hwnd := getHWND()
+		if hwnd != 0 {
+			// Window found. Temporarily hide, apply styles, and refresh frame
+			// This removes any taskbar button created during window initialization.
+			procShowWindow.Call(hwnd, swHide)
+			applyOverlayStylesHWND(hwnd)
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // applyOverlayStylesHWND applies:
@@ -125,11 +147,12 @@ func applyOverlayStyles() {
 //   - WS_EX_NOACTIVATE   → window won't steal keyboard focus
 //   - WS_EX_LAYERED      → required for the above two to work correctly
 //   - WS_EX_TOOLWINDOW   → avoids showing icon in taskbar
+//   - & ^WS_EX_APPWINDOW → explicitly removes taskbar presence
 func applyOverlayStylesHWND(hwnd uintptr) {
 	exStyle, _, _ := procGetWindowLongPtrW.Call(hwnd, gwlExStyle)
-	newStyle := exStyle | wsExLayered | wsExTransparent | wsExNoActivate | wsExToolWindow | wsExTopmost
+	newStyle := (exStyle & ^wsExAppWindow) | wsExLayered | wsExTransparent | wsExNoActivate | wsExToolWindow | wsExTopmost
 	procSetWindowLongPtrW.Call(hwnd, gwlExStyle, newStyle)
-	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpFlags)
+	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpNoSize|swpNoMove|swpNoActivate|swpFrameChanged)
 }
 
 // makeWindowClickable is now superseded by switchToSettingsWindow, but kept for direct calls
