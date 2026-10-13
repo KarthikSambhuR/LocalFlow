@@ -702,9 +702,18 @@ export async function setupMeetingsTab() {
     const seconds = Math.floor((seg.start_ms % 60000) / 1000);
     const timestampStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
+    let avatarLetter = 'S';
+    if (isYou) {
+      avatarLetter = 'Y';
+    } else if (seg.speaker.startsWith('Speaker ')) {
+      avatarLetter = seg.speaker.replace('Speaker ', 'S');
+    } else if (seg.speaker && seg.speaker.length > 0) {
+      avatarLetter = seg.speaker.charAt(0).toUpperCase();
+    }
+
     bubble.innerHTML = `
       <div class="speaker-tag ${isYou ? 'speaker-you' : 'speaker-other'}">
-        <span class="speaker-avatar">${isYou ? 'Y' : seg.speaker.replace('Speaker ', 'S')}</span>
+        <span class="speaker-avatar">${escapeHtml(avatarLetter)}</span>
         <span class="speaker-name">${escapeHtml(seg.speaker)}</span>
         <span class="bubble-time">${timestampStr}</span>
         ${seg.language ? `<span class="bubble-lang">${seg.language.toUpperCase()}</span>` : ''}

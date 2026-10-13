@@ -366,7 +366,10 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 				if len(sysBuf) >= 16000/2 {
 					chunk := make([]float32, len(sysBuf))
 					copy(chunk, sysBuf)
-					speaker := m.attributeLoopbackSpeaker(chunk)
+					speaker := GetCurrentExtensionSpeaker()
+					if speaker == "" {
+						speaker = m.attributeLoopbackSpeaker(chunk)
+					}
 					select {
 					case m.segmentQueue <- SpeechSegment{
 						MeetingID: m.meetingID,

@@ -30,16 +30,41 @@
     let speakerName = '';
 
     if (platform === 'google_meet') {
-      // Google Meet highlights the speaker's tile with blue border or speaking indicator
-      const activeTile = document.querySelector('[data-requested-participant-id] [data-self-name], [data-participant-id] [aria-label*="speaking" i], [aria-label*="is talking" i]');
-      if (activeTile) {
-        speakerName = activeTile.getAttribute('aria-label') || activeTile.textContent || '';
-        speakerName = speakerName.replace(/is talking/gi, '').replace(/speaking/gi, '').trim();
+      // 1. Google Meet animated mic/speaking indicators (blue volume wave or dots)
+      const speakingMic = document.querySelector('[data-is-muted="false"] [class*="speaking" i], [aria-label*="speaking" i], [aria-label*="is talking" i], [data-participant-id] div[class*="speaking" i]');
+      if (speakingMic) {
+        const tile = speakingMic.closest('[data-participant-id], [data-requested-participant-id], div[role="listitem"]');
+        if (tile) {
+          const nameEl = tile.querySelector('[data-self-name], [title], span[class*="name" i], div[class*="name" i]');
+          if (nameEl) speakerName = nameEl.getAttribute('title') || nameEl.getAttribute('data-self-name') || nameEl.textContent || '';
+        }
+        if (!speakerName) {
+          speakerName = speakingMic.getAttribute('aria-label') || '';
+        }
       }
+
+      // 2. Active highlighted border / speaking ring on participant tile
       if (!speakerName) {
-        // Fallback to active tile name container
-        const nameEl = document.querySelector('[data-participant-id] div[title], [data-self-name]');
-        if (nameEl) speakerName = nameEl.getAttribute('title') || nameEl.textContent || '';
+        const ring = document.querySelector('div[class*="speaking-indicator" i], div[class*="active-speaker" i], [data-participant-id]:has([class*="speaking" i])');
+        if (ring) {
+          const nameEl = ring.querySelector('[data-self-name], [title], span[class*="name" i]');
+          if (nameEl) speakerName = nameEl.getAttribute('title') || nameEl.textContent || '';
+        }
+      }
+
+      // 3. Fallback: Check participants list or any active participant label
+      if (!speakerName) {
+        const label = document.querySelector('[data-self-name], div[title][role="heading"], div[data-participant-id] span');
+        if (label) {
+          const text = label.getAttribute('title') || label.getAttribute('data-self-name') || label.textContent || '';
+          if (text && !text.includes('You') && text.trim().length > 1) {
+            speakerName = text.trim();
+          }
+        }
+      }
+
+      if (speakerName) {
+        speakerName = speakerName.replace(/is talking/gi, '').replace(/speaking/gi, '').replace(/\(You\)/gi, '').trim();
       }
     } else if (platform === 'zoom') {
       // Zoom web client active speaker display
