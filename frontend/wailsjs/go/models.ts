@@ -100,6 +100,26 @@ export namespace main {
 	        this.window_maximized = source["window_maximized"];
 	    }
 	}
+	export class DetectedBrowser {
+	    id: string;
+	    name: string;
+	    path: string;
+	    installed: boolean;
+	    url: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DetectedBrowser(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.installed = source["installed"];
+	        this.url = source["url"];
+	    }
+	}
 	export class Meeting {
 	    id: string;
 	    title: string;
@@ -107,6 +127,7 @@ export namespace main {
 	    duration_seconds: number;
 	    audio_path: string;
 	    summary_markdown: string;
+	    short_summary: string;
 	    full_transcript: string;
 	
 	    static createFrom(source: any = {}) {
@@ -121,6 +142,7 @@ export namespace main {
 	        this.duration_seconds = source["duration_seconds"];
 	        this.audio_path = source["audio_path"];
 	        this.summary_markdown = source["summary_markdown"];
+	        this.short_summary = source["short_summary"];
 	        this.full_transcript = source["full_transcript"];
 	    }
 	}

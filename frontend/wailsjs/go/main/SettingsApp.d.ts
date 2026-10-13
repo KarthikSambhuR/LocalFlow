@@ -26,9 +26,13 @@ export function GetConfig():Promise<main.Config>;
 
 export function GetDictionaryWords():Promise<Array<string>>;
 
+export function GetExtensionPath():Promise<string>;
+
 export function GetGPUDevices():Promise<Array<string>>;
 
 export function GetInitialRoute():Promise<string>;
+
+export function GetInstalledBrowsers():Promise<Array<main.DetectedBrowser>>;
 
 export function GetMeeting(arg1:string):Promise<main.MeetingDetail>;
 
@@ -52,9 +56,13 @@ export function GetVersion():Promise<string>;
 
 export function InstallUpdateAndRestart():Promise<void>;
 
+export function IsExtensionConnected():Promise<boolean>;
+
 export function IsMeetingRecording():Promise<boolean>;
 
 export function IsSetupCompleted():Promise<boolean>;
+
+export function OpenBrowserExtensionPage(arg1:string,arg2:string):Promise<void>;
 
 export function PurgeNow():Promise<void>;
 

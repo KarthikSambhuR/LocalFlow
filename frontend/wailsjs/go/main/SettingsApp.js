@@ -50,12 +50,20 @@ export function GetDictionaryWords() {
   return window['go']['main']['SettingsApp']['GetDictionaryWords']();
 }
 
+export function GetExtensionPath() {
+  return window['go']['main']['SettingsApp']['GetExtensionPath']();
+}
+
 export function GetGPUDevices() {
   return window['go']['main']['SettingsApp']['GetGPUDevices']();
 }
 
 export function GetInitialRoute() {
   return window['go']['main']['SettingsApp']['GetInitialRoute']();
+}
+
+export function GetInstalledBrowsers() {
+  return window['go']['main']['SettingsApp']['GetInstalledBrowsers']();
 }
 
 export function GetMeeting(arg1) {
@@ -102,12 +110,20 @@ export function InstallUpdateAndRestart() {
   return window['go']['main']['SettingsApp']['InstallUpdateAndRestart']();
 }
 
+export function IsExtensionConnected() {
+  return window['go']['main']['SettingsApp']['IsExtensionConnected']();
+}
+
 export function IsMeetingRecording() {
   return window['go']['main']['SettingsApp']['IsMeetingRecording']();
 }
 
 export function IsSetupCompleted() {
   return window['go']['main']['SettingsApp']['IsSetupCompleted']();
+}
+
+export function OpenBrowserExtensionPage(arg1, arg2) {
+  return window['go']['main']['SettingsApp']['OpenBrowserExtensionPage'](arg1, arg2);
 }
 
 export function PurgeNow() {

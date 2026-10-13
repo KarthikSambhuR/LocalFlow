@@ -1657,9 +1657,28 @@
   background: #ef4444;
 }
 
+.companion-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .companion-modal-card {
   max-width: 580px;
   width: 95%;
+  background: #141412;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7) !important;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   animation: companionModalIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
