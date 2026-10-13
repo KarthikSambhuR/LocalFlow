@@ -77,6 +77,10 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("[Extension Server] Browser Companion connected!")
 
 	// Notify frontend UI that companion is connected
+	engine := GetMeetingEngine()
+	if engine != nil && engine.ctx != nil {
+		wailsRuntime.EventsEmit(engine.ctx, "extension-connection-status", true)
+	}
 	if globalApp != nil && globalApp.ctx != nil {
 		wailsRuntime.EventsEmit(globalApp.ctx, "extension-connection-status", true)
 	}
@@ -89,6 +93,9 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 		globalExtensionServer.mutex.Unlock()
 		conn.Close()
 		fmt.Println("[Extension Server] Browser Companion disconnected")
+		if engine != nil && engine.ctx != nil {
+			wailsRuntime.EventsEmit(engine.ctx, "extension-connection-status", false)
+		}
 		if globalApp != nil && globalApp.ctx != nil {
 			wailsRuntime.EventsEmit(globalApp.ctx, "extension-connection-status", false)
 		}

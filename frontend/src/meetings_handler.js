@@ -406,6 +406,18 @@ export async function setupMeetingsTab() {
     });
   }
 
+  // Periodic polling check while companion modal is open
+  setInterval(async () => {
+    if (companionModal && companionModal.style.display !== 'none') {
+      if (window.go?.main?.SettingsApp?.IsExtensionConnected) {
+        try {
+          const connected = await window.go.main.SettingsApp.IsExtensionConnected();
+          updateCompanionConnectionUI(connected);
+        } catch (e) {}
+      }
+    }
+  }, 1000);
+
   // Initial connection check
   if (window.go?.main?.SettingsApp?.IsExtensionConnected) {
     window.go.main.SettingsApp.IsExtensionConnected().then(updateCompanionConnectionUI).catch(() => {});

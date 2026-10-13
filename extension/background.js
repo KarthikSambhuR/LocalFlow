@@ -17,6 +17,7 @@ function connectWebSocket() {
       isConnected = true;
       console.log('[LocalFlow Extension] Connected to LocalFlow desktop app');
       notifyTabs({ type: 'LOCALFLOW_STATUS', connected: true });
+      startPingInterval();
     };
 
     socket.onmessage = (event) => {
@@ -29,16 +30,35 @@ function connectWebSocket() {
     socket.onclose = () => {
       isConnected = false;
       socket = null;
+      stopPingInterval();
       notifyTabs({ type: 'LOCALFLOW_STATUS', connected: false });
       scheduleReconnect();
     };
 
     socket.onerror = () => {
       isConnected = false;
+      stopPingInterval();
       if (socket) socket.close();
     };
   } catch (err) {
     scheduleReconnect();
+  }
+}
+
+let pingTimer = null;
+function startPingInterval() {
+  stopPingInterval();
+  pingTimer = setInterval(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'PING' }));
+    }
+  }, 10000);
+}
+
+function stopPingInterval() {
+  if (pingTimer) {
+    clearInterval(pingTimer);
+    pingTimer = null;
   }
 }
 
