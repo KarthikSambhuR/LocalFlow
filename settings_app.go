@@ -1495,12 +1495,26 @@ func (s *SettingsApp) GetInstalledBrowsers() []DetectedBrowser {
 }
 
 func (s *SettingsApp) GetExtensionPath() string {
-	extDir := filepath.Join(getBaseAppDir(), "extension")
-	if _, err := os.Stat(extDir); err != nil {
-		// Fallback to relative extension dir
-		extDir, _ = filepath.Abs("extension")
+	candidates := []string{
+		"extension",
+		filepath.Join(".", "extension"),
+		filepath.Join(getBaseAppDir(), "extension"),
+		filepath.Join(filepath.Dir(getBaseAppDir()), "extension"),
 	}
-	return extDir
+
+	for _, c := range candidates {
+		if abs, err := filepath.Abs(c); err == nil {
+			if info, err := os.Stat(abs); err == nil && info.IsDir() {
+				// Verify manifest.json exists inside
+				if _, err := os.Stat(filepath.Join(abs, "manifest.json")); err == nil {
+					return abs
+				}
+			}
+		}
+	}
+
+	abs, _ := filepath.Abs("extension")
+	return abs
 }
 
 func (s *SettingsApp) OpenBrowserExtensionPage(browserPath string, extensionsURL string) error {
@@ -1514,13 +1528,16 @@ func (s *SettingsApp) OpenBrowserExtensionPage(browserPath string, extensionsURL
 		_ = exec.Command("explorer.exe", extDir).Start()
 	}()
 
-	// 3. Open browser extensions page
-	if browserPath != "" {
-		go func() {
-			time.Sleep(300 * time.Millisecond)
+	// 3. Open browser extensions page via shell
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		// Use powershell Start-Process or direct exec
+		if browserPath != "" {
 			_ = exec.Command(browserPath, extensionsURL).Start()
-		}()
-	}
+		} else {
+			_ = exec.Command("powershell", "-NoProfile", "-Command", fmt.Sprintf("Start-Process '%s'", extensionsURL)).Start()
+		}
+	}()
 
 	return nil
 }
