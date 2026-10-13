@@ -95,18 +95,6 @@
     <span class="platform-pill">Slack</span>
   </div>
 
-  <script>
-    chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (res) => {
-      const badge = document.getElementById('statusBadge');
-      const text = document.getElementById('statusText');
-      if (res && res.connected) {
-        badge.className = 'status-badge connected';
-        text.textContent = 'Connected to LocalFlow';
-      } else {
-        badge.className = 'status-badge disconnected';
-        text.textContent = 'Disconnected (Start LocalFlow)';
-      }
-    });
-  </script>
+  <script src="popup.js"></script>
 </body>
 </html>
