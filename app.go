@@ -91,8 +91,291 @@ type App struct {
 	useConformer            bool
 }
 
+var globalApp *App
+var globalAppMutex sync.Mutex
+
+// settingsLLMState is used when the SettingsApp window runs without a pill overlay process.
+// It provides the same LLM server lifecycle management that App provides for the pill overlay.
+var settingsLLMState = struct {
+	sync.Mutex
+	cmd         *exec.Cmd
+	port        int
+	activeModel string
+}{}
+
 func NewApp() *App {
-	return &App{}
+	a := &App{}
+	globalAppMutex.Lock()
+	globalApp = a
+	globalAppMutex.Unlock()
+	return a
+}
+
+func getSharedWhisperContext(cfg Config, modelName string) *C.struct_whisper_context {
+	globalAppMutex.Lock()
+	a := globalApp
+	globalAppMutex.Unlock()
+	if a == nil {
+		return nil
+	}
+	a.whisperMutex.Lock()
+	defer a.whisperMutex.Unlock()
+	if a.ensureWhisperLoaded(cfg, modelName) {
+		return a.whisperCtx
+	}
+	return a.whisperCtx
+}
+
+func getOrStartLLMServer(cfg Config) int {
+	globalAppMutex.Lock()
+	a := globalApp
+	globalAppMutex.Unlock()
+
+	// --- Fast path: pill overlay process owns an App with LLM state ---
+	if a != nil {
+		a.llmMutex.Lock()
+		port := a.llmPort
+		isRunning := a.llmCmd != nil && a.llmCmd.Process != nil
+		activeModel := ""
+		if isRunning {
+			activeModel = a.runningLLMConfig.LLMActiveModel
+		}
+		a.llmMutex.Unlock()
+
+		if isRunning && port > 0 {
+			if activeModel != "" && activeModel != cfg.LLMActiveModel {
+				fmt.Printf("LLM configuration changed (was %s, need %s), restarting llama-server...\n", activeModel, cfg.LLMActiveModel)
+				a.startLLMServer(cfg)
+			} else {
+				return port
+			}
+		} else {
+			a.startLLMServer(cfg)
+		}
+
+		// Wait up to 120 seconds (large models like Gemma take time to load)
+		for i := 0; i < 240; i++ {
+			time.Sleep(500 * time.Millisecond)
+			a.llmMutex.Lock()
+			p := a.llmPort
+			a.llmMutex.Unlock()
+			if p > 0 {
+				return p
+			}
+		}
+		return 0
+	}
+
+	// --- Fallback: SettingsApp window (no pill overlay), use settingsLLMState ---
+	settingsLLMState.Lock()
+	port := settingsLLMState.port
+	isRunning := settingsLLMState.cmd != nil && settingsLLMState.cmd.Process != nil
+	activeModel := settingsLLMState.activeModel
+	settingsLLMState.Unlock()
+
+	if isRunning && port > 0 {
+		if activeModel != "" && activeModel != cfg.LLMActiveModel {
+			fmt.Printf("Settings LLM configuration changed (was %s, need %s), restarting llama-server...\n", activeModel, cfg.LLMActiveModel)
+			startSettingsLLMServer(cfg)
+		} else {
+			return port
+		}
+	} else {
+		startSettingsLLMServer(cfg)
+	}
+
+	// Wait up to 120 seconds
+	for i := 0; i < 240; i++ {
+		time.Sleep(500 * time.Millisecond)
+		settingsLLMState.Lock()
+		p := settingsLLMState.port
+		settingsLLMState.Unlock()
+		if p > 0 {
+			return p
+		}
+	}
+	return 0
+}
+
+
+// startSettingsLLMServer starts llama-server for the SettingsApp window when the
+// pill overlay process is not running. It mirrors App.startLLMServer but uses the
+// package-level settingsLLMState instead of an App struct.
+func startSettingsLLMServer(cfg Config) {
+	settingsLLMState.Lock()
+	defer settingsLLMState.Unlock()
+
+	// Kill any previous instance
+	if settingsLLMState.cmd != nil && settingsLLMState.cmd.Process != nil {
+		_ = settingsLLMState.cmd.Process.Kill()
+		_ = settingsLLMState.cmd.Wait()
+		settingsLLMState.cmd = nil
+		settingsLLMState.port = 0
+	}
+
+	activeLLM := cfg.LLMActiveModel
+	if activeLLM == "" {
+		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	}
+
+	modelsDir := getModelsDirectory()
+	modelPath := filepath.Join(modelsDir, activeLLM)
+	if _, err := os.Stat(modelPath); err != nil {
+		// Try Gemma default, then any .gguf
+		candidate := filepath.Join(modelsDir, "gemma-4-E2B-it-UD-Q4_K_XL.gguf")
+		if _, e := os.Stat(candidate); e == nil {
+			modelPath = candidate
+			activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+		} else {
+			entries, _ := os.ReadDir(modelsDir)
+			found := false
+			for _, entry := range entries {
+				name := entry.Name()
+				if !entry.IsDir() && strings.HasSuffix(strings.ToLower(name), ".gguf") && !strings.Contains(strings.ToLower(name), "mmproj") {
+					modelPath = filepath.Join(modelsDir, name)
+					activeLLM = name
+					found = true
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("startSettingsLLMServer: no .gguf model found in %s\n", modelsDir)
+				return
+			}
+		}
+	}
+
+	port, err := findFreePort()
+	if err != nil {
+		fmt.Printf("startSettingsLLMServer: cannot find free port: %v\n", err)
+		return
+	}
+
+	// Locate llama-server.exe
+	exePath := findLlamaServerExe()
+	if exePath == "" {
+		fmt.Println("startSettingsLLMServer: llama-server.exe not found")
+		return
+	}
+
+	gpuLayers := 0
+	if cfg.ProcessingEngine == "vulkan" {
+		gpuLayers = 999
+	}
+
+	args := []string{
+		"-m", modelPath,
+		"-ngl", fmt.Sprintf("%d", gpuLayers),
+		"--port", fmt.Sprintf("%d", port),
+		"--host", "127.0.0.1",
+		"-c", fmt.Sprintf("%d", cfg.LLMContextSize),
+		"--reasoning", "off",
+		"--jinja",
+	}
+
+	// Attach mmproj if Gemma multimodal
+	if strings.Contains(strings.ToLower(activeLLM), "gemma") {
+		mmprojPath := filepath.Join(modelsDir, "gemma-4-e2b-mmproj-BF16.gguf")
+		if _, e := os.Stat(mmprojPath); e == nil {
+			args = append(args, "--mmproj", mmprojPath)
+		}
+	}
+
+	fmt.Printf("startSettingsLLMServer: %s %s\n", exePath, strings.Join(args, " "))
+	cmd := exec.Command(exePath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+
+	env := os.Environ()
+	dllDir := filepath.Dir(exePath)
+	if !strings.HasSuffix(strings.ToLower(dllDir), "dll") {
+		if _, e := os.Stat(filepath.Join(dllDir, "dll")); e == nil {
+			dllDir = filepath.Join(dllDir, "dll")
+		}
+	}
+	env = append(env, fmt.Sprintf("PATH=%s;%s", dllDir, os.Getenv("PATH")))
+	cmd.Env = env
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("startSettingsLLMServer: failed to start: %v\n", err)
+		return
+	}
+	assignToJobObject(cmd)
+
+	settingsLLMState.cmd = cmd
+	settingsLLMState.port = 0 // set once health check passes
+	settingsLLMState.activeModel = activeLLM
+	fmt.Printf("startSettingsLLMServer: PID %d on port %d\n", cmd.Process.Pid, port)
+
+	go func(readyPort int, startedCmd *exec.Cmd) {
+		healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", readyPort)
+		client := &http.Client{
+			Timeout: 3 * time.Second,
+			Transport: &http.Transport{
+				DisableKeepAlives: true,
+			},
+		}
+		deadline := time.Now().Add(120 * time.Second)
+		for time.Now().Before(deadline) {
+			resp, err := client.Get(healthURL)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					settingsLLMState.Lock()
+					if settingsLLMState.cmd == startedCmd {
+						settingsLLMState.port = readyPort
+						fmt.Printf("startSettingsLLMServer: ready on port %d\n", readyPort)
+					}
+					settingsLLMState.Unlock()
+					return
+				}
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		fmt.Println("startSettingsLLMServer: health check timed out")
+	}(port, cmd)
+}
+
+// findLlamaServerExe locates llama-server.exe using the same search order as App.startLLMServer.
+func findLlamaServerExe() string {
+	// 1. Relative to CWD
+	for _, p := range []string{filepath.Join("lib", "llama-server.exe"), filepath.Join("lib", "dll", "llama-server.exe")} {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// 2. Relative to exe dir
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		for _, rel := range []string{
+			filepath.Join(exeDir, "lib", "llama-server.exe"),
+			filepath.Join(exeDir, "lib", "dll", "llama-server.exe"),
+			filepath.Join(exeDir, "llama-server.exe"),
+		} {
+			if _, err := os.Stat(rel); err == nil {
+				return rel
+			}
+		}
+	}
+	// 3. PATH
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if p := filepath.Join(dir, "llama-server.exe"); func() bool { _, e := os.Stat(p); return e == nil }() {
+			return p
+		}
+	}
+	return ""
+}
+
+// getModelsDirectory returns the directory where GGUF model files are stored.
+// It mirrors App.getModelsDir without needing an App receiver.
+func getModelsDirectory() string {
+	cfg := loadConfig()
+	base := getBaseAppDir()
+	if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
+		base = cfg.DataFolder
+	}
+	return filepath.Join(base, "models")
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -818,6 +1101,18 @@ func (a *App) transcribeOld() {
 	}
 }
 
+func (a *App) SetMeetingBilingual(enabled bool) error {
+	cfg := loadConfig()
+	cfg.MeetingBilingual = enabled
+	return saveConfig(cfg)
+}
+
+func (a *App) SetMeetingLLMModel(model string) error {
+	cfg := loadConfig()
+	cfg.MeetingLLMModel = model
+	return saveConfig(cfg)
+}
+
 func (a *App) getModelsDir() string {
 	cfg := loadConfig()
 	dataDir := getDataDir(cfg)
@@ -942,6 +1237,23 @@ func (a *App) ensureActiveModel() {
 		if cfg.ActiveModel != activeModel {
 			cfg.ActiveModel = activeModel
 			_ = saveConfig(cfg)
+		}
+		return
+	}
+
+	if IsNeedleWhistleActive(activeModel) {
+		whistlePath := ResolveWhistleModelPath(cfg)
+		if fileExists(whistlePath) {
+			if a.whisperCtx != nil {
+				C.whisper_free(a.whisperCtx)
+				a.whisperCtx = nil
+			}
+			FreeConformerSessions()
+			if err := LoadNeedleWhistle(whistlePath); err != nil {
+				fmt.Printf("[Needle Whistle] Error loading Whistle model: %v\n", err)
+			} else {
+				a.loadedModelPath = activeModel
+			}
 		}
 		return
 	}
@@ -1285,6 +1597,7 @@ type LLMRequest struct {
 	Messages           []LLMMessage   `json:"messages"`
 	Temperature        float32        `json:"temperature"`
 	MaxTokens          int            `json:"max_tokens"`
+	Stream             bool           `json:"stream,omitempty"`
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 }
 
@@ -1293,6 +1606,14 @@ type LLMResponse struct {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+	} `json:"choices"`
+}
+
+type LLMStreamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Content string `json:"content"`
+		} `json:"delta"`
 	} `json:"choices"`
 }
 
@@ -1746,14 +2067,34 @@ func (a *App) startLLMServer(cfg Config) {
 	}
 
 	if activeLLM == "" {
-		fmt.Println("Cannot start llama-server: no active LLM model set in config")
-		return
+		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 	}
 
 	modelPath := filepath.Join(a.getModelsDir(), activeLLM)
 	if _, err := os.Stat(modelPath); err != nil {
-		fmt.Printf("Cannot start llama-server: model file %s does not exist\n", modelPath)
-		return
+		// Fallback: check if gemma exists or any .gguf file exists in models directory
+		found := false
+		gemmaCandidate := filepath.Join(a.getModelsDir(), "gemma-4-E2B-it-UD-Q4_K_XL.gguf")
+		if _, errG := os.Stat(gemmaCandidate); errG == nil {
+			modelPath = gemmaCandidate
+			activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+			found = true
+		} else {
+			entries, _ := os.ReadDir(a.getModelsDir())
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".gguf") && !strings.Contains(strings.ToLower(e.Name()), "mmproj") {
+					modelPath = filepath.Join(a.getModelsDir(), e.Name())
+					activeLLM = e.Name()
+					found = true
+					break
+				}
+			}
+		}
+
+		if !found {
+			fmt.Printf("Cannot start llama-server: model file %s does not exist in %s\n", activeLLM, a.getModelsDir())
+			return
+		}
 	}
 
 	port, err := findFreePort()
@@ -1895,7 +2236,12 @@ func (a *App) startLLMServer(cfg Config) {
 	// Wait for the server to become ready in the background before enabling the port.
 	go func(readyPort int) {
 		healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", readyPort)
-		client := &http.Client{Timeout: 3 * time.Second}
+		client := &http.Client{
+			Timeout: 3 * time.Second,
+			Transport: &http.Transport{
+				DisableKeepAlives: true,
+			},
+		}
 		deadline := time.Now().Add(120 * time.Second)
 		for time.Now().Before(deadline) {
 			resp, err := client.Get(healthURL)
@@ -2113,6 +2459,20 @@ func (a *App) transcribeChunk(chunk []float32) string {
 		text, err := a.transcribeAudioWithGemma(whisperBuf)
 		if err != nil {
 			fmt.Println("Background Gemma chunk transcription failed:", err)
+			return ""
+		}
+		return text
+	}
+
+	if IsNeedleWhistleActive(cfg.ActiveModel) {
+		whistlePath := ResolveWhistleModelPath(cfg)
+		if err := LoadNeedleWhistle(whistlePath); err != nil {
+			fmt.Printf("[Needle Whistle] Load error: %v\n", err)
+			return ""
+		}
+		text, err := TranscribeNeedleWhistle(whisperBuf, "")
+		if err != nil {
+			fmt.Println("[Needle Whistle] Chunk transcription failed:", err)
 			return ""
 		}
 		return text

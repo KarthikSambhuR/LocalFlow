@@ -1,0 +1,13 @@
+LIBRARY libneedle3.dll
+EXPORTS
+needle_complete
+needle_embed
+needle_init
+needle_last_error
+needle_load
+needle_models
+needle_reset
+needle_set_audio
+needle_stream_transcribe_process
+needle_stream_transcribe_stop
+needle_transcribe

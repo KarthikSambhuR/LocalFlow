@@ -55,6 +55,11 @@ type Config struct {
 	BilingualWhisperModel      string  `json:"bilingual_whisper_model"`
 	BilingualConformerModel    string  `json:"bilingual_conformer_model"`
 
+	// Meeting-specific model configurations (independent of user dictation settings)
+	MeetingModel               string  `json:"meeting_model"`
+	MeetingBilingual           bool    `json:"meeting_bilingual"`
+	MeetingLLMModel            string  `json:"meeting_llm_model"`
+
 	// Window geometry — persisted so the home/settings window reopens at the same size.
 	WindowWidth     int  `json:"window_width"`
 	WindowHeight    int  `json:"window_height"`
@@ -91,6 +96,9 @@ func loadConfig() Config {
 		BilingualRoutingEnabled:    false,
 		BilingualWhisperModel:      "ggml-tiny.en.bin",
 		BilingualConformerModel:    "indicconformer.int8.onnx",
+		MeetingModel:               "ggml-tiny.en.bin",
+		MeetingBilingual:           false,
+		MeetingLLMModel:            "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,

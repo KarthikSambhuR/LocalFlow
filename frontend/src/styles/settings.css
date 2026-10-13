@@ -555,6 +555,11 @@ kbd {
   padding: 2px;
 }
 
+.provider-cactus {
+  background: #ffffff;
+  padding: 3px;
+}
+
 .model-family-title-wrap {
   display: flex;
   flex-direction: column;

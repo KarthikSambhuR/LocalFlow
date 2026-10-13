@@ -8,6 +8,8 @@ export function AddTransliteration(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteDictionaryWord(arg1:string):Promise<void>;
 
+export function DeleteMeetingRecord(arg1:string):Promise<void>;
+
 export function DeleteModel(arg1:string):Promise<void>;
 
 export function DeleteRecording(arg1:number):Promise<void>;
@@ -28,6 +30,10 @@ export function GetGPUDevices():Promise<Array<string>>;
 
 export function GetInitialRoute():Promise<string>;
 
+export function GetMeeting(arg1:string):Promise<main.MeetingDetail>;
+
+export function GetMeetingsList():Promise<Array<main.Meeting>>;
+
 export function GetMicrophones():Promise<Array<string>>;
 
 export function GetModelsList():Promise<Array<main.ModelStatus>>;
@@ -46,9 +52,13 @@ export function GetVersion():Promise<string>;
 
 export function InstallUpdateAndRestart():Promise<void>;
 
+export function IsMeetingRecording():Promise<boolean>;
+
 export function IsSetupCompleted():Promise<boolean>;
 
 export function PurgeNow():Promise<void>;
+
+export function RegenerateMeetingSummary(arg1:string):Promise<string>;
 
 export function SelectDataFolder():Promise<string>;
 
@@ -95,5 +105,9 @@ export function SetSelectedGPU(arg1:string):Promise<void>;
 export function SetStartMinimized(arg1:boolean):Promise<void>;
 
 export function SetStartOnStartup(arg1:boolean):Promise<void>;
+
+export function StartMeeting(arg1:string):Promise<string>;
+
+export function StopMeeting():Promise<string>;
 
 export function UpdateRecording(arg1:number,arg2:string):Promise<void>;

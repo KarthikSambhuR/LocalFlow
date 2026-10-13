@@ -55,12 +55,15 @@
 
 .module.processing .processing-ring {
   opacity: 1;
-  animation: spin 0.6s linear infinite;
+  animation: spinDictation 0.6s linear infinite;
 }
 
 .module.processing .visualizer { opacity: 0; }
 
-@keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes spinDictation {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
 
 .module.refining .processing-ring {
   border-top-color: var(--accent);

@@ -48,6 +48,9 @@ export namespace main {
 	    bilingual_routing_enabled: boolean;
 	    bilingual_whisper_model: string;
 	    bilingual_conformer_model: string;
+	    meeting_model: string;
+	    meeting_bilingual: boolean;
+	    meeting_llm_model: string;
 	    window_width: number;
 	    window_height: number;
 	    window_maximized: boolean;
@@ -89,11 +92,95 @@ export namespace main {
 	        this.bilingual_routing_enabled = source["bilingual_routing_enabled"];
 	        this.bilingual_whisper_model = source["bilingual_whisper_model"];
 	        this.bilingual_conformer_model = source["bilingual_conformer_model"];
+	        this.meeting_model = source["meeting_model"];
+	        this.meeting_bilingual = source["meeting_bilingual"];
+	        this.meeting_llm_model = source["meeting_llm_model"];
 	        this.window_width = source["window_width"];
 	        this.window_height = source["window_height"];
 	        this.window_maximized = source["window_maximized"];
 	    }
 	}
+	export class Meeting {
+	    id: string;
+	    title: string;
+	    created_at: string;
+	    duration_seconds: number;
+	    audio_path: string;
+	    summary_markdown: string;
+	    full_transcript: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Meeting(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.created_at = source["created_at"];
+	        this.duration_seconds = source["duration_seconds"];
+	        this.audio_path = source["audio_path"];
+	        this.summary_markdown = source["summary_markdown"];
+	        this.full_transcript = source["full_transcript"];
+	    }
+	}
+	export class MeetingSegment {
+	    id: number;
+	    meeting_id: string;
+	    speaker: string;
+	    start_ms: number;
+	    end_ms: number;
+	    text: string;
+	    language: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MeetingSegment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.meeting_id = source["meeting_id"];
+	        this.speaker = source["speaker"];
+	        this.start_ms = source["start_ms"];
+	        this.end_ms = source["end_ms"];
+	        this.text = source["text"];
+	        this.language = source["language"];
+	    }
+	}
+	export class MeetingDetail {
+	    meeting: Meeting;
+	    segments: MeetingSegment[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MeetingDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting = this.convertValues(source["meeting"], Meeting);
+	        this.segments = this.convertValues(source["segments"], MeetingSegment);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ModelStatus {
 	    id: string;
 	    name: string;

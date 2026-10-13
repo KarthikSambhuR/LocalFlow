@@ -35,6 +35,9 @@ func (s *SettingsApp) startup(ctx context.Context) {
 	pruneAudioCache(cfg.AudioRetentionDays)
 	pruneRecordings(cfg.TranscriptionRetentionDays)
 
+	// Set Wails context on meeting engine
+	GetMeetingEngine().SetContext(ctx)
+
 	// Restore the window to the size/state it was in when the user last closed it.
 	go func() {
 		// Give the WebView a moment to fully initialize before issuing window calls.
@@ -448,6 +451,18 @@ var AvailableModels = []WhisperModelInfo{
 		SpeedDescription: "Full precision 32-bit model",
 		Description:      "Full precision 32-bit Indic Conformer 120M model for Malayalam. Balanced speed and accuracy.",
 		Language:         "malayalam",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "cactus-whistle",
+		Name:             "Cactus Whistle (Multilingual)",
+		Filename:         "whistle.cact",
+		URL:              "https://huggingface.co/Cactus-Compute/whistle/resolve/main/whistle.cact",
+		SizeMB:           17,
+		SpeedLabel:       "Ultra-compact (17 MB)",
+		SpeedDescription: "2-bit quantized edge ASR",
+		Description:      "Ultra-compact 16.9 MB ASR model by Cactus Compute powered by Needle. Supports English, German, French, Spanish, Italian, Dutch, and Polish.",
+		Language:         "multilingual",
 		ModelType:        "whisper",
 	},
 	{
@@ -1324,4 +1339,46 @@ func unzip(src string, dest string) error {
 		}
 	}
 	return nil
+}
+
+// ── Meeting Mode API ─────────────────────────────────────────────────────────
+
+func (s *SettingsApp) StartMeeting(title string) (string, error) {
+	return GetMeetingEngine().StartRecording(title)
+}
+
+func (s *SettingsApp) StopMeeting() (string, error) {
+	return GetMeetingEngine().StopRecording()
+}
+
+func (s *SettingsApp) IsMeetingRecording() bool {
+	return GetMeetingEngine().IsRecording()
+}
+
+func (s *SettingsApp) GetMeetingsList() ([]Meeting, error) {
+	return GetMeetings()
+}
+
+func (s *SettingsApp) GetMeeting(id string) (*MeetingDetail, error) {
+	return GetMeetingDetail(id)
+}
+
+func (s *SettingsApp) DeleteMeetingRecord(id string) error {
+	return DeleteMeeting(id)
+}
+
+func (s *SettingsApp) RegenerateMeetingSummary(id string) (string, error) {
+	detail, err := GetMeetingDetail(id)
+	if err != nil {
+		return "", err
+	}
+	if detail.Meeting.FullTranscript == "" {
+		return "No dialogue transcript found for this meeting.", nil
+	}
+	summary, err := generateMeetingSummary(detail.Meeting.FullTranscript)
+	if err != nil {
+		return "", err
+	}
+	_ = UpdateMeetingSummary(id, summary, detail.Meeting.FullTranscript, detail.Meeting.DurationSeconds)
+	return summary, nil
 }

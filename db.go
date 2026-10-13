@@ -164,6 +164,37 @@ func initDB() error {
 		return err
 	}
 
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS meetings (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL,
+			created_at DATETIME NOT NULL,
+			duration_seconds INTEGER DEFAULT 0,
+			audio_path TEXT,
+			summary_markdown TEXT,
+			full_transcript TEXT
+		);
+	`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS meeting_segments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			meeting_id TEXT NOT NULL,
+			speaker TEXT NOT NULL,
+			start_ms INTEGER DEFAULT 0,
+			end_ms INTEGER DEFAULT 0,
+			text TEXT NOT NULL,
+			language TEXT DEFAULT 'en',
+			FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
+		);
+	`)
+	if err != nil {
+		return err
+	}
+
 	// Perform background migration for legacy records that have empty/0 word_count but non-empty transcription
 	go migrateLegacyWordCounts()
 
@@ -475,4 +506,151 @@ func GetTransliterations() ([]WordMapping, error) {
 	}
 	return out, nil
 }
+
+type Meeting struct {
+	ID              string `json:"id"`
+	Title           string `json:"title"`
+	CreatedAt       string `json:"created_at"`
+	DurationSeconds int    `json:"duration_seconds"`
+	AudioPath       string `json:"audio_path"`
+	SummaryMarkdown string `json:"summary_markdown"`
+	FullTranscript  string `json:"full_transcript"`
+}
+
+type MeetingSegment struct {
+	ID        int    `json:"id"`
+	MeetingID string `json:"meeting_id"`
+	Speaker   string `json:"speaker"`
+	StartMs   int64  `json:"start_ms"`
+	EndMs     int64  `json:"end_ms"`
+	Text      string `json:"text"`
+	Language  string `json:"language"`
+}
+
+type MeetingDetail struct {
+	Meeting  Meeting          `json:"meeting"`
+	Segments []MeetingSegment `json:"segments"`
+}
+
+func InsertMeeting(m Meeting) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	_, err := db.Exec(`
+		INSERT INTO meetings (id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, m.ID, m.Title, m.CreatedAt, m.DurationSeconds, m.AudioPath, m.SummaryMarkdown, m.FullTranscript)
+	return err
+}
+
+func UpdateMeetingSummary(id string, summary string, fullTranscript string, durationSeconds int) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	_, err := db.Exec(`
+		UPDATE meetings 
+		SET summary_markdown = ?, full_transcript = ?, duration_seconds = ?
+		WHERE id = ?
+	`, summary, fullTranscript, durationSeconds, id)
+	return err
+}
+
+func InsertMeetingSegment(s MeetingSegment) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	_, err := db.Exec(`
+		INSERT INTO meeting_segments (meeting_id, speaker, start_ms, end_ms, text, language)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, s.MeetingID, s.Speaker, s.StartMs, s.EndMs, s.Text, s.Language)
+	return err
+}
+
+func GetMeetings() ([]Meeting, error) {
+	if db == nil {
+		return nil, nil
+	}
+	rows, err := db.Query(`
+		SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript
+		FROM meetings
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var meetings []Meeting
+	for rows.Next() {
+		var m Meeting
+		var dt time.Time
+		if err := rows.Scan(&m.ID, &m.Title, &dt, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript); err == nil {
+			m.CreatedAt = dt.Format(time.RFC3339)
+			meetings = append(meetings, m)
+		} else {
+			// Try scan as string if sqlite stored as text
+			var dtStr string
+			if err2 := rows.Scan(&m.ID, &m.Title, &dtStr, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript); err2 == nil {
+				m.CreatedAt = dtStr
+				meetings = append(meetings, m)
+			}
+		}
+	}
+	return meetings, nil
+}
+
+func GetMeetingDetail(id string) (*MeetingDetail, error) {
+	if db == nil {
+		return nil, sql.ErrConnDone
+	}
+	var m Meeting
+	var dt time.Time
+	err := db.QueryRow(`
+		SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript
+		FROM meetings WHERE id = ?
+	`, id).Scan(&m.ID, &m.Title, &dt, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript)
+	if err == nil {
+		m.CreatedAt = dt.Format(time.RFC3339)
+	} else {
+		var dtStr string
+		err2 := db.QueryRow(`
+			SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript
+			FROM meetings WHERE id = ?
+		`, id).Scan(&m.ID, &m.Title, &dtStr, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript)
+		if err2 != nil {
+			return nil, err2
+		}
+		m.CreatedAt = dtStr
+	}
+
+	rows, err := db.Query(`
+		SELECT id, meeting_id, speaker, start_ms, end_ms, text, language
+		FROM meeting_segments
+		WHERE meeting_id = ?
+		ORDER BY start_ms ASC
+	`, id)
+	if err != nil {
+		return &MeetingDetail{Meeting: m}, nil
+	}
+	defer rows.Close()
+
+	var segs []MeetingSegment
+	for rows.Next() {
+		var s MeetingSegment
+		if err := rows.Scan(&s.ID, &s.MeetingID, &s.Speaker, &s.StartMs, &s.EndMs, &s.Text, &s.Language); err == nil {
+			segs = append(segs, s)
+		}
+	}
+	return &MeetingDetail{Meeting: m, Segments: segs}, nil
+}
+
+func DeleteMeeting(id string) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	_, _ = db.Exec("DELETE FROM meeting_segments WHERE meeting_id = ?", id)
+	_, err := db.Exec("DELETE FROM meetings WHERE id = ?", id)
+	return err
+}
+
 

@@ -63,6 +63,10 @@ settingsModal.innerHTML = `
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         Home
       </div>
+      <div class="nav-item" data-section="meetings" id="navMeetings">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Meetings
+      </div>
       <div class="nav-item" data-section="insights">
         <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>
         Insights
@@ -136,6 +140,152 @@ settingsModal.innerHTML = `
           </div>
           <div class="history-list show-refined" id="historyList"></div>
         </main>
+      </div>
+    </div>
+    <div class="section" id="sec-meetings">
+      <div class="meeting-layout">
+        <!-- Live Meeting Header & Status Panel -->
+        <div class="meeting-top-panel">
+          <div class="meeting-status-card">
+            <div class="meeting-timer-box">
+              <span class="meeting-record-indicator" id="meetingPulseDot"></span>
+              <span class="meeting-timer-label" id="meetingTimer">00:00:00</span>
+            </div>
+            <div class="meeting-meta-details">
+              <span class="meeting-status-badge" id="meetingStatusBadge">Ready</span>
+              <span class="meeting-device-pill" title="Capturing microphone + system loopback audio">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>
+                Dual Audio
+              </span>
+
+              <!-- Meeting Model Selector (Independent from user's global dictation setting) -->
+              <div class="meeting-model-picker-wrap">
+                <svg class="meeting-picker-icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+                <select id="meetingModelSelect" class="meeting-compact-select" title="Meeting STT Model">
+                  <option value="ggml-tiny.en.bin">Tiny English</option>
+                  <option value="ggml-tiny.bin">Tiny Multilingual</option>
+                  <option value="ggml-base.en.bin">Base English</option>
+                  <option value="ggml-small.en.bin">Small English</option>
+                  <option value="whistle.cact">Cactus Whistle</option>
+                </select>
+              </div>
+
+              <!-- Meeting LLM Selector -->
+              <div class="meeting-model-picker-wrap">
+                <svg class="meeting-picker-icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <select id="meetingLLMSelect" class="meeting-compact-select" title="Meeting Summary Model">
+                  <option value="">Use Dictation Model</option>
+                </select>
+              </div>
+
+              <!-- Meeting Bilingual Routing Toggle -->
+              <button type="button" id="meetingBilingualToggle" class="meeting-toggle-btn" title="Toggle Malayalam/English bilingual routing for this meeting">
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                <span id="meetingBilingualLabel">English</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="meeting-action-controls">
+            <input type="text" id="meetingTitleInput" class="meeting-title-field" placeholder="Meeting title (optional)..." />
+            <button type="button" id="startMeetingBtn" class="meeting-primary-btn">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+              Record
+            </button>
+            <button type="button" id="stopMeetingBtn" class="meeting-stop-btn danger" style="display: none;">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              End
+            </button>
+          </div>
+        </div>
+
+        <!-- Audio Activity Levels (Mic vs Loopback) -->
+        <div class="meeting-levels-bar" id="meetingLevelsBar" style="display: none;">
+          <div class="level-metric">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>
+            <span class="level-label">Mic</span>
+            <div class="level-track"><div class="level-fill mic-fill" id="meetingMicMeter"></div></div>
+          </div>
+          <div class="level-metric">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span class="level-label">System</span>
+            <div class="level-track"><div class="level-fill sys-fill" id="meetingSysMeter"></div></div>
+          </div>
+        </div>
+
+        <!-- View Switcher (Live Dialogue vs Minutes & Summary) -->
+        <div class="meeting-subnav-bar">
+          <div class="view-toggle" id="meetingViewToggle">
+            <div class="toggle-pill">
+              <div class="toggle-slider" id="meetingToggleSlider"></div>
+              <button type="button" class="toggle-opt active" id="meetingTabDialogue" data-view="dialogue">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Dialogue
+              </button>
+              <button type="button" class="toggle-opt" id="meetingTabSummary" data-view="summary">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                Minutes
+              </button>
+              <button type="button" class="toggle-opt" id="meetingTabHistory" data-view="history">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Archive
+              </button>
+            </div>
+          </div>
+          <div class="meeting-subnav-actions">
+            <span class="feed-count-badge" id="meetingSpeakerCount">0 speakers</span>
+            <button type="button" id="copyMeetingSummaryBtn" class="meeting-ghost-btn" title="Copy text">
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy
+            </button>
+            <button type="button" id="regenSummaryBtn" class="meeting-ghost-btn" title="Regenerate summary" style="display: none;">
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Regenerate
+            </button>
+          </div>
+        </div>
+
+        <!-- Full-Page Views -->
+        <div class="meeting-views-container">
+          <!-- View 1: Live Dialogue -->
+          <div class="meeting-view-pane active" id="meetingPaneDialogue">
+            <div class="meeting-dialogue-list" id="meetingDialogueList">
+              <div class="meeting-empty-state" id="meetingEmptyState">
+                <div class="empty-icon-wrap">
+                  <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                </div>
+                <div class="empty-title">Ready to Record</div>
+                <p>Click <strong>Record</strong> to capture both your microphone and system audio with real-time speaker separation.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- View 2: Full-Page Markdown Summary & Minutes -->
+          <div class="meeting-view-pane" id="meetingPaneSummary">
+            <div class="meeting-summary-full-wrapper" id="meetingSummaryContent">
+              <div class="summary-placeholder" id="meetingSummaryPlaceholder">
+                <div class="summary-placeholder-icon">
+                  <svg viewBox="0 0 24 24" width="36" height="36" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+                <h3>No Minutes Generated</h3>
+                <p>When you conclude a meeting, structured summary notes, timelines, and action items will appear here.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- View 3: Past Meetings Archive -->
+          <div class="meeting-view-pane" id="meetingPaneHistory">
+            <div class="past-meetings-full-wrapper">
+              <div class="past-meetings-header">
+                <h3>Archive</h3>
+                <span class="past-meetings-count" id="pastMeetingsCount">0 meetings</span>
+              </div>
+              <div class="past-meetings-grid" id="pastMeetingsList">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="section" id="sec-insights">

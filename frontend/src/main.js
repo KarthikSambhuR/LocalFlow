@@ -29,6 +29,7 @@ import {
   setupManglishPersonalization,
   setupBilingualRouting
 } from './settings_handlers.js';
+import { setupMeetingsTab } from './meetings_handler.js';
 
 // Populate state visualizer bars from DOM module
 state.bars = bars;
@@ -117,6 +118,8 @@ function switchSection(target) {
     if (target === 'home') {
       requestAnimationFrame(() => updateGlobalToggleUI(false));
     }
+  } else if (target === 'meetings') {
+    setupMeetingsTab();
   } else if (target === 'dictionary') {
     setupDictionary();
   } else if (target === 'manglish') {

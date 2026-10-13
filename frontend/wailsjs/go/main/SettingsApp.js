@@ -14,6 +14,10 @@ export function DeleteDictionaryWord(arg1) {
   return window['go']['main']['SettingsApp']['DeleteDictionaryWord'](arg1);
 }
 
+export function DeleteMeetingRecord(arg1) {
+  return window['go']['main']['SettingsApp']['DeleteMeetingRecord'](arg1);
+}
+
 export function DeleteModel(arg1) {
   return window['go']['main']['SettingsApp']['DeleteModel'](arg1);
 }
@@ -54,6 +58,14 @@ export function GetInitialRoute() {
   return window['go']['main']['SettingsApp']['GetInitialRoute']();
 }
 
+export function GetMeeting(arg1) {
+  return window['go']['main']['SettingsApp']['GetMeeting'](arg1);
+}
+
+export function GetMeetingsList() {
+  return window['go']['main']['SettingsApp']['GetMeetingsList']();
+}
+
 export function GetMicrophones() {
   return window['go']['main']['SettingsApp']['GetMicrophones']();
 }
@@ -90,12 +102,20 @@ export function InstallUpdateAndRestart() {
   return window['go']['main']['SettingsApp']['InstallUpdateAndRestart']();
 }
 
+export function IsMeetingRecording() {
+  return window['go']['main']['SettingsApp']['IsMeetingRecording']();
+}
+
 export function IsSetupCompleted() {
   return window['go']['main']['SettingsApp']['IsSetupCompleted']();
 }
 
 export function PurgeNow() {
   return window['go']['main']['SettingsApp']['PurgeNow']();
+}
+
+export function RegenerateMeetingSummary(arg1) {
+  return window['go']['main']['SettingsApp']['RegenerateMeetingSummary'](arg1);
 }
 
 export function SelectDataFolder() {
@@ -188,6 +208,14 @@ export function SetStartMinimized(arg1) {
 
 export function SetStartOnStartup(arg1) {
   return window['go']['main']['SettingsApp']['SetStartOnStartup'](arg1);
+}
+
+export function StartMeeting(arg1) {
+  return window['go']['main']['SettingsApp']['StartMeeting'](arg1);
+}
+
+export function StopMeeting() {
+  return window['go']['main']['SettingsApp']['StopMeeting']();
 }
 
 export function UpdateRecording(arg1, arg2) {
