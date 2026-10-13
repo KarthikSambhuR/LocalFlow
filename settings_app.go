@@ -1375,10 +1375,30 @@ func (s *SettingsApp) RegenerateMeetingSummary(id string) (string, error) {
 	if detail.Meeting.FullTranscript == "" {
 		return "No dialogue transcript found for this meeting.", nil
 	}
-	summary, err := generateMeetingSummary(detail.Meeting.FullTranscript)
-	if err != nil {
-		return "", err
+
+	engine := GetMeetingEngine()
+	if engine.ctx != nil {
+		wailsRuntime.EventsEmit(engine.ctx, "meeting-summary-generating", id)
 	}
-	_ = UpdateMeetingSummary(id, summary, detail.Meeting.FullTranscript, detail.Meeting.DurationSeconds)
-	return summary, nil
+
+	go func() {
+		summary, shortSummary, err := generateMeetingSummary(detail.Meeting.FullTranscript)
+		if err != nil {
+			summary = fmt.Sprintf("Summary generation encountered an error: %v\n\nFull dialogue is saved in transcript.", err)
+			shortSummary = ""
+		}
+		_ = UpdateMeetingSummary(id, summary, shortSummary, detail.Meeting.FullTranscript, detail.Meeting.DurationSeconds)
+		if engine.ctx != nil {
+			wailsRuntime.EventsEmit(engine.ctx, "meeting-summary-completed", map[string]interface{}{
+				"id":               id,
+				"meeting_id":       id,
+				"summary":          summary,
+				"summary_markdown": summary,
+				"short_summary":    shortSummary,
+			})
+		}
+	}()
+
+	return "Generating summary in background...", nil
 }
+

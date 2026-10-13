@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -126,7 +127,128 @@ func getSharedWhisperContext(cfg Config, modelName string) *C.struct_whisper_con
 	return a.whisperCtx
 }
 
+func isLlamaServerHealthy(port int) bool {
+	if port <= 0 {
+		return false
+	}
+	client := &http.Client{
+		Timeout: 300 * time.Millisecond,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
+	}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	if err == nil {
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}
+	return false
+}
+
+func getLlamaServerLoadedModel(port int) string {
+	if port <= 0 {
+		return ""
+	}
+	client := &http.Client{
+		Timeout: 500 * time.Millisecond,
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
+	}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/v1/models", port))
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	var res struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err == nil {
+		if len(res.Data) > 0 && res.Data[0].ID != "" {
+			return res.Data[0].ID
+		}
+		if len(res.Models) > 0 && res.Models[0].Name != "" {
+			return res.Models[0].Name
+		}
+	}
+	return ""
+}
+
+func writeLlamaServerPort(port int) {
+	if port <= 0 {
+		return
+	}
+	p := filepath.Join(getBaseAppDir(), "llama_server_port.txt")
+	_ = os.WriteFile(p, []byte(strconv.Itoa(port)), 0644)
+}
+
+func removeLlamaServerPort() {
+	p := filepath.Join(getBaseAppDir(), "llama_server_port.txt")
+	_ = os.Remove(p)
+}
+
+func findActiveLlamaServerPort() int {
+	// 1. Check saved port file
+	p := filepath.Join(getBaseAppDir(), "llama_server_port.txt")
+	if data, err := os.ReadFile(p); err == nil {
+		if port, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil && port > 0 {
+			if isLlamaServerHealthy(port) {
+				return port
+			}
+		}
+	}
+
+	// 2. Scan default ports (49152..49158)
+	for port := 49152; port <= 49158; port++ {
+		if isLlamaServerHealthy(port) {
+			writeLlamaServerPort(port)
+			return port
+		}
+	}
+	return 0
+}
+
+func touchMeetingLLMBusy() {
+	p := filepath.Join(getBaseAppDir(), "llm_meeting_busy.txt")
+	_ = os.WriteFile(p, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0644)
+}
+
+func clearMeetingLLMBusy() {
+	p := filepath.Join(getBaseAppDir(), "llm_meeting_busy.txt")
+	_ = os.Remove(p)
+}
+
+func isMeetingLLMBusy() bool {
+	p := filepath.Join(getBaseAppDir(), "llm_meeting_busy.txt")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return false
+	}
+	ts, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return false
+	}
+	return time.Now().Unix()-ts < 300 // 5 minutes grace window
+}
+
 func getOrStartLLMServer(cfg Config) int {
+	// 1. Check if a healthy llama-server is ALREADY running (pill overlay, prior start, etc.)
+	if existingPort := findActiveLlamaServerPort(); existingPort > 0 {
+		loadedModel := getLlamaServerLoadedModel(existingPort)
+		if cfg.LLMActiveModel == "" || loadedModel == "" || strings.EqualFold(loadedModel, cfg.LLMActiveModel) {
+			writeLlamaServerPort(existingPort)
+			return existingPort
+		}
+	}
+
 	globalAppMutex.Lock()
 	a := globalApp
 	globalAppMutex.Unlock()
@@ -142,24 +264,29 @@ func getOrStartLLMServer(cfg Config) int {
 		}
 		a.llmMutex.Unlock()
 
-		if isRunning && port > 0 {
+		if isRunning && port > 0 && isLlamaServerHealthy(port) {
 			if activeModel != "" && activeModel != cfg.LLMActiveModel {
 				fmt.Printf("LLM configuration changed (was %s, need %s), restarting llama-server...\n", activeModel, cfg.LLMActiveModel)
 				a.startLLMServer(cfg)
 			} else {
+				writeLlamaServerPort(port)
 				return port
 			}
 		} else {
 			a.startLLMServer(cfg)
 		}
 
-		// Wait up to 120 seconds (large models like Gemma take time to load)
+		// Wait up to 120 seconds (large models take time to load)
 		for i := 0; i < 240; i++ {
 			time.Sleep(500 * time.Millisecond)
+			if p := findActiveLlamaServerPort(); p > 0 {
+				return p
+			}
 			a.llmMutex.Lock()
 			p := a.llmPort
 			a.llmMutex.Unlock()
-			if p > 0 {
+			if p > 0 && isLlamaServerHealthy(p) {
+				writeLlamaServerPort(p)
 				return p
 			}
 		}
@@ -173,11 +300,12 @@ func getOrStartLLMServer(cfg Config) int {
 	activeModel := settingsLLMState.activeModel
 	settingsLLMState.Unlock()
 
-	if isRunning && port > 0 {
+	if isRunning && port > 0 && isLlamaServerHealthy(port) {
 		if activeModel != "" && activeModel != cfg.LLMActiveModel {
 			fmt.Printf("Settings LLM configuration changed (was %s, need %s), restarting llama-server...\n", activeModel, cfg.LLMActiveModel)
 			startSettingsLLMServer(cfg)
 		} else {
+			writeLlamaServerPort(port)
 			return port
 		}
 	} else {
@@ -187,16 +315,19 @@ func getOrStartLLMServer(cfg Config) int {
 	// Wait up to 120 seconds
 	for i := 0; i < 240; i++ {
 		time.Sleep(500 * time.Millisecond)
+		if p := findActiveLlamaServerPort(); p > 0 {
+			return p
+		}
 		settingsLLMState.Lock()
 		p := settingsLLMState.port
 		settingsLLMState.Unlock()
-		if p > 0 {
+		if p > 0 && isLlamaServerHealthy(p) {
+			writeLlamaServerPort(p)
 			return p
 		}
 	}
 	return 0
 }
-
 
 // startSettingsLLMServer starts llama-server for the SettingsApp window when the
 // pill overlay process is not running. It mirrors App.startLLMServer but uses the
@@ -211,24 +342,31 @@ func startSettingsLLMServer(cfg Config) {
 		_ = settingsLLMState.cmd.Wait()
 		settingsLLMState.cmd = nil
 		settingsLLMState.port = 0
+		removeLlamaServerPort()
 	}
 
 	activeLLM := cfg.LLMActiveModel
 	if activeLLM == "" {
-		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+		activeLLM = "s1-mini-q4_k_m.gguf"
 	}
 
 	modelsDir := getModelsDirectory()
 	modelPath := filepath.Join(modelsDir, activeLLM)
 	if _, err := os.Stat(modelPath); err != nil {
-		// Try Gemma default, then any .gguf
-		candidate := filepath.Join(modelsDir, "gemma-4-E2B-it-UD-Q4_K_XL.gguf")
-		if _, e := os.Stat(candidate); e == nil {
-			modelPath = candidate
-			activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-		} else {
+		// Try s1-mini or Gemma default, then any .gguf
+		found := false
+		candidates := []string{"s1-mini-q4_k_m.gguf", "gemma-4-E2B-it-UD-Q4_K_XL.gguf"}
+		for _, cand := range candidates {
+			candidatePath := filepath.Join(modelsDir, cand)
+			if _, e := os.Stat(candidatePath); e == nil {
+				modelPath = candidatePath
+				activeLLM = cand
+				found = true
+				break
+			}
+		}
+		if !found {
 			entries, _ := os.ReadDir(modelsDir)
-			found := false
 			for _, entry := range entries {
 				name := entry.Name()
 				if !entry.IsDir() && strings.HasSuffix(strings.ToLower(name), ".gguf") && !strings.Contains(strings.ToLower(name), "mmproj") {
@@ -259,8 +397,23 @@ func startSettingsLLMServer(cfg Config) {
 	}
 
 	gpuLayers := 0
+	gpuIndex := 0
 	if cfg.ProcessingEngine == "vulkan" {
 		gpuLayers = 999
+		if cfg.SelectedGPU != "Default" {
+			gpus := GetGPUDevicesList()
+			for i, name := range gpus {
+				if name == cfg.SelectedGPU {
+					gpuIndex = i
+					break
+				}
+			}
+		}
+	}
+
+	ctxSize := cfg.LLMContextSize
+	if ctxSize <= 0 {
+		ctxSize = 2048
 	}
 
 	args := []string{
@@ -268,7 +421,7 @@ func startSettingsLLMServer(cfg Config) {
 		"-ngl", fmt.Sprintf("%d", gpuLayers),
 		"--port", fmt.Sprintf("%d", port),
 		"--host", "127.0.0.1",
-		"-c", fmt.Sprintf("%d", cfg.LLMContextSize),
+		"-c", fmt.Sprintf("%d", ctxSize),
 		"--reasoning", "off",
 		"--jinja",
 	}
@@ -281,7 +434,7 @@ func startSettingsLLMServer(cfg Config) {
 		}
 	}
 
-	fmt.Printf("startSettingsLLMServer: %s %s\n", exePath, strings.Join(args, " "))
+	fmt.Printf("startSettingsLLMServer: %s %s (GPU index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
 	cmd := exec.Command(exePath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 
@@ -293,6 +446,9 @@ func startSettingsLLMServer(cfg Config) {
 		}
 	}
 	env = append(env, fmt.Sprintf("PATH=%s;%s", dllDir, os.Getenv("PATH")))
+	if cfg.ProcessingEngine == "vulkan" {
+		env = append(env, fmt.Sprintf("GGML_VK_VISIBLE_DEVICES=%d", gpuIndex))
+	}
 	cmd.Env = env
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -325,6 +481,7 @@ func startSettingsLLMServer(cfg Config) {
 					settingsLLMState.Lock()
 					if settingsLLMState.cmd == startedCmd {
 						settingsLLMState.port = readyPort
+						writeLlamaServerPort(readyPort)
 						fmt.Printf("startSettingsLLMServer: ready on port %d\n", readyPort)
 					}
 					settingsLLMState.Unlock()
@@ -1596,7 +1753,7 @@ type LLMRequest struct {
 	Model              string         `json:"model"`
 	Messages           []LLMMessage   `json:"messages"`
 	Temperature        float32        `json:"temperature"`
-	MaxTokens          int            `json:"max_tokens"`
+	MaxTokens          int            `json:"max_tokens,omitempty"`
 	Stream             bool           `json:"stream,omitempty"`
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 }
@@ -2037,6 +2194,7 @@ func findFreePort() (int, error) {
 }
 
 func (a *App) stopLLMServer() {
+	removeLlamaServerPort()
 	a.llmMutex.Lock()
 	defer a.llmMutex.Unlock()
 	if a.llmCmd != nil && a.llmCmd.Process != nil {
@@ -2252,6 +2410,7 @@ func (a *App) startLLMServer(cfg Config) {
 					// Only publish the port if this is still the active server process.
 					if a.llmCmd == cmd {
 						a.llmPort = readyPort
+						writeLlamaServerPort(readyPort)
 						fmt.Printf("llama-server is ready on port %d\n", readyPort)
 					}
 					a.llmMutex.Unlock()
@@ -2271,7 +2430,7 @@ func (a *App) syncLLMServerState(cfg Config) {
 	a.llmMutex.Unlock()
 
 	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-	shouldRun := cfg.LLMEnabled || isGemmaAudioSTT
+	shouldRun := cfg.LLMEnabled || isGemmaAudioSTT || isMeetingLLMBusy()
 
 	if isRunning && !shouldRun {
 		a.stopLLMServer()
@@ -2526,7 +2685,9 @@ var soundTagRegex = regexp.MustCompile(`\[[^\]]*\]|\([^)]*\)`)
 
 func cleanSoundTags(text string) string {
 	cleaned := soundTagRegex.ReplaceAllString(text, "")
-	cleaned = regexp.MustCompile(`\s+`).ReplaceAllString(cleaned, " ")
+	// Only collapse horizontal whitespace (spaces/tabs), NOT newlines.
+	// Using \s+ would destroy markdown line breaks in LLM-generated text.
+	cleaned = regexp.MustCompile(`[ \t]+`).ReplaceAllString(cleaned, " ")
 	return strings.TrimSpace(cleaned)
 }
 

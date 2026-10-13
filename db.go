@@ -172,12 +172,15 @@ func initDB() error {
 			duration_seconds INTEGER DEFAULT 0,
 			audio_path TEXT,
 			summary_markdown TEXT,
+			short_summary TEXT,
 			full_transcript TEXT
 		);
 	`)
 	if err != nil {
 		return err
 	}
+	// Migrate: add short_summary column if it doesn't exist yet
+	_, _ = db.Exec(`ALTER TABLE meetings ADD COLUMN short_summary TEXT`)
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS meeting_segments (
@@ -514,6 +517,7 @@ type Meeting struct {
 	DurationSeconds int    `json:"duration_seconds"`
 	AudioPath       string `json:"audio_path"`
 	SummaryMarkdown string `json:"summary_markdown"`
+	ShortSummary    string `json:"short_summary"`
 	FullTranscript  string `json:"full_transcript"`
 }
 
@@ -543,15 +547,15 @@ func InsertMeeting(m Meeting) error {
 	return err
 }
 
-func UpdateMeetingSummary(id string, summary string, fullTranscript string, durationSeconds int) error {
+func UpdateMeetingSummary(id string, summary string, shortSummary string, fullTranscript string, durationSeconds int) error {
 	if db == nil {
 		return sql.ErrConnDone
 	}
 	_, err := db.Exec(`
 		UPDATE meetings 
-		SET summary_markdown = ?, full_transcript = ?, duration_seconds = ?
+		SET summary_markdown = ?, short_summary = ?, full_transcript = ?, duration_seconds = ?
 		WHERE id = ?
-	`, summary, fullTranscript, durationSeconds, id)
+	`, summary, shortSummary, fullTranscript, durationSeconds, id)
 	return err
 }
 
@@ -571,7 +575,7 @@ func GetMeetings() ([]Meeting, error) {
 		return nil, nil
 	}
 	rows, err := db.Query(`
-		SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript
+		SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, short_summary, full_transcript
 		FROM meetings
 		ORDER BY created_at DESC
 	`)
@@ -584,13 +588,13 @@ func GetMeetings() ([]Meeting, error) {
 	for rows.Next() {
 		var m Meeting
 		var dt time.Time
-		if err := rows.Scan(&m.ID, &m.Title, &dt, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript); err == nil {
+		if err := rows.Scan(&m.ID, &m.Title, &dt, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.ShortSummary, &m.FullTranscript); err == nil {
 			m.CreatedAt = dt.Format(time.RFC3339)
 			meetings = append(meetings, m)
 		} else {
 			// Try scan as string if sqlite stored as text
 			var dtStr string
-			if err2 := rows.Scan(&m.ID, &m.Title, &dtStr, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript); err2 == nil {
+			if err2 := rows.Scan(&m.ID, &m.Title, &dtStr, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.ShortSummary, &m.FullTranscript); err2 == nil {
 				m.CreatedAt = dtStr
 				meetings = append(meetings, m)
 			}
@@ -606,17 +610,17 @@ func GetMeetingDetail(id string) (*MeetingDetail, error) {
 	var m Meeting
 	var dt time.Time
 	err := db.QueryRow(`
-		SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript
+		SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, short_summary, full_transcript
 		FROM meetings WHERE id = ?
-	`, id).Scan(&m.ID, &m.Title, &dt, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript)
+	`, id).Scan(&m.ID, &m.Title, &dt, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.ShortSummary, &m.FullTranscript)
 	if err == nil {
 		m.CreatedAt = dt.Format(time.RFC3339)
 	} else {
 		var dtStr string
 		err2 := db.QueryRow(`
-			SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, full_transcript
+			SELECT id, title, created_at, duration_seconds, audio_path, summary_markdown, short_summary, full_transcript
 			FROM meetings WHERE id = ?
-		`, id).Scan(&m.ID, &m.Title, &dtStr, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.FullTranscript)
+		`, id).Scan(&m.ID, &m.Title, &dtStr, &m.DurationSeconds, &m.AudioPath, &m.SummaryMarkdown, &m.ShortSummary, &m.FullTranscript)
 		if err2 != nil {
 			return nil, err2
 		}

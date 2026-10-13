@@ -12,6 +12,21 @@ func getBaseAppDir() string {
 	if err != nil {
 		return "data"
 	}
+	exeLower := strings.ToLower(exePath)
+	if strings.Contains(exeLower, "temp") || strings.Contains(exeLower, "go-build") {
+		for _, candidate := range []string{
+			filepath.Join("build", "bin", "data"),
+			"data",
+		} {
+			if _, err := os.Stat(filepath.Join(candidate, "localflow_config.json")); err == nil {
+				abs, errAbs := filepath.Abs(candidate)
+				if errAbs == nil {
+					return abs
+				}
+				return candidate
+			}
+		}
+	}
 	appDir := filepath.Join(filepath.Dir(exePath), "data")
 	_ = os.MkdirAll(appDir, 0755)
 	return appDir

@@ -561,7 +561,7 @@ func (m *MeetingEngine) StopRecording() (string, error) {
 	audioFilename, _ := saveMeetingWav(meetingID, mixed)
 
 	// Update DB record
-	_ = UpdateMeetingSummary(meetingID, "", fullTranscript, durationSec)
+	_ = UpdateMeetingSummary(meetingID, "", "", fullTranscript, durationSec)
 	if db != nil {
 		_, _ = db.Exec("UPDATE meetings SET audio_path = ? WHERE id = ?", audioFilename, meetingID)
 	}
@@ -571,15 +571,21 @@ func (m *MeetingEngine) StopRecording() (string, error) {
 		if m.ctx != nil {
 			wailsRuntime.EventsEmit(m.ctx, "meeting-summary-generating", meetingID)
 		}
-		summary, err := generateMeetingSummary(fullTranscript)
+		summary, shortSummary, err := generateMeetingSummary(fullTranscript)
 		if err != nil {
 			summary = fmt.Sprintf("Summary generation encountered an error: %v\n\nFull dialogue is saved in transcript.", err)
+			shortSummary = ""
 		}
-		_ = UpdateMeetingSummary(meetingID, summary, fullTranscript, durationSec)
+		fmt.Printf("[MeetingEngine] Summary generated: %d chars, %d newlines\n",
+			len(summary), strings.Count(summary, "\n"))
+		_ = UpdateMeetingSummary(meetingID, summary, shortSummary, fullTranscript, durationSec)
 		if m.ctx != nil {
 			wailsRuntime.EventsEmit(m.ctx, "meeting-summary-completed", map[string]interface{}{
+				"id":               meetingID,
 				"meeting_id":       meetingID,
+				"summary":          summary,
 				"summary_markdown": summary,
+				"short_summary":    shortSummary,
 			})
 		}
 	}()

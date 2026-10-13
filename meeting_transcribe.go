@@ -151,20 +151,19 @@ func transcribeMeetingChunk(samples []float32) (string, string) {
 	useConformer := false
 	detectedLang := "en"
 
-	isPureEnglishModel := strings.HasSuffix(meetingModel, ".en.bin") || (!meetingBilingual && !strings.Contains(meetingModel, "indicconformer"))
-
-	if isPureEnglishModel {
-		detectedLang = "en"
-		useConformer = false
-	} else if meetingBilingual {
+	if meetingBilingual {
 		detectedLang = detectMeetingChunkLanguage(whisperBuf, cfg)
 		useConformer = (detectedLang == "ml")
+	} else if strings.Contains(meetingModel, "indicconformer") {
+		useConformer = true
+		detectedLang = "ml"
+	} else if strings.HasSuffix(meetingModel, ".en.bin") {
+		detectedLang = "en"
+		useConformer = false
 	} else {
-		isConformerActive := meetingModel == "indicconformer.int8.onnx" || meetingModel == "indicconformer.fp32.onnx"
-		useConformer = isConformerActive
-		if useConformer {
-			detectedLang = "ml"
-		}
+		// Multilingual Whisper model (e.g. ggml-base.bin, ggml-small.bin, etc.)
+		detectedLang = "auto"
+		useConformer = false
 	}
 
 	if useConformer {
