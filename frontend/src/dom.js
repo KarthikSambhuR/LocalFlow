@@ -184,6 +184,13 @@ settingsModal.innerHTML = `
                 <span id="meetingBilingualLabel">English</span>
               </button>
 
+              <!-- Browser Companion Extension Modal Trigger -->
+              <button type="button" id="openCompanionModalBtn" class="meeting-dropdown-btn companion-btn" title="Setup Browser Extension for Zoom, Google Meet, Teams, Webex, Discord & Slack speaker names">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+                <span id="companionBtnText">Browser Extension</span>
+                <span class="companion-status-dot disconnected" id="companionHeaderStatusDot" title="Extension Status"></span>
+              </button>
+
               <!-- "+ New Meeting" Primary Button -->
               <button type="button" id="openNewMeetingModalBtn" class="meeting-new-btn">
                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -350,6 +357,112 @@ settingsModal.innerHTML = `
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
                 Start Recording
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. BROWSER EXTENSION SETUP MODAL (Method 3 Interactive Wizard) -->
+        <div class="meeting-modal-overlay" id="companionModal" style="display: none;">
+          <div class="meeting-modal-card companion-modal-card">
+            <!-- Modal Header -->
+            <div class="modal-header">
+              <div class="modal-header-icon companion-icon-badge">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+              </div>
+              <div class="modal-header-text">
+                <h3>Browser Meeting Companion</h3>
+                <p>Isolates speaker audio &amp; captures names on Google Meet, Zoom, Teams, Webex, Discord &amp; Slack</p>
+              </div>
+              <button type="button" class="modal-close-icon" id="closeCompanionModalBtn">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <div class="modal-body companion-modal-body">
+              <!-- Step Progress Indicators -->
+              <div class="companion-stepper">
+                <div class="step-pill active" id="stepPill1">
+                  <span class="step-num">1</span> Choose Browser
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-pill" id="stepPill2">
+                  <span class="step-num">2</span> Load Unpacked
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-pill" id="stepPill3">
+                  <span class="step-num">3</span> Connected
+                </div>
+              </div>
+
+              <!-- VIEW 1: Choose Browser -->
+              <div class="companion-step-view active" id="companionStep1View">
+                <div class="companion-step-heading">
+                  <h4>Select Your Browser</h4>
+                  <p>LocalFlow automatically detects installed Chromium browsers on your computer.</p>
+                </div>
+                <div class="browser-cards-grid" id="installedBrowsersGrid">
+                  <!-- Dynamically populated browser cards -->
+                </div>
+              </div>
+
+              <!-- VIEW 2: 1-Click Launch & Load Unpacked Guide -->
+              <div class="companion-step-view" id="companionStep2View" style="display: none;">
+                <div class="companion-step-heading">
+                  <h4 id="selectedBrowserTitle">Install on Google Chrome</h4>
+                  <p>Follow the 2 simple steps below. The extension folder has been opened and copied to your clipboard!</p>
+                </div>
+
+                <div class="animated-guide-container">
+                  <div class="guide-card">
+                    <div class="guide-card-badge">Step A</div>
+                    <div class="guide-card-content">
+                      <div class="guide-card-title">Turn ON "Developer mode"</div>
+                      <p class="guide-card-desc">Toggle the Developer Mode switch in the top-right corner of your browser's extensions page.</p>
+                      <div class="guide-visual-toggle">
+                        <span>Developer mode</span>
+                        <div class="mock-toggle on"><div class="mock-toggle-circle"></div></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="guide-card">
+                    <div class="guide-card-badge">Step B</div>
+                    <div class="guide-card-content">
+                      <div class="guide-card-title">Click "Load unpacked" &amp; Select Folder</div>
+                      <p class="guide-card-desc">Click <strong>Load unpacked</strong> at the top left. Paste the path or select the folder we opened in Explorer.</p>
+                      <div class="guide-path-box">
+                        <span id="extensionFolderPathDisplay">C:\LocalFlow\extension</span>
+                        <button type="button" class="copy-path-btn" id="copyExtPathBtn" title="Copy Folder Path">
+                          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                          <span id="copyExtPathBtnText">Copy</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Launch Button Action -->
+                <div class="launch-action-bar">
+                  <button type="button" class="browser-relaunch-btn" id="relaunchBrowserBtn">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Re-open Browser Extensions &amp; Folder
+                  </button>
+                </div>
+              </div>
+
+              <!-- VIEW 3: Real-Time Connection Status -->
+              <div class="companion-status-indicator-bar" id="companionConnectionBar">
+                <div class="status-pulse-circle disconnected" id="companionPulseDot"></div>
+                <div class="status-info-text">
+                  <span class="status-main-label" id="companionMainStatusLabel">Waiting for connection...</span>
+                  <span class="status-sub-label" id="companionSubStatusLabel">Open Google Meet, Zoom, Teams, Webex, Discord or Slack in your browser to begin streaming</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer companion-modal-footer">
+              <button type="button" class="modal-cancel-btn" id="companionBackBtn" style="display: none;">Back to Browsers</button>
+              <button type="button" class="modal-start-btn" id="companionDoneBtn">Done</button>
             </div>
           </div>
         </div>

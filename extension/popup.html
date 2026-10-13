@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 260px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #121212;
+      color: #e5e7eb;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+    }
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f9fafb;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .desc {
+      font-size: 12px;
+      line-height: 1.4;
+      color: #9ca3af;
+      margin: 0 0 12px 0;
+    }
+    .platforms {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .platform-pill {
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 8px;
+      border-radius: 4px;
+      color: #d1d5db;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="icon.png" class="icon" alt="LocalFlow">
+    <span class="title">LocalFlow Companion</span>
+  </div>
+
+  <div id="statusBadge" class="status-badge disconnected">
+    <span class="dot"></span>
+    <span id="statusText">Connecting to LocalFlow...</span>
+  </div>
+
+  <p class="desc">Isolates individual speaker audio and names for live meeting transcription.</p>
+
+  <div class="platforms">
+    <span class="platform-pill">Google Meet</span>
+    <span class="platform-pill">Zoom</span>
+    <span class="platform-pill">Teams</span>
+    <span class="platform-pill">Webex</span>
+    <span class="platform-pill">Discord</span>
+    <span class="platform-pill">Slack</span>
+  </div>
+
+  <script>
+    chrome.runtime.sendMessage({ type: 'GET_STATUS' }, (res) => {
+      const badge = document.getElementById('statusBadge');
+      const text = document.getElementById('statusText');
+      if (res && res.connected) {
+        badge.className = 'status-badge connected';
+        text.textContent = 'Connected to LocalFlow';
+      } else {
+        badge.className = 'status-badge disconnected';
+        text.textContent = 'Disconnected (Start LocalFlow)';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -567,6 +567,9 @@ func (a *App) startup(ctx context.Context) {
 
 	// 7. Start update checker in background
 	go StartBackgroundUpdateCheck(a.ctx)
+
+	// 8. Start Browser Companion WebSocket Bridge
+	StartExtensionWebSocketServer()
 }
 
 func (a *App) shutdown(ctx context.Context) {

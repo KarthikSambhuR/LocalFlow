@@ -352,6 +352,187 @@ export async function setupMeetingsTab() {
     }
   }
 
+  // ── Browser Companion Modal (Method 3 Interactive Wizard) ───────────────────
+  const companionModal = document.getElementById('companionModal');
+  const openCompanionModalBtn = document.getElementById('openCompanionModalBtn');
+  const closeCompanionModalBtn = document.getElementById('closeCompanionModalBtn');
+  const companionDoneBtn = document.getElementById('companionDoneBtn');
+  const companionBackBtn = document.getElementById('companionBackBtn');
+
+  const companionStep1View = document.getElementById('companionStep1View');
+  const companionStep2View = document.getElementById('companionStep2View');
+  const stepPill1 = document.getElementById('stepPill1');
+  const stepPill2 = document.getElementById('stepPill2');
+  const stepPill3 = document.getElementById('stepPill3');
+
+  const installedBrowsersGrid = document.getElementById('installedBrowsersGrid');
+  const selectedBrowserTitle = document.getElementById('selectedBrowserTitle');
+  const extensionFolderPathDisplay = document.getElementById('extensionFolderPathDisplay');
+  const copyExtPathBtn = document.getElementById('copyExtPathBtn');
+  const copyExtPathBtnText = document.getElementById('copyExtPathBtnText');
+  const relaunchBrowserBtn = document.getElementById('relaunchBrowserBtn');
+
+  const companionPulseDot = document.getElementById('companionPulseDot');
+  const companionMainStatusLabel = document.getElementById('companionMainStatusLabel');
+  const companionSubStatusLabel = document.getElementById('companionSubStatusLabel');
+  const companionHeaderStatusDot = document.getElementById('companionHeaderStatusDot');
+
+  let activeBrowserCandidate = null;
+
+  const updateCompanionConnectionUI = (isConnected) => {
+    if (companionPulseDot) {
+      companionPulseDot.className = `status-pulse-circle ${isConnected ? 'connected' : 'disconnected'}`;
+    }
+    if (companionHeaderStatusDot) {
+      companionHeaderStatusDot.className = `companion-status-dot ${isConnected ? 'connected' : 'disconnected'}`;
+    }
+    if (stepPill3) {
+      stepPill3.classList.toggle('active', isConnected);
+    }
+    if (companionMainStatusLabel) {
+      companionMainStatusLabel.textContent = isConnected ? 'Companion Connected ✅' : 'Waiting for connection...';
+    }
+    if (companionSubStatusLabel) {
+      companionSubStatusLabel.textContent = isConnected
+        ? 'Real-time speaker audio & names are streaming into LocalFlow!'
+        : 'Open Google Meet, Zoom, Teams, Webex, Discord or Slack in your browser to begin streaming';
+    }
+  };
+
+  // Poll or listen for connection status
+  if (window.runtime?.EventsOn) {
+    window.runtime.EventsOn('extension-connection-status', (connected) => {
+      updateCompanionConnectionUI(connected);
+    });
+  }
+
+  // Initial connection check
+  if (window.go?.main?.SettingsApp?.IsExtensionConnected) {
+    window.go.main.SettingsApp.IsExtensionConnected().then(updateCompanionConnectionUI).catch(() => {});
+  }
+
+  const setCompanionStep = (step) => {
+    if (step === 1) {
+      if (companionStep1View) companionStep1View.style.display = 'block';
+      if (companionStep2View) companionStep2View.style.display = 'none';
+      if (stepPill1) stepPill1.classList.add('active');
+      if (stepPill2) stepPill2.classList.remove('active');
+      if (companionBackBtn) companionBackBtn.style.display = 'none';
+    } else if (step === 2) {
+      if (companionStep1View) companionStep1View.style.display = 'none';
+      if (companionStep2View) companionStep2View.style.display = 'block';
+      if (stepPill1) stepPill1.classList.remove('active');
+      if (stepPill2) stepPill2.classList.add('active');
+      if (companionBackBtn) companionBackBtn.style.display = 'inline-block';
+    }
+  };
+
+  const openCompanionModal = async () => {
+    if (!companionModal) return;
+    companionModal.style.display = 'flex';
+    setCompanionStep(1);
+
+    // Get extension path
+    let extPath = 'C:\\LocalFlow\\extension';
+    if (window.go?.main?.SettingsApp?.GetExtensionPath) {
+      try {
+        extPath = await window.go.main.SettingsApp.GetExtensionPath();
+      } catch (e) {}
+    }
+    if (extensionFolderPathDisplay) extensionFolderPathDisplay.textContent = extPath;
+
+    // Fetch installed browsers
+    if (installedBrowsersGrid && window.go?.main?.SettingsApp?.GetInstalledBrowsers) {
+      try {
+        const browsers = await window.go.main.SettingsApp.GetInstalledBrowsers();
+        if (browsers && browsers.length > 0) {
+          installedBrowsersGrid.innerHTML = browsers.map(b => {
+            return `
+              <div class="browser-card" data-browser-id="${b.id}" data-browser-path="${escapeHtml(b.path)}" data-browser-url="${b.url}" data-browser-name="${escapeHtml(b.name)}">
+                <div class="browser-card-icon">
+                  <svg viewBox="0 0 24 24" width="26" height="26" stroke="#10b981" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+                </div>
+                <div class="browser-card-name">${escapeHtml(b.name)}</div>
+                <span class="browser-badge-installed">Installed</span>
+              </div>
+            `;
+          }).join('');
+
+          installedBrowsersGrid.querySelectorAll('.browser-card').forEach(card => {
+            card.onclick = async () => {
+              const bPath = card.getAttribute('data-browser-path');
+              const bUrl = card.getAttribute('data-browser-url');
+              const bName = card.getAttribute('data-browser-name');
+              activeBrowserCandidate = { path: bPath, url: bUrl, name: bName };
+
+              if (selectedBrowserTitle) selectedBrowserTitle.textContent = `Install on ${bName}`;
+              setCompanionStep(2);
+
+              // 1-Click Launch: Open browser to extensions page & open extension folder
+              if (window.go?.main?.SettingsApp?.OpenBrowserExtensionPage) {
+                try {
+                  await window.go.main.SettingsApp.OpenBrowserExtensionPage(bPath, bUrl);
+                } catch (err) {
+                  console.error('Failed to open browser extensions page:', err);
+                }
+              }
+            };
+          });
+        } else {
+          installedBrowsersGrid.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); font-size: 12px; padding: 16px;">
+              No standard Chromium browsers detected. You can load unpacked manually from: <br><code>${escapeHtml(extPath)}</code>
+            </div>
+          `;
+        }
+      } catch (err) {
+        console.warn('Failed to load installed browsers:', err);
+      }
+    }
+  };
+
+  const closeCompanionModal = () => {
+    if (companionModal) companionModal.style.display = 'none';
+  };
+
+  if (openCompanionModalBtn) openCompanionModalBtn.onclick = openCompanionModal;
+  if (closeCompanionModalBtn) closeCompanionModalBtn.onclick = closeCompanionModal;
+  if (companionDoneBtn) companionDoneBtn.onclick = closeCompanionModal;
+  if (companionBackBtn) companionBackBtn.onclick = () => setCompanionStep(1);
+
+  if (companionModal) {
+    companionModal.onclick = (e) => {
+      if (e.target === companionModal) closeCompanionModal();
+    };
+  }
+
+  if (copyExtPathBtn) {
+    copyExtPathBtn.onclick = () => {
+      const pathText = extensionFolderPathDisplay?.textContent || '';
+      if (pathText && navigator.clipboard) {
+        navigator.clipboard.writeText(pathText);
+        if (copyExtPathBtnText) {
+          copyExtPathBtnText.textContent = 'Copied!';
+          setTimeout(() => {
+            copyExtPathBtnText.textContent = 'Copy';
+          }, 1500);
+        }
+      }
+    };
+  }
+
+  if (relaunchBrowserBtn) {
+    relaunchBrowserBtn.onclick = async () => {
+      if (activeBrowserCandidate && window.go?.main?.SettingsApp?.OpenBrowserExtensionPage) {
+        try {
+          await window.go.main.SettingsApp.OpenBrowserExtensionPage(activeBrowserCandidate.path, activeBrowserCandidate.url);
+        } catch (err) {
+          console.error('Failed to re-open browser extension page:', err);
+        }
+      }
+    };
+  }
+
   const updateSpeakersBadge = () => {
     if (!liveSpeakerBadge) return;
     const count = liveSpeakersSet.size;

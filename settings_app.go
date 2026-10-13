@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/gen2brain/malgo"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -1400,5 +1401,133 @@ func (s *SettingsApp) RegenerateMeetingSummary(id string) (string, error) {
 	}()
 
 	return "Generating summary in background...", nil
+}
+
+type DetectedBrowser struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Installed bool   `json:"installed"`
+	URL       string `json:"url"`
+}
+
+func (s *SettingsApp) GetInstalledBrowsers() []DetectedBrowser {
+	var browsers []DetectedBrowser
+
+	localAppData := os.Getenv("LOCALAPPDATA")
+	progFiles := os.Getenv("ProgramFiles")
+	progFilesX86 := os.Getenv("ProgramFiles(x86)")
+
+	candidates := []struct {
+		id    string
+		name  string
+		paths []string
+		url   string
+	}{
+		{
+			id:   "chrome",
+			name: "Google Chrome",
+			paths: []string{
+				filepath.Join(progFiles, "Google", "Chrome", "Application", "chrome.exe"),
+				filepath.Join(progFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+				filepath.Join(localAppData, "Google", "Chrome", "Application", "chrome.exe"),
+			},
+			url: "chrome://extensions",
+		},
+		{
+			id:   "edge",
+			name: "Microsoft Edge",
+			paths: []string{
+				filepath.Join(progFilesX86, "Microsoft", "Edge", "Application", "msedge.exe"),
+				filepath.Join(progFiles, "Microsoft", "Edge", "Application", "msedge.exe"),
+			},
+			url: "edge://extensions",
+		},
+		{
+			id:   "brave",
+			name: "Brave Browser",
+			paths: []string{
+				filepath.Join(progFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+				filepath.Join(localAppData, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+			},
+			url: "brave://extensions",
+		},
+		{
+			id:   "opera",
+			name: "Opera",
+			paths: []string{
+				filepath.Join(localAppData, "Programs", "Opera", "launcher.exe"),
+				filepath.Join(progFiles, "Opera", "launcher.exe"),
+			},
+			url: "opera://extensions",
+		},
+		{
+			id:   "vivaldi",
+			name: "Vivaldi",
+			paths: []string{
+				filepath.Join(localAppData, "Vivaldi", "Application", "vivaldi.exe"),
+				filepath.Join(progFiles, "Vivaldi", "Application", "vivaldi.exe"),
+			},
+			url: "vivaldi://extensions",
+		},
+	}
+
+	for _, c := range candidates {
+		foundPath := ""
+		for _, p := range c.paths {
+			if _, err := os.Stat(p); err == nil {
+				foundPath = p
+				break
+			}
+		}
+		if foundPath != "" {
+			browsers = append(browsers, DetectedBrowser{
+				ID:        c.id,
+				Name:      c.name,
+				Path:      foundPath,
+				Installed: true,
+				URL:       c.url,
+			})
+		}
+	}
+
+	return browsers
+}
+
+func (s *SettingsApp) GetExtensionPath() string {
+	extDir := filepath.Join(getBaseAppDir(), "extension")
+	if _, err := os.Stat(extDir); err != nil {
+		// Fallback to relative extension dir
+		extDir, _ = filepath.Abs("extension")
+	}
+	return extDir
+}
+
+func (s *SettingsApp) OpenBrowserExtensionPage(browserPath string, extensionsURL string) error {
+	extDir := s.GetExtensionPath()
+
+	// 1. Copy extension path to Windows clipboard
+	_ = clipboard.WriteAll(extDir)
+
+	// 2. Open extension folder in Windows Explorer
+	go func() {
+		_ = exec.Command("explorer.exe", extDir).Start()
+	}()
+
+	// 3. Open browser extensions page
+	if browserPath != "" {
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			_ = exec.Command(browserPath, extensionsURL).Start()
+		}()
+	}
+
+	return nil
+}
+
+func (s *SettingsApp) IsExtensionConnected() bool {
+	globalExtensionServer.mutex.Lock()
+	defer globalExtensionServer.mutex.Unlock()
+	return globalExtensionServer.activeClient != nil
 }
 

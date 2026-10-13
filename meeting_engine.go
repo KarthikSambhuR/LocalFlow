@@ -141,6 +141,11 @@ func (m *MeetingEngine) attributeLoopbackSpeaker(samples []float32) string {
 	}
 
 	if bestMatch != "" && minDist < voiceClusterThreshold {
+		// If extension detected a real name (e.g. from Google Meet / Teams), label it with that name
+		if extSpeaker := GetCurrentExtensionSpeaker(); extSpeaker != "" {
+			bestMatch = extSpeaker
+		}
+
 		// Update running profile
 		for i := range m.speakerProfiles {
 			if m.speakerProfiles[i].SpeakerID == bestMatch {
@@ -156,8 +161,11 @@ func (m *MeetingEngine) attributeLoopbackSpeaker(samples []float32) string {
 	}
 
 	// Register a new speaker profile
-	newSpeaker := fmt.Sprintf("Speaker %d", m.nextSpeakerNum)
-	m.nextSpeakerNum++
+	newSpeaker := GetCurrentExtensionSpeaker()
+	if newSpeaker == "" {
+		newSpeaker = fmt.Sprintf("Speaker %d", m.nextSpeakerNum)
+		m.nextSpeakerNum++
+	}
 	m.speakerProfiles = append(m.speakerProfiles, SpeakerVoiceProfile{
 		SpeakerID:       newSpeaker,
 		AverageCentroid: centroid,

@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "LocalFlow Meeting Companion",
+  "version": "1.0.0",
+  "description": "Isolates real-time audio streams and captures participant names per speaker for Google Meet, Zoom, Teams, Webex, Discord, and Slack.",
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "action": {
+    "default_title": "LocalFlow Companion",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://meet.google.com/*",
+    "*://*.zoom.us/*",
+    "*://teams.microsoft.com/*",
+    "*://teams.live.com/*",
+    "*://*.webex.com/*",
+    "*://discord.com/*",
+    "*://app.slack.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://meet.google.com/*",
+        "*://*.zoom.us/*",
+        "*://teams.microsoft.com/*",
+        "*://teams.live.com/*",
+        "*://*.webex.com/*",
+        "*://discord.com/*",
+        "*://app.slack.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": [
+        "*://meet.google.com/*",
+        "*://*.zoom.us/*",
+        "*://teams.microsoft.com/*",
+        "*://teams.live.com/*",
+        "*://*.webex.com/*",
+        "*://discord.com/*",
+        "*://app.slack.com/*"
+      ]
+    }
+  ]
+}
