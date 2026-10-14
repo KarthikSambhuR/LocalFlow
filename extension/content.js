@@ -1,35 +1,35 @@
 // LocalFlow Meeting Companion - Content Script
-// Bridges messages from injected.js to background service worker
-
 (function () {
   'use strict';
+  console.log('[LF-content] ✅ content script running on', location.hostname);
 
-  // Inject the page context script to access WebAudio & DOM objects directly
-  function injectPageScript() {
-    try {
-      const script = document.createElement('script');
-      script.src = chrome.runtime.getURL('injected.js');
-      script.onload = () => script.remove();
-      (document.head || document.documentElement).appendChild(script);
-    } catch (e) {
-      console.warn('[LocalFlow Content Script] Failed to inject page script:', e);
-    }
-  }
+  // Only run injection in the top-level frame (not iframes on Meet/Teams etc.)
+  if (window !== window.top) return;
 
-  // Listen for messages from injected.js in page context
+  // Forward messages from injected page script to service worker
   window.addEventListener('message', (event) => {
     if (event.source !== window || !event.data || event.data.source !== 'LOCALFLOW_INJECTED') {
       return;
     }
-
-    // Forward to extension service worker
-    chrome.runtime.sendMessage(event.data).catch(() => {});
+    if (event.data.type === 'MEETING_TELEMETRY') {
+      console.log('[LF-content] forwarding telemetry, participants:', event.data.participants?.length, event.data.participants?.map(p => p.name));
+    }
+    chrome.runtime.sendMessage(event.data).catch((e) => {
+      console.warn('[LF-content] sendMessage failed:', e?.message);
+    });
   });
 
-  // Inject on document start
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectPageScript);
-  } else {
-    injectPageScript();
-  }
+  // Forward background setting updates back to page script
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'SETTINGS_UPDATED') {
+      window.postMessage({
+        source: 'LOCALFLOW_CONTENT',
+        type: 'SETTINGS_UPDATED',
+        settings: msg.settings
+      }, '*');
+    }
+  });
+
+  // Notify background to inject the page script via chrome.scripting (bypasses CSP)
+  chrome.runtime.sendMessage({ type: 'INJECT_PAGE_SCRIPT' }).catch(() => {});
 })();

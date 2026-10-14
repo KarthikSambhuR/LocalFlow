@@ -370,12 +370,18 @@ export async function setupMeetingsTab() {
   const extensionFolderPathDisplay = document.getElementById('extensionFolderPathDisplay');
   const copyExtPathBtn = document.getElementById('copyExtPathBtn');
   const copyExtPathBtnText = document.getElementById('copyExtPathBtnText');
+  const extensionPageUrlDisplay = document.getElementById('extensionPageUrlDisplay');
+  const copyExtUrlBtn = document.getElementById('copyExtUrlBtn');
+  const copyExtUrlBtnText = document.getElementById('copyExtUrlBtnText');
   const relaunchBrowserBtn = document.getElementById('relaunchBrowserBtn');
 
   const companionPulseDot = document.getElementById('companionPulseDot');
   const companionMainStatusLabel = document.getElementById('companionMainStatusLabel');
   const companionSubStatusLabel = document.getElementById('companionSubStatusLabel');
   const companionHeaderStatusDot = document.getElementById('companionHeaderStatusDot');
+
+  const companionStudioDot = document.getElementById('companionStudioDot');
+  const companionStudioLabel = document.getElementById('companionStudioLabel');
 
   let activeBrowserCandidate = null;
 
@@ -385,6 +391,13 @@ export async function setupMeetingsTab() {
     }
     if (companionHeaderStatusDot) {
       companionHeaderStatusDot.className = `companion-status-dot ${isConnected ? 'connected' : 'disconnected'}`;
+    }
+    // Also update recording studio inline badge
+    if (companionStudioDot) {
+      companionStudioDot.className = `companion-status-dot ${isConnected ? 'connected' : 'disconnected'}`;
+    }
+    if (companionStudioLabel) {
+      companionStudioLabel.textContent = isConnected ? 'Extension ✓' : 'Extension';
     }
     if (stepPill3) {
       stepPill3.classList.toggle('active', isConnected);
@@ -399,24 +412,36 @@ export async function setupMeetingsTab() {
     }
   };
 
-  // Poll or listen for connection status
+  // Listen for Wails runtime events (primary update path)
   if (window.runtime?.EventsOn) {
     window.runtime.EventsOn('extension-connection-status', (connected) => {
       updateCompanionConnectionUI(connected);
     });
+
+    window.runtime.EventsOn('meeting-extension-speaker', (data) => {
+      if (data?.speaker) {
+        liveSpeakersSet.add(data.speaker);
+        updateSpeakersBadge();
+      }
+    });
+
+    window.runtime.EventsOn('meeting-extension-participants', (names) => {
+      if (Array.isArray(names)) {
+        names.forEach(n => liveSpeakersSet.add(n));
+        updateSpeakersBadge();
+      }
+    });
   }
 
-  // Periodic polling check while companion modal is open
+  // Periodic polling check to ensure window stays in sync with companion connection state
   setInterval(async () => {
-    if (companionModal && companionModal.style.display !== 'none') {
-      if (window.go?.main?.SettingsApp?.IsExtensionConnected) {
-        try {
-          const connected = await window.go.main.SettingsApp.IsExtensionConnected();
-          updateCompanionConnectionUI(connected);
-        } catch (e) {}
-      }
+    if (window.go?.main?.SettingsApp?.IsExtensionConnected) {
+      try {
+        const connected = await window.go.main.SettingsApp.IsExtensionConnected();
+        updateCompanionConnectionUI(connected);
+      } catch (e) {}
     }
-  }, 1000);
+  }, 2000);
 
   // Initial connection check
   if (window.go?.main?.SettingsApp?.IsExtensionConnected) {
@@ -478,6 +503,7 @@ export async function setupMeetingsTab() {
               activeBrowserCandidate = { path: bPath, url: bUrl, name: bName };
 
               if (selectedBrowserTitle) selectedBrowserTitle.textContent = `Install on ${bName}`;
+              if (extensionPageUrlDisplay) extensionPageUrlDisplay.textContent = bUrl;
               setCompanionStep(2);
 
               // 1-Click Launch: Open browser to extensions page & open extension folder
@@ -515,6 +541,21 @@ export async function setupMeetingsTab() {
   if (companionModal) {
     companionModal.onclick = (e) => {
       if (e.target === companionModal) closeCompanionModal();
+    };
+  }
+
+  if (copyExtUrlBtn) {
+    copyExtUrlBtn.onclick = () => {
+      const urlText = extensionPageUrlDisplay?.textContent || 'chrome://extensions';
+      if (urlText && navigator.clipboard) {
+        navigator.clipboard.writeText(urlText);
+        if (copyExtUrlBtnText) {
+          copyExtUrlBtnText.textContent = 'Copied!';
+          setTimeout(() => {
+            copyExtUrlBtnText.textContent = 'Copy URL';
+          }, 1500);
+        }
+      }
     };
   }
 

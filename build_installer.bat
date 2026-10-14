@@ -19,6 +19,8 @@ copy "build\bin\LocalFlow.exe" "temp_payload\"
 copy "lib\dll\*.dll" "temp_payload\"
 mkdir "temp_payload\lib"
 powershell -Command "Get-ChildItem -Path 'lib' -File | Copy-Item -Destination 'temp_payload\lib\'"
+echo Copying browser companion extension to payload...
+powershell -Command "Copy-Item -Path 'extension' -Destination 'temp_payload\extension' -Recurse"
 
 echo [2.5/4] Copying GCC runtime DLL dependencies...
 copy "C:\Enviornment\MinGW\x86_64-w64-mingw32\lib\gcc\x86_64-w64-mingw32\15.2.0\libstdc++-6-x64.dll" "temp_payload\"

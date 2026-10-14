@@ -117,36 +117,79 @@ func computeAcousticFeatures(samples []float32, sampleRate int) (float64, float6
 	return centroid, rms, zcr
 }
 
-// attributeLoopbackSpeaker clusters voice segments into "Speaker 2", "Speaker 3", etc.
+// NotifyExtensionSpeaker registers an active participant identified by the browser extension
+func (m *MeetingEngine) NotifyExtensionSpeaker(speakerName string) {
+	lower := strings.ToLower(speakerName)
+	if speakerName == "" || strings.Contains(lower, "frame") || strings.Contains(lower, "reframe") || strings.Contains(lower, "_") {
+		return
+	}
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	for _, p := range m.speakerProfiles {
+		if p.SpeakerID == speakerName {
+			return
+		}
+	}
+	m.speakerProfiles = append(m.speakerProfiles, SpeakerVoiceProfile{
+		SpeakerID:   speakerName,
+		SampleCount: 1,
+	})
+}
+
+// attributeLoopbackSpeaker assigns a speaker name to loopback audio segments.
+// When browser companion or Google Meet is active, it strictly attributes to the detected participant name
+// without erroneously splitting the single conversation into multiple random speakers.
 func (m *MeetingEngine) attributeLoopbackSpeaker(samples []float32) string {
+	// 1. If extension detected an active participant name, ALWAYS use that exact name!
+	if extSpeaker := GetCurrentExtensionSpeaker(); extSpeaker != "" {
+		return extSpeaker
+	}
+
+	// 2. If the extension is connected but no specific speaker name was active right this second,
+	// check if we have any known remote speaker profiles from this meeting
+	if globalExtensionServer.activeClient != nil {
+		for _, p := range m.speakerProfiles {
+			if p.SpeakerID != "" && p.SpeakerID != "You" {
+				return p.SpeakerID
+			}
+		}
+		return "Remote Speaker"
+	}
+
+	// 3. Fallback: Pure audio clustering when recording standalone apps without companion
 	centroid, rms, zcr := computeAcousticFeatures(samples, 16000)
+
+	// If only 1 remote speaker profile exists so far, be very conservative about creating another:
+	// A single person talking naturally varies pitch and energy, and shouldn't be split.
+	if len(m.speakerProfiles) == 0 {
+		newSpeaker := fmt.Sprintf("Speaker %d", m.nextSpeakerNum)
+		m.nextSpeakerNum++
+		m.speakerProfiles = append(m.speakerProfiles, SpeakerVoiceProfile{
+			SpeakerID:       newSpeaker,
+			AverageCentroid: centroid,
+			AverageEnergy:   rms,
+			ZeroCrossRate:   zcr,
+			SampleCount:     1,
+		})
+		return newSpeaker
+	}
 
 	bestMatch := ""
 	minDist := math.MaxFloat64
-
-	// Distance threshold for voice clustering
-	const voiceClusterThreshold = 0.18
-
 	for i := range m.speakerProfiles {
 		p := &m.speakerProfiles[i]
-		// Euclidean distance on normalized spectral features
 		dCentroid := (p.AverageCentroid - centroid) * 2.0
 		dZCR := (p.ZeroCrossRate - zcr) * 1.5
 		dist := math.Sqrt(dCentroid*dCentroid + dZCR*dZCR)
-
 		if dist < minDist {
 			minDist = dist
 			bestMatch = p.SpeakerID
 		}
 	}
 
+	// Use a forgiving clustering threshold (0.42 instead of 0.18) to avoid splitting the same person
+	const voiceClusterThreshold = 0.42
 	if bestMatch != "" && minDist < voiceClusterThreshold {
-		// If extension detected a real name (e.g. from Google Meet / Teams), label it with that name
-		if extSpeaker := GetCurrentExtensionSpeaker(); extSpeaker != "" {
-			bestMatch = extSpeaker
-		}
-
-		// Update running profile
 		for i := range m.speakerProfiles {
 			if m.speakerProfiles[i].SpeakerID == bestMatch {
 				p := &m.speakerProfiles[i]
@@ -160,12 +203,13 @@ func (m *MeetingEngine) attributeLoopbackSpeaker(samples []float32) string {
 		return bestMatch
 	}
 
-	// Register a new speaker profile
-	newSpeaker := GetCurrentExtensionSpeaker()
-	if newSpeaker == "" {
-		newSpeaker = fmt.Sprintf("Speaker %d", m.nextSpeakerNum)
-		m.nextSpeakerNum++
+	// If only 1 remote speaker profile exists and minDist is moderate, stick to it!
+	if len(m.speakerProfiles) == 1 && minDist < 0.65 {
+		return m.speakerProfiles[0].SpeakerID
 	}
+
+	newSpeaker := fmt.Sprintf("Speaker %d", m.nextSpeakerNum)
+	m.nextSpeakerNum++
 	m.speakerProfiles = append(m.speakerProfiles, SpeakerVoiceProfile{
 		SpeakerID:       newSpeaker,
 		AverageCentroid: centroid,
@@ -197,6 +241,7 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	m.sysAllAudio = nil
 	m.speakerProfiles = nil
 	m.nextSpeakerNum = 2
+	ResetExtensionSpeaker()
 	m.segmentQueue = make(chan SpeechSegment, 256)
 	m.workerStop = make(chan struct{})
 

@@ -25,12 +25,25 @@ type SettingsApp struct {
 	InitialRoute string
 }
 
+var globalSettingsApp *SettingsApp
+var globalSettingsAppMutex sync.Mutex
+
+func GetGlobalSettingsApp() *SettingsApp {
+	globalSettingsAppMutex.Lock()
+	defer globalSettingsAppMutex.Unlock()
+	return globalSettingsApp
+}
+
 func NewSettingsApp(route string) *SettingsApp {
 	return &SettingsApp{InitialRoute: route}
 }
 
 func (s *SettingsApp) startup(ctx context.Context) {
 	s.ctx = ctx
+	globalSettingsAppMutex.Lock()
+	globalSettingsApp = s
+	globalSettingsAppMutex.Unlock()
+
 	initDB()
 	cfg := loadConfig()
 	pruneAudioCache(cfg.AudioRetentionDays)
@@ -38,6 +51,9 @@ func (s *SettingsApp) startup(ctx context.Context) {
 
 	// Set Wails context on meeting engine
 	GetMeetingEngine().SetContext(ctx)
+
+	// Ensure extension server is running
+	StartExtensionWebSocketServer()
 
 	// Restore the window to the size/state it was in when the user last closed it.
 	go func() {
@@ -1502,6 +1518,36 @@ func (s *SettingsApp) GetExtensionPath() string {
 		filepath.Join(filepath.Dir(getBaseAppDir()), "extension"),
 	}
 
+	// Add search from current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(cwd, "extension"))
+		// Check parent dirs
+		dir := cwd
+		for i := 0; i < 4; i++ {
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			candidates = append(candidates, filepath.Join(parent, "extension"))
+			dir = parent
+		}
+	}
+
+	// Add search from executable directory
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates, filepath.Join(exeDir, "extension"))
+		dir := exeDir
+		for i := 0; i < 4; i++ {
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			candidates = append(candidates, filepath.Join(parent, "extension"))
+			dir = parent
+		}
+	}
+
 	for _, c := range candidates {
 		if abs, err := filepath.Abs(c); err == nil {
 			if info, err := os.Stat(abs); err == nil && info.IsDir() {
@@ -1520,23 +1566,22 @@ func (s *SettingsApp) GetExtensionPath() string {
 func (s *SettingsApp) OpenBrowserExtensionPage(browserPath string, extensionsURL string) error {
 	extDir := s.GetExtensionPath()
 
-	// 1. Copy extension path to Windows clipboard
+	// 1. Copy extension path to Windows clipboard so the user can easily paste it into the folder dialog
 	_ = clipboard.WriteAll(extDir)
 
-	// 2. Open extension folder in Windows Explorer
+	// 2. Open browser and navigate to its extensions page via SendKeys
 	go func() {
-		_ = exec.Command("explorer.exe", extDir).Start()
-	}()
-
-	// 3. Open browser extensions page via shell
-	go func() {
-		time.Sleep(300 * time.Millisecond)
-		// Use powershell Start-Process or direct exec
-		if browserPath != "" {
-			_ = exec.Command(browserPath, extensionsURL).Start()
-		} else {
-			_ = exec.Command("powershell", "-NoProfile", "-Command", fmt.Sprintf("Start-Process '%s'", extensionsURL)).Start()
+		targetURL := extensionsURL
+		if targetURL == "" {
+			targetURL = "chrome://extensions"
 		}
+		var psCmd string
+		if browserPath != "" {
+			psCmd = fmt.Sprintf(`Start-Process -FilePath '%s'; Start-Sleep -Milliseconds 600; $wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('^l'); Start-Sleep -Milliseconds 120; $wshell.SendKeys('%s{ENTER}')`, browserPath, targetURL)
+		} else {
+			psCmd = fmt.Sprintf(`Start-Process chrome; Start-Sleep -Milliseconds 600; $wshell = New-Object -ComObject wscript.shell; $wshell.SendKeys('^l'); Start-Sleep -Milliseconds 120; $wshell.SendKeys('%s{ENTER}')`, targetURL)
+		}
+		_ = exec.Command("powershell", "-NoProfile", "-Command", psCmd).Start()
 	}()
 
 	return nil

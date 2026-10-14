@@ -107,7 +107,7 @@ settingsModal.innerHTML = `
           <span>Shortcut</span>
           <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
         </div>
-        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.4.1</div>
+        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.4.2</div>
       </div>
     </div>
     <div class="settings-content">
@@ -249,6 +249,10 @@ settingsModal.innerHTML = `
 
             <div class="recording-studio-actions">
               <span class="feed-count-badge" id="meetingSpeakerCount">0 speakers</span>
+              <span class="companion-studio-badge" id="companionStudioBadge" title="Browser Extension Status">
+                <span class="companion-status-dot disconnected" id="companionStudioDot"></span>
+                <span id="companionStudioLabel">Extension</span>
+              </span>
               <button type="button" id="stopMeetingBtn" class="meeting-stop-btn danger">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
                 End Meeting
@@ -409,15 +413,22 @@ settingsModal.innerHTML = `
               <div class="companion-step-view" id="companionStep2View" style="display: none;">
                 <div class="companion-step-heading">
                   <h4 id="selectedBrowserTitle">Install on Google Chrome</h4>
-                  <p>Follow the 2 simple steps below. The extension folder has been opened and copied to your clipboard!</p>
+                  <p>Follow the 2 simple steps below. The extension folder path has been copied to your clipboard!</p>
                 </div>
 
                 <div class="animated-guide-container">
                   <div class="guide-card">
                     <div class="guide-card-badge">Step A</div>
                     <div class="guide-card-content">
-                      <div class="guide-card-title">Turn ON "Developer mode"</div>
-                      <p class="guide-card-desc">Toggle the Developer Mode switch in the top-right corner of your browser's extensions page.</p>
+                      <div class="guide-card-title">Open Extensions &amp; Turn ON "Developer mode"</div>
+                      <p class="guide-card-desc">If your browser opened a new tab, paste the URL below into the address bar. Then toggle <strong>Developer mode</strong> in the top right.</p>
+                      <div class="guide-path-box" style="margin-bottom: 10px;">
+                        <span id="extensionPageUrlDisplay">chrome://extensions</span>
+                        <button type="button" class="copy-path-btn" id="copyExtUrlBtn" title="Copy Extensions URL">
+                          <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                          <span id="copyExtUrlBtnText">Copy URL</span>
+                        </button>
+                      </div>
                       <div class="guide-visual-toggle">
                         <span>Developer mode</span>
                         <div class="mock-toggle on"><div class="mock-toggle-circle"></div></div>
@@ -428,13 +439,13 @@ settingsModal.innerHTML = `
                   <div class="guide-card">
                     <div class="guide-card-badge">Step B</div>
                     <div class="guide-card-content">
-                      <div class="guide-card-title">Click "Load unpacked" &amp; Select Folder</div>
-                      <p class="guide-card-desc">Click <strong>Load unpacked</strong> at the top left. Paste the path or select the folder we opened in Explorer.</p>
+                      <div class="guide-card-title">Click "Load unpacked" &amp; Paste Path</div>
+                      <p class="guide-card-desc">Click <strong>Load unpacked</strong> at the top left. In the file picker dialog, paste (Ctrl+V) the copied path into the folder bar and hit Enter.</p>
                       <div class="guide-path-box">
-                        <span id="extensionFolderPathDisplay">C:\LocalFlow\extension</span>
+                        <span id="extensionFolderPathDisplay">C:\Program Files\LocalFlow\extension</span>
                         <button type="button" class="copy-path-btn" id="copyExtPathBtn" title="Copy Folder Path">
                           <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                          <span id="copyExtPathBtnText">Copy</span>
+                          <span id="copyExtPathBtnText">Copy Path</span>
                         </button>
                       </div>
                     </div>
@@ -445,7 +456,7 @@ settingsModal.innerHTML = `
                 <div class="launch-action-bar">
                   <button type="button" class="browser-relaunch-btn" id="relaunchBrowserBtn">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Re-open Browser Extensions &amp; Folder
+                    Re-open Browser Extensions Tab
                   </button>
                 </div>
               </div>

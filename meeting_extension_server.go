@@ -1,10 +1,10 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,38 +29,57 @@ type ExtensionAudioMessage struct {
 }
 
 type ExtensionBridgeServer struct {
-	mutex            sync.Mutex
-	activeClient     *websocket.Conn
-	activeSpeakerMap map[string]string // e.g. mapping "Speaker 2" -> "Karthik"
+	mutex             sync.Mutex
+	activeClient      *websocket.Conn
+	activeSpeakerMap  map[string]string // e.g. mapping "Speaker 2" -> "Karthik"
 	lastActiveSpeaker string
 	lastSpeakerTime   time.Time
+	knownParticipants []string
 }
 
 var globalExtensionServer = &ExtensionBridgeServer{
 	activeSpeakerMap: make(map[string]string),
 }
 
+var extensionServerOnce sync.Once
+
 // StartExtensionWebSocketServer starts local WebSocket listener on 127.0.0.1:28282
 func StartExtensionWebSocketServer() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/extension", handleExtensionWS)
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","app":"LocalFlow"}`))
-	})
+	extensionServerOnce.Do(func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/extension", handleExtensionWS)
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok","app":"LocalFlow"}`))
+		})
 
-	server := &http.Server{
-		Addr:    "127.0.0.1:28282",
-		Handler: mux,
-	}
-
-	go func() {
-		fmt.Println("[Extension Server] Listening on ws://127.0.0.1:28282/extension")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("[Extension Server] Error: %v\n", err)
+		server := &http.Server{
+			Addr:    "127.0.0.1:28282",
+			Handler: mux,
 		}
-	}()
+
+		go func() {
+			fmt.Println("[Extension Server] Listening on ws://127.0.0.1:28282/extension")
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				fmt.Printf("[Extension Server] Error: %v\n", err)
+			}
+		}()
+	})
+}
+
+func broadcastExtensionEvent(eventName string, data ...interface{}) {
+	engine := GetMeetingEngine()
+	if engine != nil && engine.ctx != nil {
+		wailsRuntime.EventsEmit(engine.ctx, eventName, data...)
+	}
+	if globalApp != nil && globalApp.ctx != nil {
+		wailsRuntime.EventsEmit(globalApp.ctx, eventName, data...)
+	}
+	settingsApp := GetGlobalSettingsApp()
+	if settingsApp != nil && settingsApp.ctx != nil {
+		wailsRuntime.EventsEmit(settingsApp.ctx, eventName, data...)
+	}
 }
 
 func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
@@ -75,15 +94,7 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 	globalExtensionServer.mutex.Unlock()
 
 	fmt.Println("[Extension Server] Browser Companion connected!")
-
-	// Notify frontend UI that companion is connected
-	engine := GetMeetingEngine()
-	if engine != nil && engine.ctx != nil {
-		wailsRuntime.EventsEmit(engine.ctx, "extension-connection-status", true)
-	}
-	if globalApp != nil && globalApp.ctx != nil {
-		wailsRuntime.EventsEmit(globalApp.ctx, "extension-connection-status", true)
-	}
+	broadcastExtensionEvent("extension-connection-status", true)
 
 	defer func() {
 		globalExtensionServer.mutex.Lock()
@@ -93,12 +104,7 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 		globalExtensionServer.mutex.Unlock()
 		conn.Close()
 		fmt.Println("[Extension Server] Browser Companion disconnected")
-		if engine != nil && engine.ctx != nil {
-			wailsRuntime.EventsEmit(engine.ctx, "extension-connection-status", false)
-		}
-		if globalApp != nil && globalApp.ctx != nil {
-			wailsRuntime.EventsEmit(globalApp.ctx, "extension-connection-status", false)
-		}
+		broadcastExtensionEvent("extension-connection-status", false)
 	}()
 
 	for {
@@ -107,69 +113,76 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		var msg ExtensionAudioMessage
-		if err := json.Unmarshal(msgBytes, &msg); err != nil {
+		// Handle raw PING keepalive (sent as plain string, not JSON)
+		if string(msgBytes) == `{"type":"PING"}` || string(msgBytes) == "PING" {
+			_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"PONG"}`))
 			continue
 		}
 
-		if msg.Type == "SPEAKER_ACTIVE" && msg.SpeakerName != "" {
-			globalExtensionServer.mutex.Lock()
-			globalExtensionServer.lastActiveSpeaker = msg.SpeakerName
-			globalExtensionServer.lastSpeakerTime = time.Now()
-			globalExtensionServer.mutex.Unlock()
+		var rawMap map[string]interface{}
+		if err := json.Unmarshal(msgBytes, &rawMap); err != nil {
+			continue
+		}
 
-			// Broadcast current speaker name to UI
-			if globalApp != nil && globalApp.ctx != nil {
-				wailsRuntime.EventsEmit(globalApp.ctx, "meeting-extension-speaker", map[string]interface{}{
-					"speaker":  msg.SpeakerName,
-					"platform": msg.Platform,
+		msgType, _ := rawMap["type"].(string)
+
+		if msgType == "SPEAKER_ACTIVE" {
+			speakerName, _ := rawMap["speakerName"].(string)
+			platform, _ := rawMap["platform"].(string)
+			lower := strings.ToLower(speakerName)
+			if speakerName != "" && !strings.Contains(lower, "frame") && !strings.Contains(lower, "reframe") && !strings.Contains(lower, "_") {
+				globalExtensionServer.mutex.Lock()
+				globalExtensionServer.lastActiveSpeaker = speakerName
+				globalExtensionServer.lastSpeakerTime = time.Now()
+				globalExtensionServer.mutex.Unlock()
+
+				// Inform MeetingEngine about the active speaker
+				engine := GetMeetingEngine()
+				if engine != nil {
+					engine.NotifyExtensionSpeaker(speakerName)
+				}
+
+				// Broadcast current speaker name to all UI windows
+				broadcastExtensionEvent("meeting-extension-speaker", map[string]interface{}{
+					"speaker":  speakerName,
+					"platform": platform,
 				})
 			}
-		} else if msg.Type == "AUDIO_CHUNK" && msg.PcmBase64 != "" {
-			// Process audio chunk from specific speaker
-			data, err := base64.StdEncoding.DecodeString(msg.PcmBase64)
-			if err != nil || len(data) == 0 {
-				continue
-			}
-
-			// Convert 16-bit PCM bytes to float32 samples
-			numSamples := len(data) / 2
-			samples := make([]float32, numSamples)
-			for i := 0; i < numSamples; i++ {
-				val := int16(data[i*2]) | (int16(data[i*2+1]) << 8)
-				samples[i] = float32(val) / 32768.0
-			}
-
-			speaker := msg.SpeakerName
-			if speaker == "" {
-				speaker = "Remote Speaker"
-			}
-
-			engine := GetMeetingEngine()
-			if engine.isRecording && engine.segmentQueue != nil {
-				nowMs := time.Since(engine.startTime).Milliseconds()
-				seg := SpeechSegment{
-					MeetingID: engine.meetingID,
-					Speaker:   speaker,
-					StartMs:   nowMs - int64(numSamples*1000/16000),
-					EndMs:     nowMs,
-					Samples:   samples,
+		} else if msgType == "PARTICIPANTS_UPDATE" {
+			if participantsList, ok := rawMap["participants"].([]interface{}); ok {
+				var names []string
+				for _, p := range participantsList {
+					if str, ok := p.(string); ok && str != "" {
+						l := strings.ToLower(str)
+						if !strings.Contains(l, "frame") && !strings.Contains(l, "reframe") && !strings.Contains(l, "_") {
+							names = append(names, str)
+						}
+					}
 				}
-				select {
-				case engine.segmentQueue <- seg:
-				default:
+				if len(names) > 0 {
+					globalExtensionServer.mutex.Lock()
+					globalExtensionServer.knownParticipants = names
+					globalExtensionServer.mutex.Unlock()
+
+					broadcastExtensionEvent("meeting-extension-participants", names)
 				}
 			}
 		}
 	}
 }
 
-// GetCurrentExtensionSpeaker returns the last detected speaker name if within 4 seconds
+// GetCurrentExtensionSpeaker returns the active speaker detected by the extension
 func GetCurrentExtensionSpeaker() string {
 	globalExtensionServer.mutex.Lock()
 	defer globalExtensionServer.mutex.Unlock()
-	if time.Since(globalExtensionServer.lastSpeakerTime) < 4*time.Second {
-		return globalExtensionServer.lastActiveSpeaker
-	}
-	return ""
+	return globalExtensionServer.lastActiveSpeaker
+}
+
+// ResetExtensionSpeaker resets the current speaker state for a new meeting
+func ResetExtensionSpeaker() {
+	globalExtensionServer.mutex.Lock()
+	defer globalExtensionServer.mutex.Unlock()
+	globalExtensionServer.lastActiveSpeaker = ""
+	globalExtensionServer.lastSpeakerTime = time.Time{}
+	globalExtensionServer.knownParticipants = nil
 }

@@ -2001,9 +2001,34 @@
   color: var(--text-primary);
 }
 
+.status-main-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .status-sub-label {
   font-size: 11px;
   color: var(--text-muted);
 }
 
+/* ── Studio Recording Companion Badge ───────────────── */
+.companion-studio-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+}
 
+.companion-studio-badge:has(.companion-status-dot.connected) {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.08);
+}

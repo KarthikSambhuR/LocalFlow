@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LocalFlow Meeting Companion",
-  "version": "1.0.0",
+  "version": "1.1.3",
   "description": "Isolates real-time audio streams and captures participant names per speaker for Google Meet, Zoom, Teams, Webex, Discord, and Slack.",
   "icons": {
     "48": "icon.png",
@@ -13,7 +13,9 @@
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "*://meet.google.com/*",
@@ -39,8 +41,7 @@
         "*://app.slack.com/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_start",
-      "all_frames": true
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

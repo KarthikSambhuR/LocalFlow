@@ -1,98 +1,506 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <style>
-    body {
-      width: 260px;
-      margin: 0;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #121212;
-      color: #e5e7eb;
+    :root {
+      --bg-base: #0a0a0c;
+      --bg-surface: #121318;
+      --bg-elevated: #1a1c23;
+      --border: rgba(255, 255, 255, 0.08);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent: #10b981;
+      --danger: #ef4444;
     }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      width: 320px;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
     .header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
+      justify-content: space-between;
+      padding: 13px 16px 11px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-surface);
     }
-    .icon {
-      width: 24px;
-      height: 24px;
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .brand-icon {
+      width: 22px;
+      height: 22px;
       border-radius: 6px;
     }
-    .title {
-      font-size: 14px;
-      font-weight: 700;
-      color: #f9fafb;
+
+    .brand-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
     }
-    .status-badge {
+
+    .conn-pill {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 12px;
+      padding: 4px 9px;
       border-radius: 999px;
       font-size: 11px;
-      font-weight: 600;
-      margin-bottom: 12px;
+      font-weight: 500;
+      transition: all 0.15s ease;
     }
-    .status-badge.connected {
-      background: rgba(16, 185, 129, 0.15);
-      color: #10b981;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+
+    .conn-pill.connected {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
     }
-    .status-badge.disconnected {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-      border: 1px solid rgba(239, 68, 68, 0.3);
+
+    .conn-pill.disconnected {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
     }
+
     .dot {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: currentColor;
     }
-    .desc {
+
+    .connected .dot {
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: var(--bg-surface);
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 9px 0;
       font-size: 12px;
-      line-height: 1.4;
-      color: #9ca3af;
-      margin: 0 0 12px 0;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
     }
-    .platforms {
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .tab-btn.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--accent);
+    }
+
+    .view {
+      display: none;
+      padding: 13px 16px 15px;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    .meeting-bar {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 7px 11px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 11.5px;
     }
-    .platform-pill {
+
+    .platform-tag {
+      font-weight: 600;
+      color: var(--text-primary);
+      text-transform: capitalize;
+    }
+
+    .participant-count {
+      color: var(--text-secondary);
+    }
+
+    .section-label {
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 7px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .speakers-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-bottom: 13px;
+      max-height: 125px;
+      overflow-y: auto;
+    }
+
+    .speaker-card {
+      background: var(--bg-surface);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      border-radius: 8px;
+      padding: 8px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .speaker-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .speaker-name {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 210px;
+    }
+
+    .speaker-db {
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .vol-track {
+      width: 100%;
+      height: 5px;
+      background: var(--bg-elevated);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .vol-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #10b981 0%, #34d399 75%, #fbbf24 100%);
+      border-radius: 999px;
+      transition: width 85ms linear;
+      will-change: width;
+    }
+
+    .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 46px;
+      background: var(--bg-surface);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-size: 11.5px;
+      text-align: center;
+    }
+
+    /* Live Participants Roster */
+    .participants-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: 145px;
+      overflow-y: auto;
+    }
+
+    .participant-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      border-radius: 7px;
+    }
+
+    .participant-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 10px;
-      background: rgba(255, 255, 255, 0.06);
-      padding: 3px 8px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .participant-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mic-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
       border-radius: 4px;
-      color: #d1d5db;
+      flex-shrink: 0;
+    }
+
+    .mic-badge.speaking {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .mic-badge.unmuted {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-secondary);
+    }
+
+    .mic-badge.muted {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+    }
+
+    /* Settings Controls */
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .setting-row:last-of-type {
+      border-bottom: none;
+    }
+
+    .setting-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .setting-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .setting-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 19px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      transition: 0.15s;
+      border-radius: 999px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 13px;
+      width: 13px;
+      left: 2px;
+      bottom: 2px;
+      background: #9ca3af;
+      transition: 0.15s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: var(--accent);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(15px);
+      background: var(--accent);
+    }
+
+    .input-box {
+      width: 72px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 5px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: right;
+      font-family: inherit;
+    }
+
+    .range-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="range"] {
+      width: 85px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .btn-reconnect {
+      margin-top: 10px;
+      width: 100%;
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-reconnect:hover {
+      background: #232631;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <img src="icon.png" class="icon" alt="LocalFlow">
-    <span class="title">LocalFlow Companion</span>
+    <div class="brand">
+      <img src="icon.png" class="brand-icon" alt="LocalFlow">
+      <span class="brand-title">LocalFlow</span>
+    </div>
+    <div id="statusBadge" class="conn-pill disconnected">
+      <span class="dot"></span>
+      <span id="statusText">Offline</span>
+    </div>
   </div>
 
-  <div id="statusBadge" class="status-badge disconnected">
-    <span class="dot"></span>
-    <span id="statusText">Connecting to LocalFlow...</span>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="liveView">Live Audio</button>
+    <button class="tab-btn" data-tab="settingsView">Options</button>
   </div>
 
-  <p class="desc">Isolates individual speaker audio and names for live meeting transcription.</p>
+  <!-- LIVE AUDIO VIEW -->
+  <div id="liveView" class="view active">
+    <div class="meeting-bar">
+      <span id="platformName" class="platform-tag">No Active Meeting</span>
+      <span id="participantCount" class="participant-count">0 participants</span>
+    </div>
 
-  <div class="platforms">
-    <span class="platform-pill">Google Meet</span>
-    <span class="platform-pill">Zoom</span>
-    <span class="platform-pill">Teams</span>
-    <span class="platform-pill">Webex</span>
-    <span class="platform-pill">Discord</span>
-    <span class="platform-pill">Slack</span>
+    <div class="section-label">
+      <span>Active Speakers</span>
+      <span id="speakingCount">0 speaking</span>
+    </div>
+
+    <div id="speakersContainer" class="speakers-list">
+      <div class="empty-state">No one is currently speaking</div>
+    </div>
+
+    <div class="section-label">
+      <span>In This Meeting</span>
+      <span id="rosterCount">0</span>
+    </div>
+
+    <div id="participantsContainer" class="participants-list">
+      <div class="empty-state">Waiting for meeting participants...</div>
+    </div>
+  </div>
+
+  <!-- OPTIONS VIEW -->
+  <div id="settingsView" class="view">
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Enable Audio Capture</span>
+        <span class="setting-desc">Stream speaker telemetry to desktop app</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggleCapture" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">Noise Gate Threshold</span>
+        <span class="setting-desc">Hide speakers below <span id="gateVal">6%</span> volume</span>
+      </div>
+      <div class="range-wrap">
+        <input type="range" id="rangeNoiseGate" min="1" max="35" value="6">
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-title">LocalFlow Bridge Port</span>
+        <span class="setting-desc">127.0.0.1 WebSocket port</span>
+      </div>
+      <input type="number" id="inputPort" class="input-box" value="28282" min="1024" max="65535">
+    </div>
+
+    <button id="btnReconnect" class="btn-reconnect">Reconnect to LocalFlow App</button>
   </div>
 
   <script src="popup.js"></script>
