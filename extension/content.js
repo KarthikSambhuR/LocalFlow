@@ -11,9 +11,6 @@
     if (event.source !== window || !event.data || event.data.source !== 'LOCALFLOW_INJECTED') {
       return;
     }
-    if (event.data.type === 'MEETING_TELEMETRY') {
-      console.log('[LF-content] forwarding telemetry, participants:', event.data.participants?.length, event.data.participants?.map(p => p.name));
-    }
     chrome.runtime.sendMessage(event.data).catch((e) => {
       console.warn('[LF-content] sendMessage failed:', e?.message);
     });

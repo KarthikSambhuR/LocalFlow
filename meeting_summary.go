@@ -5,18 +5,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+var meetingSummaryMutex sync.Mutex
+
 // generateMeetingSummary generates structured meeting minutes and a short TL;DR summary.
 // Returns (fullMarkdown, shortSummary, error).
-func generateMeetingSummary(transcript string) (string, string, error) {
+func generateMeetingSummary(meetingID, transcript string) (string, string, error) {
+	meetingSummaryMutex.Lock()
+	defer meetingSummaryMutex.Unlock()
 	transcript = strings.TrimSpace(transcript)
 	if transcript == "" {
 		return "No speech recorded during this meeting.", "No speech recorded.", nil
@@ -29,7 +35,10 @@ func generateMeetingSummary(transcript string) (string, string, error) {
 	cfg := loadConfig()
 
 	// Use currently active model (falling back to any available .gguf model if unset)
-	activeModel := cfg.LLMActiveModel
+	activeModel := cfg.MeetingLLMModel
+	if activeModel == "" {
+		activeModel = cfg.LLMActiveModel
+	}
 	if activeModel == "" {
 		activeModel = "s1-mini-q4_k_m.gguf"
 	}
@@ -106,9 +115,10 @@ Structure your response with:
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userMsg},
 		},
-		Temperature: 0.25,
-		MaxTokens:   0, // Omitted via omitempty to let llama.cpp dynamically utilize full available context without 500 error
-		Stream:      true,
+		Temperature:        0.25,
+		MaxTokens:          0, // Omitted via omitempty to let llama.cpp dynamically utilize full available context without 500 error
+		Stream:             true,
+		ChatTemplateKwargs: map[string]any{"enable_thinking": false},
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -137,7 +147,12 @@ Structure your response with:
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			break
+			if err != io.EOF {
+				return "", "", fmt.Errorf("summary stream interrupted: %w", err)
+			}
+			if line == "" {
+				break
+			}
 		}
 		line = strings.TrimSpace(line)
 		if line == "" || line == "data: [DONE]" {
@@ -163,7 +178,7 @@ Structure your response with:
 						ctx := GetMeetingEngine().ctx
 						if ctx != nil && tokenCount%5 == 0 {
 							wailsRuntime.EventsEmit(ctx, "meeting-summary-token", map[string]interface{}{
-								"meeting_id":      GetMeetingEngine().meetingID,
+								"meeting_id":      meetingID,
 								"token_count":     tokenCount,
 								"partial_content": fullContent.String(),
 							})

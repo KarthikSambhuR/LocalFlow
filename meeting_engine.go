@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -36,20 +37,23 @@ type SpeechSegment struct {
 // MeetingEngine manages dual-channel recording (Mic + WASAPI Loopback),
 // VAD turn segmentation, speaker attribution, and meeting transcription.
 type MeetingEngine struct {
-	ctx           context.Context
-	mutex         sync.Mutex
-	isRecording   bool
-	meetingID     string
-	title         string
-	startTime     time.Time
-	micDevice     *malgo.Device
-	loopbackDev   *malgo.Device
-	malgoCtx      *malgo.AllocatedContext
-	segmentQueue  chan SpeechSegment
-	workerStop    chan struct{}
-	allSegments   []MeetingSegment
-	micAllAudio   []float32
-	sysAllAudio   []float32
+	ctx          context.Context
+	mutex        sync.Mutex
+	isRecording  bool
+	meetingID    string
+	title        string
+	startTime    time.Time
+	micDevice    *malgo.Device
+	loopbackDev  *malgo.Device
+	malgoCtx     *malgo.AllocatedContext
+	segmentQueue chan SpeechSegment
+	workerStop   chan struct{}
+	workerDone   chan struct{}
+	stopping     bool
+	flushCapture func()
+	allSegments  []MeetingSegment
+	micAllAudio  []float32
+	sysAllAudio  []float32
 
 	// Loopback speaker clustering
 	speakerProfiles []SpeakerVoiceProfile
@@ -119,8 +123,7 @@ func computeAcousticFeatures(samples []float32, sampleRate int) (float64, float6
 
 // NotifyExtensionSpeaker registers an active participant identified by the browser extension
 func (m *MeetingEngine) NotifyExtensionSpeaker(speakerName string) {
-	lower := strings.ToLower(speakerName)
-	if speakerName == "" || strings.Contains(lower, "frame") || strings.Contains(lower, "reframe") || strings.Contains(lower, "_") {
+	if strings.TrimSpace(speakerName) == "" {
 		return
 	}
 	m.mutex.Lock()
@@ -141,20 +144,18 @@ func (m *MeetingEngine) NotifyExtensionSpeaker(speakerName string) {
 // without erroneously splitting the single conversation into multiple random speakers.
 func (m *MeetingEngine) attributeLoopbackSpeaker(samples []float32) string {
 	// 1. If extension detected an active participant name, ALWAYS use that exact name!
-	if extSpeaker := GetCurrentExtensionSpeaker(); extSpeaker != "" {
+	if extSpeaker := GetExtensionLoopbackSpeaker(); extSpeaker != "" {
 		return extSpeaker
 	}
 
-	// 2. If the extension is connected but no specific speaker name was active right this second,
-	// check if we have any known remote speaker profiles from this meeting
-	if globalExtensionServer.activeClient != nil {
-		for _, p := range m.speakerProfiles {
-			if p.SpeakerID != "" && p.SpeakerID != "You" {
-				return p.SpeakerID
-			}
-		}
+	globalExtensionServer.mutex.Lock()
+	connected := globalExtensionServer.activeClient != nil
+	globalExtensionServer.mutex.Unlock()
+	if connected {
 		return "Remote Speaker"
 	}
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	// 3. Fallback: Pure audio clustering when recording standalone apps without companion
 	centroid, rms, zcr := computeAcousticFeatures(samples, 16000)
@@ -223,9 +224,37 @@ func (m *MeetingEngine) attributeLoopbackSpeaker(samples []float32) string {
 // StartRecording initializes both mic capture and WASAPI loopback capture streams.
 func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	started := false
+	defer func() {
+		// Device shutdown waits for callbacks, which also acquire m.mutex.
+		if !started {
+			m.stopping = true
+		}
+		m.mutex.Unlock()
+		if !started {
+			if m.micDevice != nil {
+				_ = m.micDevice.Stop()
+				m.micDevice.Uninit()
+				m.micDevice = nil
+			}
+			if m.loopbackDev != nil {
+				_ = m.loopbackDev.Stop()
+				m.loopbackDev.Uninit()
+				m.loopbackDev = nil
+			}
+			if m.malgoCtx != nil {
+				_ = m.malgoCtx.Uninit()
+				m.malgoCtx.Free()
+				m.malgoCtx = nil
+			}
+			m.mutex.Lock()
+			m.stopping = false
+			m.mutex.Unlock()
+		}
+	}()
 
-	if m.isRecording {
+	if m.isRecording || m.stopping {
+		started = true
 		return m.meetingID, fmt.Errorf("a meeting is already being recorded")
 	}
 
@@ -241,17 +270,21 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	m.sysAllAudio = nil
 	m.speakerProfiles = nil
 	m.nextSpeakerNum = 2
-	ResetExtensionSpeaker()
+
 	m.segmentQueue = make(chan SpeechSegment, 256)
 	m.workerStop = make(chan struct{})
+	m.workerDone = make(chan struct{})
+	m.recentSysRms = 0
 
 	// Insert initial meeting row into database
-	_ = InsertMeeting(Meeting{
+	if err := InsertMeeting(Meeting{
 		ID:              m.meetingID,
 		Title:           m.title,
 		CreatedAt:       m.startTime.Format(time.RFC3339),
 		DurationSeconds: 0,
-	})
+	}); err != nil {
+		return "", fmt.Errorf("failed to save meeting: %w", err)
+	}
 
 	mctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
 	if err != nil {
@@ -283,7 +316,7 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	var micBuf []float32
 	var micSpeechStartMs int64 = -1
 	var micSilenceCount int = 0
-	const silenceCutoffFrames = 20 // ~600ms of silence at 30ms frames
+	const silenceCutoffSamples = 16000 * 600 / 1000
 	const baseEnergyThreshold = 0.0015
 
 	onMicData := func(pOutput, pInput []byte, frameCount uint32) {
@@ -330,9 +363,11 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 			micSilenceCount = 0
 		} else if micSpeechStartMs != -1 {
 			micBuf = append(micBuf, samples...)
-			micSilenceCount++
+			micSilenceCount += len(samples)
+		}
+		if micSpeechStartMs != -1 {
 			// If silence persists or speech chunk exceeds 12 seconds, dispatch
-			if micSilenceCount >= silenceCutoffFrames || len(micBuf) >= 16000*12 {
+			if micSilenceCount >= silenceCutoffSamples || len(micBuf) >= 16000*12 {
 				if len(micBuf) >= 16000/2 { // At least 0.5s of audio
 					chunk := make([]float32, len(micBuf))
 					copy(chunk, micBuf)
@@ -345,6 +380,10 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 						Samples:   chunk,
 					}:
 					default:
+						fmt.Println("[Meeting] Transcription queue full; audio remains in the saved recording")
+						if m.ctx != nil {
+							wailsRuntime.EventsEmit(m.ctx, "meeting-warning", "Transcription is falling behind. Some dialogue could not be transcribed live; audio is retained in the recording.")
+						}
 					}
 				}
 				micBuf = nil
@@ -356,7 +395,6 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 
 	micDev, err := malgo.InitDevice(mctx.Context, micConfig, malgo.DeviceCallbacks{Data: onMicData})
 	if err != nil {
-		mctx.Free()
 		return "", fmt.Errorf("failed to init microphone device: %w", err)
 	}
 	m.micDevice = micDev
@@ -368,6 +406,7 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	loopbackConfig.Capture.Channels = 1
 	loopbackConfig.SampleRate = 16000
 
+	var sysSpeaker string
 	var sysBuf []float32
 	var sysSpeechStartMs int64 = -1
 	var sysSilenceCount int = 0
@@ -398,32 +437,52 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 		m.mutex.Unlock()
 
 		isSpeech := rms > baseEnergyThreshold
+		// Metadata can arrive a little after the first audio callback. Name the
+		// pending unknown turn instead of saving an avoidable generic fragment.
+		if sysSpeaker == "Remote Speaker" {
+			if name := GetExtensionLoopbackSpeaker(); name != "" {
+				sysSpeaker = name
+			}
+		}
+		if next := GetExtensionLoopbackSpeaker(); isSpeech && next != "" && next != sysSpeaker && sysSpeechStartMs >= 0 && len(sysBuf) >= 1600 {
+			select {
+			case m.segmentQueue <- SpeechSegment{MeetingID: m.meetingID, Speaker: sysSpeaker, StartMs: sysSpeechStartMs, EndMs: nowMs, Samples: append([]float32(nil), sysBuf...)}:
+			default:
+				fmt.Println("[Meeting] Transcription queue full at speaker change; audio retained")
+			}
+			sysBuf = nil
+			sysSpeechStartMs = -1
+			sysSilenceCount = 0
+		}
 		if isSpeech {
 			if sysSpeechStartMs == -1 {
 				sysSpeechStartMs = nowMs
+				sysSpeaker = m.attributeLoopbackSpeaker(samples)
 			}
 			sysBuf = append(sysBuf, samples...)
 			sysSilenceCount = 0
 		} else if sysSpeechStartMs != -1 {
 			sysBuf = append(sysBuf, samples...)
-			sysSilenceCount++
-			if sysSilenceCount >= silenceCutoffFrames || len(sysBuf) >= 16000*12 {
+			sysSilenceCount += len(samples)
+		}
+		if sysSpeechStartMs != -1 {
+			if sysSilenceCount >= silenceCutoffSamples || len(sysBuf) >= 16000*12 {
 				if len(sysBuf) >= 16000/2 {
 					chunk := make([]float32, len(sysBuf))
 					copy(chunk, sysBuf)
-					speaker := GetCurrentExtensionSpeaker()
-					if speaker == "" {
-						speaker = m.attributeLoopbackSpeaker(chunk)
-					}
 					select {
 					case m.segmentQueue <- SpeechSegment{
 						MeetingID: m.meetingID,
-						Speaker:   speaker,
+						Speaker:   sysSpeaker,
 						StartMs:   sysSpeechStartMs,
 						EndMs:     nowMs,
 						Samples:   chunk,
 					}:
 					default:
+						fmt.Println("[Meeting] Transcription queue full; audio remains in the saved recording")
+						if m.ctx != nil {
+							wailsRuntime.EventsEmit(m.ctx, "meeting-warning", "Transcription is falling behind. Some dialogue could not be transcribed live; audio is retained in the recording.")
+						}
 					}
 				}
 				sysBuf = nil
@@ -436,8 +495,21 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	loopbackDev, err := malgo.InitDevice(mctx.Context, loopbackConfig, malgo.DeviceCallbacks{Data: onLoopbackData})
 	if err != nil {
 		fmt.Printf("Warning: WASAPI Loopback init failed (%v). Continuing with Mic-only.\n", err)
+		if m.ctx != nil {
+			wailsRuntime.EventsEmit(m.ctx, "meeting-warning", "System audio could not be opened. Only your microphone will be recorded.")
+		}
 	} else {
 		m.loopbackDev = loopbackDev
+	}
+
+	m.flushCapture = func() {
+		nowMs := time.Since(m.startTime).Milliseconds()
+		if micSpeechStartMs >= 0 && len(micBuf) >= 1600 {
+			m.segmentQueue <- SpeechSegment{MeetingID: m.meetingID, Speaker: "You", StartMs: micSpeechStartMs, EndMs: nowMs, Samples: append([]float32(nil), micBuf...)}
+		}
+		if sysSpeechStartMs >= 0 && len(sysBuf) >= 1600 {
+			m.segmentQueue <- SpeechSegment{MeetingID: m.meetingID, Speaker: sysSpeaker, StartMs: sysSpeechStartMs, EndMs: nowMs, Samples: append([]float32(nil), sysBuf...)}
+		}
 	}
 
 	// Start devices
@@ -447,10 +519,14 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 	if m.loopbackDev != nil {
 		if err := m.loopbackDev.Start(); err != nil {
 			fmt.Printf("Warning: failed to start loopback device: %v\n", err)
+			if m.ctx != nil {
+				wailsRuntime.EventsEmit(m.ctx, "meeting-warning", "System audio could not be started. Remote participants will not be recorded.")
+			}
 		}
 	}
 
 	m.isRecording = true
+	started = true
 
 	// Launch background transcription worker
 	go m.transcriptionWorker()
@@ -460,6 +536,7 @@ func (m *MeetingEngine) StartRecording(title string) (string, error) {
 
 // transcriptionWorker consumes speech chunks and transcribes them.
 func (m *MeetingEngine) transcriptionWorker() {
+	defer close(m.workerDone)
 	for {
 		select {
 		case <-m.workerStop:
@@ -512,10 +589,12 @@ func (m *MeetingEngine) StopRecording() (string, error) {
 		return "", fmt.Errorf("no meeting is currently recording")
 	}
 	m.isRecording = false
+	m.stopping = true
 	meetingID := m.meetingID
 	durationSec := int(time.Since(m.startTime).Seconds())
 	m.mutex.Unlock()
 
+	defer func() { m.mutex.Lock(); m.stopping = false; m.mutex.Unlock() }()
 	// Stop devices
 	if m.micDevice != nil {
 		_ = m.micDevice.Stop()
@@ -528,58 +607,21 @@ func (m *MeetingEngine) StopRecording() (string, error) {
 		m.loopbackDev = nil
 	}
 	if m.malgoCtx != nil {
+		_ = m.malgoCtx.Uninit()
 		m.malgoCtx.Free()
 		m.malgoCtx = nil
 	}
 
 	// Stop transcription worker
-	close(m.workerStop)
-	time.Sleep(300 * time.Millisecond)
-
-	// Fallback check: if no segments were captured during the meeting (e.g. short recording or continuous speech),
-	// directly transcribe the recorded microphone audio so speech is never lost!
-	m.mutex.Lock()
-	if len(m.allSegments) == 0 {
-		fmt.Printf("[Meeting] 0 VAD segments captured. Checking raw audio buffers (mic=%d, sys=%d)...\n", len(m.micAllAudio), len(m.sysAllAudio))
-		if len(m.micAllAudio) >= 16000/2 {
-			text, lang := transcribeMeetingChunk(m.micAllAudio)
-			text = strings.TrimSpace(text)
-			if text != "" && text != "[BLANK_AUDIO]" && text != "(blank audio)" && text != "[silence]" {
-				seg := MeetingSegment{
-					MeetingID: meetingID,
-					Speaker:   "You",
-					StartMs:   0,
-					EndMs:     int64(len(m.micAllAudio)) * 1000 / 16000,
-					Text:      text,
-					Language:  lang,
-				}
-				m.allSegments = append(m.allSegments, seg)
-				_ = InsertMeetingSegment(seg)
-				if m.ctx != nil {
-					wailsRuntime.EventsEmit(m.ctx, "meeting-segment-transcribed", seg)
-				}
-			}
-		}
-		if len(m.sysAllAudio) >= 16000/2 {
-			text, lang := transcribeMeetingChunk(m.sysAllAudio)
-			text = strings.TrimSpace(text)
-			if text != "" && text != "[BLANK_AUDIO]" && text != "(blank audio)" && text != "[silence]" {
-				seg := MeetingSegment{
-					MeetingID: meetingID,
-					Speaker:   "Speaker 2",
-					StartMs:   0,
-					EndMs:     int64(len(m.sysAllAudio)) * 1000 / 16000,
-					Text:      text,
-					Language:  lang,
-				}
-				m.allSegments = append(m.allSegments, seg)
-				_ = InsertMeetingSegment(seg)
-				if m.ctx != nil {
-					wailsRuntime.EventsEmit(m.ctx, "meeting-segment-transcribed", seg)
-				}
-			}
-		}
+	if m.flushCapture != nil {
+		m.flushCapture()
+		m.flushCapture = nil
 	}
+	close(m.workerStop)
+	<-m.workerDone
+
+	m.mutex.Lock()
+	sort.SliceStable(m.allSegments, func(i, j int) bool { return m.allSegments[i].StartMs < m.allSegments[j].StartMs })
 
 	// Mix audio tracks for playback save
 	maxLen := len(m.micAllAudio)
@@ -627,7 +669,7 @@ func (m *MeetingEngine) StopRecording() (string, error) {
 		if m.ctx != nil {
 			wailsRuntime.EventsEmit(m.ctx, "meeting-summary-generating", meetingID)
 		}
-		summary, shortSummary, err := generateMeetingSummary(fullTranscript)
+		summary, shortSummary, err := generateMeetingSummary(meetingID, fullTranscript)
 		if err != nil {
 			summary = fmt.Sprintf("Summary generation encountered an error: %v\n\nFull dialogue is saved in transcript.", err)
 			shortSummary = ""

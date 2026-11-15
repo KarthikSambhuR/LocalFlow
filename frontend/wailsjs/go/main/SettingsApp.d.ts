@@ -26,6 +26,8 @@ export function GetConfig():Promise<main.Config>;
 
 export function GetDictionaryWords():Promise<Array<string>>;
 
+export function GetExtensionParticipants():Promise<Array<string>>;
+
 export function GetExtensionPath():Promise<string>;
 
 export function GetGPUDevices():Promise<Array<string>>;

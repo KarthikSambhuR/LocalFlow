@@ -115,9 +115,11 @@ export async function setupMeetingsTab() {
   const meetingBilingualToggle = document.getElementById('meetingBilingualToggle');
   const meetingBilingualLabel = document.getElementById('meetingBilingualLabel');
 
-  if (!hubView) return;
+  if (!hubView || meetingTabInitialized) return;
+  meetingTabInitialized = true;
 
   const liveSpeakersSet = new Set();
+  let extensionParticipants = [];
 
   // ── Subview Switcher ────────────────────────────────────────────────────────
   const showHubView = () => {
@@ -407,7 +409,7 @@ export async function setupMeetingsTab() {
     }
     if (companionSubStatusLabel) {
       companionSubStatusLabel.textContent = isConnected
-        ? 'Real-time speaker audio & names are streaming into LocalFlow!'
+        ? 'Companion connected. Audio is recorded from your microphone and system output.'
         : 'Open Google Meet, Zoom, Teams, Webex, Discord or Slack in your browser to begin streaming';
     }
   };
@@ -419,14 +421,15 @@ export async function setupMeetingsTab() {
     });
 
     window.runtime.EventsOn('meeting-extension-speaker', (data) => {
-      if (data?.speaker) {
+      if (activeRecordingMeetingID && data?.speaker) {
         liveSpeakersSet.add(data.speaker);
         updateSpeakersBadge();
       }
     });
 
     window.runtime.EventsOn('meeting-extension-participants', (names) => {
-      if (Array.isArray(names)) {
+      extensionParticipants = Array.isArray(names) ? names : [];
+      if (activeRecordingMeetingID && Array.isArray(names)) {
         names.forEach(n => liveSpeakersSet.add(n));
         updateSpeakersBadge();
       }
@@ -439,6 +442,13 @@ export async function setupMeetingsTab() {
       try {
         const connected = await window.go.main.SettingsApp.IsExtensionConnected();
         updateCompanionConnectionUI(connected);
+        if (window.go.main.SettingsApp.GetExtensionParticipants) {
+          extensionParticipants = await window.go.main.SettingsApp.GetExtensionParticipants() || [];
+          if (activeRecordingMeetingID) {
+            extensionParticipants.forEach(n => liveSpeakersSet.add(n));
+            updateSpeakersBadge();
+          }
+        }
       } catch (e) {}
     }
   }, 2000);
@@ -757,7 +767,7 @@ export async function setupMeetingsTab() {
         <span class="speaker-avatar">${escapeHtml(avatarLetter)}</span>
         <span class="speaker-name">${escapeHtml(seg.speaker)}</span>
         <span class="bubble-time">${timestampStr}</span>
-        ${seg.language ? `<span class="bubble-lang">${seg.language.toUpperCase()}</span>` : ''}
+        ${seg.language ? `<span class="bubble-lang">${escapeHtml(seg.language.toUpperCase())}</span>` : ''}
       </div>
       <div class="dialogue-bubble">${escapeHtml(seg.text)}</div>
     `;
@@ -811,6 +821,7 @@ export async function setupMeetingsTab() {
 
       // Reset recording studio state
       liveSpeakersSet.clear();
+      extensionParticipants.forEach(n => liveSpeakersSet.add(n));
       if (liveDialogueList) liveDialogueList.innerHTML = '';
       if (liveEmptyState) liveDialogueList.appendChild(liveEmptyState);
       updateSpeakersBadge();
@@ -839,12 +850,9 @@ export async function setupMeetingsTab() {
         stopMeetingBtn.textContent = 'Ending...';
         if (meetingTimerInterval) clearInterval(meetingTimerInterval);
 
-        const meetingId = activeRecordingMeetingID;
         await window.go.main.SettingsApp.StopMeeting();
 
-        if (meetingId) {
-          generatingMeetingIDs.add(meetingId);
-        }
+        activeRecordingMeetingID = null;
 
         stopMeetingBtn.disabled = false;
         stopMeetingBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> End Meeting`;
@@ -927,6 +935,7 @@ export async function setupMeetingsTab() {
 
   // ── Wails Event Listeners (Background & Multi-Threading) ─────────────────────
   if (window.runtime) {
+    window.runtime.EventsOn('meeting-warning', message => alert(message));
     // Mic level
     window.runtime.EventsOff('meeting-level-mic');
     window.runtime.EventsOn('meeting-level-mic', (vol) => {
@@ -948,6 +957,7 @@ export async function setupMeetingsTab() {
     // Live segment transcribed during recording
     window.runtime.EventsOff('meeting-segment-transcribed');
     window.runtime.EventsOn('meeting-segment-transcribed', (seg) => {
+      if (seg.meeting_id !== activeRecordingMeetingID) return;
       if (liveEmptyState && liveEmptyState.parentElement === liveDialogueList) {
         liveDialogueList.removeChild(liveEmptyState);
       }

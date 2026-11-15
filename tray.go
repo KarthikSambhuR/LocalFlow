@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"os"
 	"os/exec"
+	goruntime "runtime"
 	"syscall"
 	"unsafe"
 
@@ -15,7 +16,13 @@ import (
 var trayIcon []byte
 
 func (a *App) setupTray() {
-	go systray.Run(a.onTrayReady, func() {})
+	go func() {
+		// The tray owns a Win32 window and message pump. Keep both on the same
+		// OS thread for the lifetime of systray.Run.
+		goruntime.LockOSThread()
+		defer goruntime.UnlockOSThread()
+		systray.Run(a.onTrayReady, func() {})
+	}()
 }
 
 func (a *App) onTrayReady() {
@@ -61,4 +68,3 @@ func closeAllLocalFlowWindows() {
 		}
 	}
 }
-

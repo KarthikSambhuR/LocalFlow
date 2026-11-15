@@ -211,6 +211,7 @@ export namespace main {
 	    speed_label: string;
 	    speed_description: string;
 	    description: string;
+	    parameters?: string;
 	    is_downloaded: boolean;
 	    is_active: boolean;
 	    is_downloading: boolean;
@@ -218,6 +219,7 @@ export namespace main {
 	    language: string;
 	    model_type: string;
 	    is_disabled: boolean;
+	    disabled_reason?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ModelStatus(source);
@@ -232,6 +234,7 @@ export namespace main {
 	        this.speed_label = source["speed_label"];
 	        this.speed_description = source["speed_description"];
 	        this.description = source["description"];
+	        this.parameters = source["parameters"];
 	        this.is_downloaded = source["is_downloaded"];
 	        this.is_active = source["is_active"];
 	        this.is_downloading = source["is_downloading"];
@@ -239,6 +242,7 @@ export namespace main {
 	        this.language = source["language"];
 	        this.model_type = source["model_type"];
 	        this.is_disabled = source["is_disabled"];
+	        this.disabled_reason = source["disabled_reason"];
 	    }
 	}
 	export class Recording {

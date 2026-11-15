@@ -676,8 +676,8 @@ const MODEL_FAMILIES_DEF = [
     provider: 'OpenAI',
     iconKey: 'openai',
     iconClass: 'provider-openai',
-    description: 'Speech-to-text with English and multilingual variants.',
-    variantMatcher: (m) => m.model_type === 'whisper' && m.id.startsWith('tiny') || m.id.startsWith('base') || m.id.startsWith('small') || m.id.startsWith('medium') || m.id.startsWith('large'),
+    description: 'Speech-to-text with English, Malayalam, and multilingual variants.',
+    variantMatcher: (m) => m.model_type === 'whisper' && (m.id.startsWith('tiny') || m.id.startsWith('base') || m.id.startsWith('small') || m.id.startsWith('medium') || m.id.startsWith('large') || m.id.startsWith('adalat-')),
     variants: [
       { label: 'Tiny (EN)', id: 'tiny' },
       { label: 'Base (EN)', id: 'base' },
@@ -687,6 +687,10 @@ const MODEL_FAMILIES_DEF = [
       { label: 'Tiny (Multi)', id: 'tiny-multilingual' },
       { label: 'Base (Multi)', id: 'base-multilingual' },
       { label: 'Small (Multi)', id: 'small-multilingual' },
+      { label: 'Medium R-MFT', id: 'adalat-medium-ml-rmft' },
+      { label: 'Medium High-LR', id: 'adalat-medium-ml-high-lr' },
+      { label: 'Small High-LR', id: 'adalat-small-ml-high-lr' },
+      { label: 'Small R-MFT', id: 'adalat-small-ml-rmft' },
     ]
   },
   {
@@ -790,6 +794,12 @@ const selectedVariantPerFamily = {};
 // Selected sub-category (e.g. 'en' vs 'multi') per family
 const selectedSubCategoryPerFamily = {};
 
+function whisperVariantCategory(variant, model) {
+  if (model?.language === 'malayalam' || variant.id.startsWith('adalat-')) return 'malayalam';
+  if (model?.language === 'english' || variant.id.endsWith('.en') || variant.label.includes('(EN)')) return 'en';
+  return 'multi';
+}
+
 export async function setupModelsSettings() {
   const modelsDownloadedSTT = document.getElementById('modelsDownloadedSTT');
   const modelsDownloadedLLM = document.getElementById('modelsDownloadedLLM');
@@ -827,20 +837,24 @@ export async function setupModelsSettings() {
 
         if (relevantVariants.length === 0) return null;
 
-        // Check if this family has both English and Multilingual variants
-        const hasEn = relevantVariants.some(v => v.id.includes('.en') || v.label.includes('(EN)'));
-        const hasMulti = relevantVariants.some(v => v.id.includes('multilingual') || v.id.includes('multi') || v.label.includes('(Multi)') || v.id.includes('indic') || v.id.includes('sarvam'));
-        const isMultiLayer = hasEn && hasMulti;
+        const categories = new Set(relevantVariants.map(v => whisperVariantCategory(v, modelMap[v.id])));
+        const hasEn = categories.has('en');
+        const hasMulti = categories.has('multi');
+        const hasMalayalam = categories.has('malayalam');
+        const isMultiLayer = categories.size > 1;
+        const filterByCategory = (category) => relevantVariants.filter(v => whisperVariantCategory(v, modelMap[v.id]) === category);
 
-        // Determine active sub-category ('en' or 'multi') if multi-layered
+        // Determine active language category if this family has multiple languages.
         let currentSubCat = selectedSubCategoryPerFamily[fam.familyId + '_' + mode];
-        if (!currentSubCat || (currentSubCat === 'en' && !hasEn) || (currentSubCat === 'multi' && !hasMulti)) {
+        if (!currentSubCat || !categories.has(currentSubCat)) {
           // Default to active model's category, or first available
           const activeV = relevantVariants.find(v => modelMap[v.id]?.is_active);
-          if (activeV && (activeV.id.includes('multi') || activeV.id.includes('indic') || activeV.id.includes('sarvam'))) {
-            currentSubCat = 'multi';
+          if (activeV) {
+            currentSubCat = whisperVariantCategory(activeV, modelMap[activeV.id]);
           } else if (hasEn) {
             currentSubCat = 'en';
+          } else if (hasMalayalam) {
+            currentSubCat = 'malayalam';
           } else {
             currentSubCat = 'multi';
           }
@@ -850,11 +864,7 @@ export async function setupModelsSettings() {
         // Visible variants for current sub-category
         let visibleVariants = relevantVariants;
         if (isMultiLayer) {
-          if (currentSubCat === 'en') {
-            visibleVariants = relevantVariants.filter(v => v.id.includes('.en') || v.label.includes('(EN)'));
-          } else {
-            visibleVariants = relevantVariants.filter(v => v.id.includes('multilingual') || v.id.includes('multi') || v.label.includes('(Multi)') || v.id.includes('indic') || v.id.includes('sarvam'));
-          }
+          visibleVariants = filterByCategory(currentSubCat);
           if (visibleVariants.length === 0) visibleVariants = relevantVariants;
         }
 
@@ -883,13 +893,15 @@ export async function setupModelsSettings() {
               <div class="model-progress-text" id="text-${currentModel.id}">Downloading... ${currentModel.download_progress}%</div>
             </div>
           `;
+        } else if (currentModel.is_disabled) {
+          actionHtml = `<button class="kbd-btn model-action-btn" disabled title="${escapeHtml(currentModel.disabled_reason || 'This model is unavailable.')}">Unavailable</button>`;
         } else if (currentModel.is_downloaded) {
           actionHtml = `
-            ${currentModel.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" ${currentModel.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${currentModel.id}">Activate</button>`}
+            ${currentModel.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" data-id="${currentModel.id}">Activate</button>`}
             ${!currentModel.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${currentModel.filename}">Delete</button>` : ''}
           `;
         } else {
-          actionHtml = `<button class="kbd-btn download-btn model-action-btn" ${currentModel.is_disabled ? 'disabled' : ''} data-id="${currentModel.id}">Download</button>`;
+          actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${currentModel.id}">Download</button>`;
         }
 
         const card = document.createElement('div');
@@ -902,8 +914,9 @@ export async function setupModelsSettings() {
             <div class="model-variant-selector-row">
               <span class="model-variant-selector-label">Language</span>
               <div class="model-variant-segmented-btn-group">
-                <button type="button" class="model-variant-btn ${currentSubCat === 'en' ? 'active' : ''}" data-cat="en">English</button>
-                <button type="button" class="model-variant-btn ${currentSubCat === 'multi' ? 'active' : ''}" data-cat="multi">Multilingual</button>
+                ${hasEn ? `<button type="button" class="model-variant-btn ${currentSubCat === 'en' ? 'active' : ''}" data-cat="en">English</button>` : ''}
+                ${hasMalayalam ? `<button type="button" class="model-variant-btn ${currentSubCat === 'malayalam' ? 'active' : ''}" data-cat="malayalam">Malayalam</button>` : ''}
+                ${hasMulti ? `<button type="button" class="model-variant-btn ${currentSubCat === 'multi' ? 'active' : ''}" data-cat="multi">Multilingual</button>` : ''}
               </div>
             </div>
           `;
@@ -959,9 +972,10 @@ export async function setupModelsSettings() {
 
             <div class="model-variant-details-bar">
               <div class="model-variant-meta">
-                <span class="model-variant-pill">${currentModel.size_mb} MB</span>
+                <span class="model-variant-pill">${currentModel.parameters || `${currentModel.size_mb} MB`}</span>
                 <span class="model-variant-pill">${currentModel.speed_label}</span>
                 <span class="model-variant-pill">${currentModel.speed_description}</span>
+                ${currentModel.disabled_reason ? `<span class="model-variant-pill" title="${escapeHtml(currentModel.disabled_reason)}">Unavailable</span>` : ''}
                 <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${currentModel.filename}</span>
               </div>
               <div class="model-variant-actions">
@@ -976,11 +990,7 @@ export async function setupModelsSettings() {
           // Re-calculate visible variants for currentSubCat
           let vis = relevantVariants;
           if (isMultiLayer) {
-            if (currentSubCat === 'en') {
-              vis = relevantVariants.filter(v => v.id.includes('.en') || v.label.includes('(EN)'));
-            } else {
-              vis = relevantVariants.filter(v => v.id.includes('multilingual') || v.id.includes('multi') || v.label.includes('(Multi)') || v.id.includes('indic') || v.id.includes('sarvam'));
-            }
+            vis = filterByCategory(currentSubCat);
             if (vis.length === 0) vis = relevantVariants;
           }
 
@@ -1039,9 +1049,10 @@ export async function setupModelsSettings() {
           if (metaContainer) {
             metaContainer.style.opacity = '0.5';
             metaContainer.innerHTML = `
-              <span class="model-variant-pill">${model.size_mb} MB</span>
+              <span class="model-variant-pill">${model.parameters || `${model.size_mb} MB`}</span>
               <span class="model-variant-pill">${model.speed_label}</span>
               <span class="model-variant-pill">${model.speed_description}</span>
+              ${model.disabled_reason ? `<span class="model-variant-pill" title="${escapeHtml(model.disabled_reason)}">Unavailable</span>` : ''}
               <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${model.filename}</span>
             `;
             requestAnimationFrame(() => { metaContainer.style.opacity = '1'; });
@@ -1060,13 +1071,15 @@ export async function setupModelsSettings() {
                   <div class="model-progress-text" id="text-${model.id}">Downloading... ${model.download_progress}%</div>
                 </div>
               `;
+            } else if (model.is_disabled) {
+              actHtml = `<button class="kbd-btn model-action-btn" disabled title="${escapeHtml(model.disabled_reason || 'This model is unavailable.')}">Unavailable</button>`;
             } else if (model.is_downloaded) {
               actHtml = `
-                ${model.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" ${model.is_disabled ? 'disabled title="Only Gemma and Sarvam are supported with Malayalam Conformer"' : ''} data-id="${model.id}">Activate</button>`}
+                ${model.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" data-id="${model.id}">Activate</button>`}
                 ${!model.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${model.filename}">Delete</button>` : ''}
               `;
             } else {
-              actHtml = `<button class="kbd-btn download-btn model-action-btn" ${model.is_disabled ? 'disabled' : ''} data-id="${model.id}">Download</button>`;
+              actHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${model.id}">Download</button>`;
             }
             actionsContainer.innerHTML = actHtml;
             bindActionButtons();
@@ -1202,7 +1215,10 @@ export async function setupModelsSettings() {
       }
 
     } catch (err) {
-      console.error(err);
+      console.error('Could not render model catalog:', err);
+      const errorMessage = `<div style="font-size: 13px; color: var(--text-muted); padding: 10px 0;">Could not load models. Reopen this page to retry.</div>`;
+      if (modelsAvailableLLM) modelsAvailableLLM.innerHTML = errorMessage;
+      if (modelsAvailableSTT) modelsAvailableSTT.innerHTML = errorMessage;
     }
   };
 

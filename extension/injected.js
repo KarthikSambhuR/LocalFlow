@@ -1,12 +1,14 @@
 // LocalFlow Meeting Companion - Page Context Audio & Speaker Engine
 (function () {
   'use strict';
+  if (window.__localFlowCompanionLoaded) return;
+  window.__localFlowCompanionLoaded = true;
   console.log('[LF-injected] 🚀 injected script loaded in MAIN world on', location.href);
 
   const PLATFORM_DETECTORS = {
     google_meet: () => location.hostname.includes('meet.google.com'),
     zoom: () => location.hostname.includes('zoom.us'),
-    teams: () => location.hostname.includes('teams.microsoft.com') || location.hostname.includes('teams.live.com'),
+    teams: () => (location.hostname.includes('teams.microsoft.com') || location.hostname === 'teams.cloud.microsoft') || location.hostname.includes('teams.live.com'),
     webex: () => location.hostname.includes('webex.com'),
     discord: () => location.hostname.includes('discord.com'),
     slack: () => location.hostname.includes('app.slack.com')
@@ -50,7 +52,7 @@
   function cleanName(raw) {
     if (!raw || typeof raw !== 'string') return '';
     return raw
-      .replace(/frame_person|reframe|more_vert|mic_off|keep_off|visual_effects|more_horiz|devices/gi, '')
+      .replace(/\b(frame_person|more_vert|mic_off|keep_off|visual_effects|more_horiz|devices)\b/gi, '')
       .replace(/\s*\((you|guest|external|presentation)\)\s*/gi, '')
       .replace(/\b(meeting host|co-host|is speaking|is talking|presenting)\b/gi, '')
       .replace(/^(speaking|talking):\s*/gi, '')
@@ -65,19 +67,13 @@
   function isValidName(name) {
     if (!name || name.length < 2 || name.length > 50) return false;
     // Reject icon/material-icon tokens like mic_off, videocam_off (all lowercase with underscores, no spaces)
-    if (/^[a-z][a-z0-9_]+$/.test(name) && name.includes('_')) return false;
+
     // Reject meeting codes like "nwe-vrbd-mgi" or timestamps like "15:22"
     if (/^[a-z]{3}-[a-z]{4}-[a-z]{3}$/i.test(name)) return false;
     if (/^[0-9:\s\-.,+]+$/.test(name)) return false;
 
     const lower = name.toLowerCase().trim();
     if (BAD_WORDS.has(lower)) return false;
-    for (const word of BAD_WORDS) {
-      const w = word.toLowerCase();
-      if (lower === w || lower.startsWith(w + ' ') || lower.endsWith(' ' + w)) {
-        return false;
-      }
-    }
     return true;
   }
 
@@ -273,8 +269,10 @@
     for (const icon of icons) {
       if (icon.textContent?.trim() === 'mic_off') return true;
     }
-    if (container.querySelector('[aria-label*="muted" i], [data-is-muted="true"]')) return true;
-    return false;
+    if (container.matches?.('[data-is-muted="true"]') || container.querySelector('[data-is-muted="true"]')) return true;
+    return Array.from(container.querySelectorAll('[aria-label]')).some(el =>
+      /\bmuted\b/i.test(el.getAttribute('aria-label') || '') &&
+      !/\b(not muted|unmuted)\b/i.test(el.getAttribute('aria-label') || ''));
   }
 
   function checkTileSpeakingVol(container, name) {
@@ -323,7 +321,7 @@
 
     // Trigger on signature change OR on first non-empty signature (animation started)
     if (currentSig && (currentSig !== prev.sig)) {
-      const vol = maxBarMetric > config.noiseGate ? maxBarMetric : Math.floor(45 + Math.random() * 35);
+      const vol = maxBarMetric > config.noiseGate ? maxBarMetric : Math.max(config.noiseGate, 45);
       prevBarSignatures.set(name, { sig: currentSig, activeUntil: now + 450, lastVol: vol });
       return vol;
     }
@@ -339,6 +337,7 @@
 
   // --- COMPREHENSIVE PARTICIPANT & SPEAKER SCANNER ---
   function scanMeetingState() {
+    let selfDetected = false;
     const participantMap = new Map(); // name -> { name, muted, isSelf }
     const activeMap = new Map(); // name -> volume
     const globalAudioVol = getGlobalAudioEnergy();
@@ -364,6 +363,10 @@
       const unmutedList = [];
 
       candidateTiles.forEach(tile => {
+        // Meet can label the local tile just "You", which is deliberately not a
+        // participant name. Preserve self detection before filtering that label.
+        const isSelf = /(?:\(you\)|^you$)/i.test((tile.textContent || '').trim()) || tile.hasAttribute('data-self-name');
+        if (isSelf) selfDetected = true;
         const name = extractNameFromElement(tile);
         if (!isValidName(name)) return;
 
@@ -371,7 +374,6 @@
         if (tile.closest('[role="banner"], [aria-label*="Call controls" i]')) return;
 
         const muted = isTileMuted(tile);
-        const isSelf = /\(you\)/i.test(tile.textContent || '') || tile.hasAttribute('data-self-name');
 
         if (!participantMap.has(name)) {
           participantMap.set(name, { name, muted, isSelf });
@@ -389,13 +391,13 @@
           activeMap.set(name, Math.max(activeMap.get(name) || 0, combined));
         }
 
-        if (!muted) {
+        if (!muted && !isSelf) {
           if (!unmutedList.includes(name)) unmutedList.push(name);
         }
       });
 
       // Fallback: if audio energy is actively detected (or only 1 participant is unmuted and speaking)
-      if (activeMap.size === 0 && globalAudioVol >= Math.max(10, config.noiseGate) && unmutedList.length > 0) {
+      if (activeMap.size === 0 && globalAudioVol >= Math.max(10, config.noiseGate) && unmutedList.length === 1) {
         for (const name of unmutedList) {
           activeMap.set(name, globalAudioVol);
         }
@@ -408,7 +410,7 @@
           const muted = Boolean(el.querySelector('[aria-label*="Muted" i], [class*="mute"]'));
           participantMap.set(name, { name, muted, isSelf: false });
           if (el.querySelector('[class*="avatarSpeaking"], [class*="borderSpeaking"]')) {
-            activeMap.set(name, globalAudioVol >= config.noiseGate ? globalAudioVol : Math.floor(45 + Math.random() * 35));
+            activeMap.set(name, globalAudioVol >= config.noiseGate ? globalAudioVol : Math.max(config.noiseGate, 45));
           }
         }
       });
@@ -423,7 +425,7 @@
         const name = cleanName(el.textContent);
         if (isValidName(name)) {
           participantMap.set(name, { name, muted: false, isSelf: false });
-          activeMap.set(name, globalAudioVol >= config.noiseGate ? globalAudioVol : Math.floor(45 + Math.random() * 35));
+          activeMap.set(name, globalAudioVol >= config.noiseGate ? globalAudioVol : Math.max(config.noiseGate, 45));
         }
       });
     } else if (platform === 'teams') {
@@ -437,8 +439,25 @@
         const name = cleanName(el.getAttribute('aria-label') || el.textContent);
         if (isValidName(name)) {
           participantMap.set(name, { name, muted: false, isSelf: false });
-          activeMap.set(name, globalAudioVol >= config.noiseGate ? globalAudioVol : Math.floor(45 + Math.random() * 35));
+          activeMap.set(name, globalAudioVol >= config.noiseGate ? globalAudioVol : Math.max(config.noiseGate, 45));
         }
+      });
+    }
+
+    if (platform === 'webex' || platform === 'slack') {
+      const tileSelector = platform === 'webex'
+        ? '[data-test="participant-item"], [data-test="participant-tile"], [class*="participant-item"], [class*="participant-tile"]'
+        : '[data-qa="huddle_participant"], [data-qa="huddle_participant_tile"], [class*="huddle_participant"]';
+      document.querySelectorAll(tileSelector).forEach(tile => {
+        const nameNode = tile.querySelector('[data-test="participant-name"], [data-qa="participant_name"], [class*="participant-name"], [class*="participant_name"]');
+        const name = nameNode ? cleanName(nameNode.textContent) : extractNameFromElement(tile);
+        if (!isValidName(name)) return;
+        const isSelf = /\(you\)/i.test(tile.textContent || '');
+        const muted = isTileMuted(tile);
+        participantMap.set(name, { name, muted, isSelf });
+        const explicitSpeaking = tile.matches('[data-speaking="true"], [data-is-speaking="true"]') ||
+          tile.querySelector('[data-speaking="true"], [data-is-speaking="true"], [aria-label*="is speaking" i]');
+        if (!muted && explicitSpeaking) activeMap.set(name, Math.max(config.noiseGate, 45));
       });
     }
 
@@ -451,10 +470,10 @@
     speakers.sort((a, b) => b.volume - a.volume);
 
     const result = {
+      selfDetected,
       participants: Array.from(participantMap.values()),
       speakers
     };
-    console.log('[LF] scan →', result.participants.map(p => p.name), '| speakers:', result.speakers.map(s => s.name));
     return result;
   }
 
@@ -466,7 +485,7 @@
   setInterval(() => {
     if (!config.captureEnabled) return;
 
-    const { participants, speakers } = scanMeetingState();
+    const { participants, speakers, selfDetected } = scanMeetingState();
     const now = Date.now();
     const partKey = participants.map(p => `${p.name}:${p.muted ? 'M' : 'U'}`).join('|');
     const participantsChanged = partKey !== lastPartKey;
@@ -477,7 +496,7 @@
       participantsChanged ||
       speakers.length > 0 ||
       !wasEmptySpeakers ||
-      (now - lastEmitTime > 1500 && participants.length > 0)
+      now - lastEmitTime > 1500
     ) {
       forceNextEmit = false;
       lastPartKey = partKey;
@@ -491,8 +510,9 @@
         participants,
         speakers,
         participantsChanged,
+        selfDetected,
         timestamp: now
       }, '*');
     }
-  }, 100);
+  }, 250);
 })();

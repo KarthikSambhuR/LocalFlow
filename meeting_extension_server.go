@@ -29,12 +29,14 @@ type ExtensionAudioMessage struct {
 }
 
 type ExtensionBridgeServer struct {
-	mutex             sync.Mutex
-	activeClient      *websocket.Conn
-	activeSpeakerMap  map[string]string // e.g. mapping "Speaker 2" -> "Karthik"
-	lastActiveSpeaker string
-	lastSpeakerTime   time.Time
-	knownParticipants []string
+	mutex              sync.Mutex
+	activeClient       *websocket.Conn
+	activeSpeakerMap   map[string]string // e.g. mapping "Speaker 2" -> "Karthik"
+	lastActiveSpeaker  string
+	lastSpeakerTime    time.Time
+	knownParticipants  []string
+	remoteParticipants []string
+	lastRosterTime     time.Time
 }
 
 var globalExtensionServer = &ExtensionBridgeServer{
@@ -90,21 +92,39 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	globalExtensionServer.mutex.Lock()
+	globalExtensionServer.remoteParticipants = nil
+	globalExtensionServer.lastRosterTime = time.Time{}
+	previous := globalExtensionServer.activeClient
 	globalExtensionServer.activeClient = conn
+	globalExtensionServer.lastActiveSpeaker = ""
+	globalExtensionServer.lastSpeakerTime = time.Time{}
 	globalExtensionServer.mutex.Unlock()
 
+	if previous != nil {
+		_ = previous.Close()
+	}
+	conn.SetReadLimit(1024 * 1024)
 	fmt.Println("[Extension Server] Browser Companion connected!")
 	broadcastExtensionEvent("extension-connection-status", true)
 
 	defer func() {
 		globalExtensionServer.mutex.Lock()
+		wasActive := globalExtensionServer.activeClient == conn
 		if globalExtensionServer.activeClient == conn {
 			globalExtensionServer.activeClient = nil
+			globalExtensionServer.lastActiveSpeaker = ""
+			globalExtensionServer.lastSpeakerTime = time.Time{}
+			globalExtensionServer.knownParticipants = nil
+			globalExtensionServer.remoteParticipants = nil
+			globalExtensionServer.lastRosterTime = time.Time{}
 		}
 		globalExtensionServer.mutex.Unlock()
 		conn.Close()
 		fmt.Println("[Extension Server] Browser Companion disconnected")
-		broadcastExtensionEvent("extension-connection-status", false)
+		if wasActive {
+			broadcastExtensionEvent("extension-connection-status", false)
+			broadcastExtensionEvent("meeting-extension-participants", []string{})
+		}
 	}()
 
 	for {
@@ -124,13 +144,19 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		globalExtensionServer.mutex.Lock()
+		current := globalExtensionServer.activeClient == conn
+		globalExtensionServer.mutex.Unlock()
+		if !current {
+			continue
+		}
 		msgType, _ := rawMap["type"].(string)
 
 		if msgType == "SPEAKER_ACTIVE" {
 			speakerName, _ := rawMap["speakerName"].(string)
 			platform, _ := rawMap["platform"].(string)
-			lower := strings.ToLower(speakerName)
-			if speakerName != "" && !strings.Contains(lower, "frame") && !strings.Contains(lower, "reframe") && !strings.Contains(lower, "_") {
+			speakerName = strings.TrimSpace(speakerName)
+			{
 				globalExtensionServer.mutex.Lock()
 				globalExtensionServer.lastActiveSpeaker = speakerName
 				globalExtensionServer.lastSpeakerTime = time.Now()
@@ -150,18 +176,32 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if msgType == "PARTICIPANTS_UPDATE" {
 			if participantsList, ok := rawMap["participants"].([]interface{}); ok {
-				var names []string
+				names := []string{}
 				for _, p := range participantsList {
 					if str, ok := p.(string); ok && str != "" {
-						l := strings.ToLower(str)
-						if !strings.Contains(l, "frame") && !strings.Contains(l, "reframe") && !strings.Contains(l, "_") {
-							names = append(names, str)
+						if name := strings.TrimSpace(str); name != "" {
+							names = append(names, name)
 						}
 					}
 				}
-				if len(names) > 0 {
+				{
 					globalExtensionServer.mutex.Lock()
 					globalExtensionServer.knownParticipants = names
+					globalExtensionServer.lastRosterTime = time.Now()
+					globalExtensionServer.remoteParticipants = nil
+					if remote, ok := rawMap["remoteParticipants"].([]interface{}); ok {
+						for _, item := range remote {
+							if name, ok := item.(string); ok && strings.TrimSpace(name) != "" {
+								// Only accept names that actually occur in the roster.
+								for _, participant := range names {
+									if participant == strings.TrimSpace(name) {
+										globalExtensionServer.remoteParticipants = append(globalExtensionServer.remoteParticipants, participant)
+										break
+									}
+								}
+							}
+						}
+					}
 					globalExtensionServer.mutex.Unlock()
 
 					broadcastExtensionEvent("meeting-extension-participants", names)
@@ -175,6 +215,9 @@ func handleExtensionWS(w http.ResponseWriter, r *http.Request) {
 func GetCurrentExtensionSpeaker() string {
 	globalExtensionServer.mutex.Lock()
 	defer globalExtensionServer.mutex.Unlock()
+	if globalExtensionServer.activeClient == nil || time.Since(globalExtensionServer.lastSpeakerTime) > 3*time.Second {
+		return ""
+	}
 	return globalExtensionServer.lastActiveSpeaker
 }
 
@@ -184,5 +227,22 @@ func ResetExtensionSpeaker() {
 	defer globalExtensionServer.mutex.Unlock()
 	globalExtensionServer.lastActiveSpeaker = ""
 	globalExtensionServer.lastSpeakerTime = time.Time{}
-	globalExtensionServer.knownParticipants = nil
+
+}
+
+// GetExtensionLoopbackSpeaker can identify a two-person call even when Meet's
+// animation is unavailable. It never guesses among several remote participants.
+func GetExtensionLoopbackSpeaker() string {
+	globalExtensionServer.mutex.Lock()
+	defer globalExtensionServer.mutex.Unlock()
+	if globalExtensionServer.activeClient == nil {
+		return ""
+	}
+	if globalExtensionServer.lastActiveSpeaker != "" && time.Since(globalExtensionServer.lastSpeakerTime) <= 3*time.Second {
+		return globalExtensionServer.lastActiveSpeaker
+	}
+	if len(globalExtensionServer.remoteParticipants) == 1 && time.Since(globalExtensionServer.lastRosterTime) <= 5*time.Second {
+		return globalExtensionServer.remoteParticipants[0]
+	}
+	return ""
 }

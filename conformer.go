@@ -224,8 +224,11 @@ func preprocessFeatures(waveform []float32, melFilterbank [][]float64, hann []fl
 func initOrReuseSessions() error {
 	conformerMutex.Lock()
 	defer conformerMutex.Unlock()
+	return initOrReuseSessionsLocked(loadConfig())
+}
 
-	cfg := loadConfig()
+// Caller holds conformerMutex through initialization and inference.
+func initOrReuseSessionsLocked(cfg Config) error {
 	activeModel := cfg.ActiveModel
 	if cfg.BilingualRoutingEnabled {
 		activeModel = cfg.BilingualConformerModel
@@ -314,7 +317,16 @@ func initOrReuseSessions() error {
 
 // TranscribeIndicConformer runs the conformer model on the given audio samples.
 func TranscribeIndicConformer(samples []float32) (string, error) {
-	if err := initOrReuseSessions(); err != nil {
+	return transcribeIndicConformerWithConfig(samples, loadConfig())
+}
+
+func transcribeIndicConformerWithConfig(samples []float32, cfg Config) (string, error) {
+	conformerMutex.Lock()
+	defer conformerMutex.Unlock()
+	if len(samples) < 257 {
+		return "", fmt.Errorf("audio is too short to process")
+	}
+	if err := initOrReuseSessionsLocked(cfg); err != nil {
 		return "", err
 	}
 

@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,10 +47,12 @@ const (
 	llkhfInjected  = 0x00000010
 	keyeventfKeyup = 0x0002
 
-	vkLControl = 0xA2
-	vkRControl = 0xA3
-	vkLWin     = 0x5B
-	vkRWin     = 0x5C
+	vkLControl   = 0xA2
+	vkRControl   = 0xA3
+	vkLWin       = 0x5B
+	vkRWin       = 0x5C
+	vkLaunchApp1 = 0xB6
+	vkLaunchApp2 = 0xB7
 
 	whKeyboardLL = 13
 )
@@ -584,6 +587,7 @@ func (a *App) listenToKeyboard() {
 		lWinPressed          = false
 		lShiftPressed        = false
 		lF23Pressed          = false
+		copilotKeyPressed    = false
 		acceptingUntil       time.Time
 		keyMutex             sync.RWMutex
 		key1Rawcode          uint16
@@ -762,6 +766,7 @@ func (a *App) listenToKeyboard() {
 				lWinPressed = false
 				lShiftPressed = false
 				lF23Pressed = false
+				copilotKeyPressed = false
 				a.setShortcutKeysDown(false)
 
 				if wasRecording {
@@ -785,6 +790,7 @@ func (a *App) listenToKeyboard() {
 				lWinPressed = false
 				lShiftPressed = false
 				lF23Pressed = false
+				copilotKeyPressed = false
 				a.setShortcutKeysDown(false)
 				continue
 			}
@@ -794,6 +800,7 @@ func (a *App) listenToKeyboard() {
 				winPressed := ev.rawcode == vkLWin || ev.rawcode == vkRWin
 				shiftPressed := ev.rawcode == 160
 				f23Pressed := ev.rawcode == 134
+				directCopilotKey := ev.rawcode == vkLaunchApp1 || ev.rawcode == vkLaunchApp2
 
 				if ev.down {
 					if winPressed {
@@ -805,6 +812,9 @@ func (a *App) listenToKeyboard() {
 					if f23Pressed {
 						lF23Pressed = true
 					}
+					if directCopilotKey {
+						copilotKeyPressed = true
+					}
 				} else {
 					if winPressed {
 						lWinPressed = false
@@ -815,10 +825,13 @@ func (a *App) listenToKeyboard() {
 					if f23Pressed {
 						lF23Pressed = false
 					}
+					if directCopilotKey {
+						copilotKeyPressed = false
+					}
 				}
 
-				a.setShortcutKeysDown(lWinPressed || lShiftPressed || lF23Pressed)
-				shouldBeRecording = lWinPressed && lShiftPressed && lF23Pressed
+				a.setShortcutKeysDown(lWinPressed || lShiftPressed || lF23Pressed || copilotKeyPressed)
+				shouldBeRecording = (lWinPressed && lShiftPressed && lF23Pressed) || copilotKeyPressed
 			} else {
 				if ev.rawcode == currentKey1Rawcode {
 					if ev.down {
@@ -950,7 +963,7 @@ func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyE
 
 				if isCopilot {
 					hotkeyUsesThisWin = isWinRawcode(rawcode)
-					isHotkeyKey = isWinRawcode(rawcode) || rawcode == 160 || rawcode == 134
+					isHotkeyKey = isWinRawcode(rawcode) || rawcode == 160 || rawcode == 134 || rawcode == vkLaunchApp1 || rawcode == vkLaunchApp2
 					if isWinRawcode(rawcode) {
 						otherHotkeyDown = pressed[160] && pressed[134]
 					} else if rawcode == 160 {
@@ -977,6 +990,12 @@ func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyE
 
 				if isDown && winDown && winOwned && isHotkeyKey && !isWinRawcode(rawcode) {
 					localFlowGesture = true
+				}
+
+				// Some keyboards report the Copilot key directly as
+				// VK_LAUNCH_APP1/2 instead of Win+Shift+F23.
+				if isCopilot && (rawcode == vkLaunchApp1 || rawcode == vkLaunchApp2) {
+					return 1
 				}
 
 				if isCopilot && isHotkeyKey && winOwned && !isWinRawcode(rawcode) {
@@ -1055,6 +1074,11 @@ func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyE
 	})
 
 	go func() {
+		// WH_KEYBOARD_LL callbacks and their message pump must stay on the same
+		// Windows thread for the lifetime of the hook.
+		goruntime.LockOSThread()
+		defer goruntime.UnlockOSThread()
+
 		hook, _, err := procSetWindowsHookExW.Call(whKeyboardLL, hookProc, 0, 0)
 		if hook == 0 {
 			fmt.Println("Error installing keyboard hook:", err)
@@ -1203,7 +1227,10 @@ func (a *App) transcribeOld() {
 		wParams.suppress_blank = C.bool(true)
 		wParams.suppress_nst = C.bool(true)
 		wParams.no_speech_thold = C.float(0.7)
+		langC := C.CString(whisperLanguageCode(cfg.ActiveModel))
+		wParams.language = langC
 		C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf)))
+		C.free(unsafe.Pointer(langC))
 
 		numSegments := int(C.whisper_full_n_segments(a.whisperCtx))
 		result := ""
@@ -1418,7 +1445,7 @@ func (a *App) ensureActiveModel() {
 		return
 	}
 
-	if cfg.BilingualRoutingEnabled {
+	if cfg.BilingualRoutingEnabled && !isAdalatWhisperModel(activeModel) {
 		a.ensureWhisperLoaded(cfg, cfg.BilingualWhisperModel)
 		return
 	}
@@ -1586,7 +1613,7 @@ func (a *App) transcribe() {
 	result := ""
 	whisperFailed := false
 
-	if cfg.BilingualRoutingEnabled {
+	if cfg.BilingualRoutingEnabled && !isAdalatWhisperModel(cfg.ActiveModel) {
 		a.mutex.Lock()
 		if !a.routingDecided {
 			probeLen := len(a.audioBuffer)
@@ -2484,7 +2511,7 @@ func (a *App) backgroundTranscriptionLoop() {
 		}
 
 		cfg := loadConfig()
-		if cfg.BilingualRoutingEnabled {
+		if cfg.BilingualRoutingEnabled && !isAdalatWhisperModel(cfg.ActiveModel) {
 			a.mutex.Lock()
 			decided := a.routingDecided
 			bufLen := len(a.audioBuffer)
@@ -2641,7 +2668,7 @@ func (a *App) transcribeChunk(chunk []float32) string {
 	}
 
 	isConformerActive := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
-	if cfg.BilingualRoutingEnabled {
+	if cfg.BilingualRoutingEnabled && !isAdalatWhisperModel(cfg.ActiveModel) {
 		a.mutex.Lock()
 		isConformerActive = a.useConformer
 		a.mutex.Unlock()
@@ -2666,7 +2693,7 @@ func (a *App) transcribeChunk(chunk []float32) string {
 	wParams.suppress_blank = C.bool(true)
 	wParams.suppress_nst = C.bool(true)
 	wParams.no_speech_thold = C.float(0.7)
-	langC := C.CString("en")
+	langC := C.CString(whisperLanguageCode(cfg.ActiveModel))
 	wParams.language = langC
 
 	if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {

@@ -107,7 +107,7 @@ settingsModal.innerHTML = `
           <span>Shortcut</span>
           <div><kbd id="sideK1">Ctrl</kbd><b>+</b><kbd id="sideK2">Win</kbd></div>
         </div>
-        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.4.2</div>
+        <div class="app-version-label" id="appVersionLabel">LocalFlow v1.4.3</div>
       </div>
     </div>
     <div class="settings-content">
@@ -558,13 +558,13 @@ settingsModal.innerHTML = `
 
       <!-- BOTTOM: AVAILABLE TO DOWNLOAD -->
       <div style="margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--border);">
-        <div class="setting-group" id="groupAvailableSTT" style="margin-bottom: 24px;">
-          <label>Download Speech to Text Models</label>
-          <div id="modelsAvailableSTT"></div>
-        </div>
         <div class="setting-group" id="groupAvailableLLM">
           <label>Download Text Refinement Models</label>
           <div id="modelsAvailableLLM"></div>
+        </div>
+        <div class="setting-group" id="groupAvailableSTT" style="margin-top: 24px;">
+          <label>Download Speech to Text Models</label>
+          <div id="modelsAvailableSTT"></div>
         </div>
       </div>
     </div>

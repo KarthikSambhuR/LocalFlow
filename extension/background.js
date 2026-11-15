@@ -50,13 +50,15 @@ chrome.storage.onChanged.addListener((changes) => {
 // Clean up injected tab tracking on navigation/close
 chrome.tabs.onRemoved.addListener((tabId) => {
   injectedTabs.delete(tabId);
+  if (meetingState.tabId === tabId) clearMeetingState();
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'loading') {
     injectedTabs.delete(tabId);
+    if (meetingState.tabId === tabId) clearMeetingState();
   }
   if (changeInfo.status === 'complete' && tab?.url) {
-    const isMeetingUrl = /meet\.google\.com|zoom\.us|teams\.(microsoft|live)\.com|webex\.com|discord\.com|app\.slack\.com/.test(tab.url);
+    const isMeetingUrl = /meet\.google\.com|zoom\.us|teams\.(microsoft\.com|live\.com|cloud\.microsoft)|webex\.com|discord\.com|app\.slack\.com/.test(tab.url);
     if (isMeetingUrl && !injectedTabs.has(tabId)) {
       chrome.scripting.executeScript({
         target: { tabId, allFrames: false },
@@ -79,22 +81,28 @@ function connectWebSocket() {
   }
 
   try {
-    socket = new WebSocket(`ws://127.0.0.1:${settings.wsPort}/extension`);
+    const ws = new WebSocket(`ws://127.0.0.1:${settings.wsPort}/extension`);
+    socket = ws;
 
-    socket.onopen = () => {
+    ws.onopen = () => {
+      if (socket !== ws) return;
       isConnected = true;
       broadcastStatus();
       startPingInterval();
+      // Roster changes may have happened while the desktop app was offline.
+      if (meetingState.tabId !== null) syncMeetingToApp();
+      broadcastToTabs({ type: 'SETTINGS_UPDATED', settings });
     };
 
-    socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
         broadcastToPopups({ type: 'APP_MESSAGE', data: msg });
       } catch (_) {}
     };
 
-    socket.onclose = () => {
+    ws.onclose = () => {
+      if (socket !== ws) return;
       isConnected = false;
       socket = null;
       stopPingInterval();
@@ -104,10 +112,11 @@ function connectWebSocket() {
       }
     };
 
-    socket.onerror = () => {
+    ws.onerror = () => {
+      if (socket !== ws) return;
       isConnected = false;
       stopPingInterval();
-      if (socket) socket.close();
+      ws.close();
     };
   } catch (_) {
     if (settings.autoReconnect && settings.captureEnabled) {
@@ -159,6 +168,31 @@ function sendToApp(payload) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(payload));
   }
+}
+
+function clearMeetingState() {
+  meetingState = { platform: null, tabId: null, participants: [], activeSpeakers: [], lastUpdated: Date.now() };
+  syncMeetingToApp();
+  broadcastStatus();
+}
+
+function syncMeetingToApp() {
+  sendToApp({
+    type: 'PARTICIPANTS_UPDATE', platform: meetingState.platform,
+    participants: meetingState.participants.map(p => p.name),
+    // A sole remote is safe to identify only when our own roster entry is known.
+    remoteParticipants: (meetingState.selfDetected || meetingState.participants.some(p => p.isSelf === true))
+      ? meetingState.participants.filter(p => !p.isSelf).map(p => p.name) : null,
+    timestamp: Date.now()
+  });
+  // Microphone speech is attributed locally as "You"; do not label loopback with self.
+  const remote = meetingState.activeSpeakers.filter(s =>
+    !meetingState.participants.some(p => p.name === s.name && p.isSelf));
+  sendToApp({
+    type: 'SPEAKER_ACTIVE', platform: meetingState.platform,
+    speakerName: remote.length === 1 ? remote[0].name : '',
+    speakers: remote, timestamp: Date.now()
+  });
 }
 
 function broadcastStatus() {
@@ -253,11 +287,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!settings.captureEnabled) return false;
 
   if (msg.type === 'MEETING_TELEMETRY') {
+    if (meetingState.tabId !== null && meetingState.tabId !== sender.tab?.id &&
+        Date.now() - meetingState.lastUpdated < 5000) return false;
+    if (!meetingState.tabId && !(msg.participants || []).length) return false;
     meetingState.platform = msg.platform;
     meetingState.tabId = sender.tab ? sender.tab.id : null;
+    meetingState.selfDetected = msg.selfDetected === true;
     meetingState.participants = msg.participants || [];
     meetingState.activeSpeakers = msg.speakers || [];
     meetingState.lastUpdated = Date.now();
+    if (!meetingState.participants.length && !meetingState.activeSpeakers.length) meetingState.tabId = null;
 
     broadcastToPopups({
       type: 'LIVE_TELEMETRY',
@@ -266,24 +305,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       speakers: meetingState.activeSpeakers
     });
 
-    if (msg.participantsChanged) {
-      sendToApp({
-        type: 'PARTICIPANTS_UPDATE',
-        platform: msg.platform,
-        participants: meetingState.participants.map(p => p.name),
-        timestamp: msg.timestamp
-      });
-    }
-
-    if (meetingState.activeSpeakers.length > 0) {
-      sendToApp({
-        type: 'SPEAKER_ACTIVE',
-        platform: msg.platform,
-        speakerName: meetingState.activeSpeakers[0].name,
-        speakers: meetingState.activeSpeakers,
-        timestamp: msg.timestamp
-      });
-    }
+    syncMeetingToApp();
   } else if (msg.type === 'AUDIO_CHUNK') {
     sendToApp(msg);
   }

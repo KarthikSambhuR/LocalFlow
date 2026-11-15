@@ -139,7 +139,7 @@ func transcribeMeetingChunk(samples []float32) (string, string) {
 	}
 	meetingBilingual := cfg.MeetingBilingual
 
-	if IsNeedleWhistleActive(meetingModel) {
+	if IsNeedleWhistleActive(meetingModel) && !meetingBilingual {
 		whistlePath := ResolveWhistleModelPath(cfg)
 		if err := LoadNeedleWhistle(whistlePath); err == nil {
 			text, err := TranscribeNeedleWhistle(whisperBuf, "")
@@ -157,6 +157,9 @@ func transcribeMeetingChunk(samples []float32) (string, string) {
 	} else if strings.Contains(meetingModel, "indicconformer") {
 		useConformer = true
 		detectedLang = "ml"
+	} else if whisperLanguageCode(meetingModel) == "ml" {
+		detectedLang = "ml"
+		useConformer = false
 	} else if strings.HasSuffix(meetingModel, ".en.bin") {
 		detectedLang = "en"
 		useConformer = false
@@ -167,8 +170,16 @@ func transcribeMeetingChunk(samples []float32) (string, string) {
 	}
 
 	if useConformer {
-		_ = LoadConformerSessions()
-		text, err := TranscribeIndicConformer(whisperBuf)
+		conformerCfg := cfg
+		conformerCfg.BilingualRoutingEnabled = false
+		conformerCfg.ActiveModel = meetingModel
+		if meetingBilingual {
+			conformerCfg.ActiveModel = cfg.BilingualConformerModel
+		}
+		if !strings.Contains(conformerCfg.ActiveModel, "indicconformer") {
+			conformerCfg.ActiveModel = "indicconformer.int8.onnx"
+		}
+		text, err := transcribeIndicConformerWithConfig(whisperBuf, conformerCfg)
 		if err == nil && text != "" {
 			return cleanSoundTags(text), "ml"
 		}
@@ -183,6 +194,21 @@ func detectMeetingChunkLanguage(samples []float32, cfg Config) string {
 	targetModel := cfg.BilingualWhisperModel
 	if targetModel == "" {
 		targetModel = "ggml-base.bin"
+	}
+	// English-only Whisper cannot detect Malayalam, even when bilingual is enabled.
+	if !strings.HasSuffix(targetModel, ".bin") || strings.HasSuffix(targetModel, ".en.bin") {
+		targetModel = ""
+		entries, _ := os.ReadDir(filepath.Join(getDataDir(cfg), "models"))
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".bin") && !strings.HasSuffix(entry.Name(), ".en.bin") {
+				targetModel = entry.Name()
+				break
+			}
+		}
+		if targetModel == "" {
+			fmt.Println("[Meeting STT] Bilingual detection requires a downloaded multilingual Whisper model")
+			return "en"
+		}
 	}
 	ctx := getMeetingWhisperContext(cfg, targetModel)
 	if ctx == nil {

@@ -142,7 +142,6 @@ func (s *SettingsApp) GetUpdateStatus() UpdateState {
 	return readUpdateState()
 }
 
-
 func (s *SettingsApp) GetAnalytics() []Analytics {
 	an, _ := GetAnalytics()
 	return an
@@ -347,6 +346,9 @@ type WhisperModelInfo struct {
 	Description      string `json:"description"`
 	Language         string `json:"language"`
 	ModelType        string `json:"model_type"` // "whisper" or "llm"
+	Parameters       string `json:"parameters,omitempty"`
+	IsDisabled       bool   `json:"is_disabled"`
+	DisabledReason   string `json:"disabled_reason,omitempty"`
 }
 
 var AvailableModels = []WhisperModelInfo{
@@ -445,6 +447,57 @@ var AvailableModels = []WhisperModelInfo{
 		Description:      "Multilingual model. Better accuracy with a speed cost.",
 		Language:         "multilingual",
 		ModelType:        "whisper",
+	},
+	{
+		ID:               "adalat-medium-ml-rmft",
+		Name:             "Medium R-MFT (Malayalam)",
+		Filename:         "ggml-medium-ml-rmft-q5_k.bin",
+		URL:              "https://huggingface.co/trysem/whisper-medium-ml-rmft-GGML/resolve/d74f7c977db533801f3580b85177426e77c9c96a/ggml-model-q5_k.bin?download=true",
+		SizeMB:           546,
+		SpeedLabel:       "Best quality",
+		SpeedDescription: "R-MFT Medium · Q5_K quantized",
+		Description:      "Adalat Vividh-ASR Medium R-MFT. Best global WER in the Vividh Malayalam benchmark; downloaded as a Whisper.cpp-compatible Q5_K model.",
+		Language:         "malayalam",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "adalat-medium-ml-high-lr",
+		Name:             "Medium High-LR (Malayalam)",
+		Filename:         "ggml-medium-ml-high-lr.bin",
+		SizeMB:           1500,
+		SpeedLabel:       "High quality",
+		SpeedDescription: "769M parameters · conversion needed",
+		Description:      "Adalat Vividh-ASR Medium High-LR. The Transformers checkpoint has no compatible Whisper.cpp export in the model collection yet.",
+		Language:         "malayalam",
+		ModelType:        "whisper",
+		IsDisabled:       true,
+		DisabledReason:   "No Whisper.cpp-compatible GGML export is available for this variant yet.",
+	},
+	{
+		ID:               "adalat-small-ml-high-lr",
+		Name:             "Small High-LR (Malayalam)",
+		Filename:         "ggml-small-ml-high-lr.bin",
+		SizeMB:           500,
+		SpeedLabel:       "Edge balanced",
+		SpeedDescription: "244M parameters · conversion needed",
+		Description:      "Adalat Vividh-ASR Small High-LR. The Transformers checkpoint has no compatible Whisper.cpp export in the model collection yet.",
+		Language:         "malayalam",
+		ModelType:        "whisper",
+		IsDisabled:       true,
+		DisabledReason:   "No Whisper.cpp-compatible GGML export is available for this variant yet.",
+	},
+	{
+		ID:               "adalat-small-ml-rmft",
+		Name:             "Small R-MFT (Malayalam)",
+		Filename:         "ggml-small-ml-rmft.bin",
+		SizeMB:           500,
+		SpeedLabel:       "Edge robust",
+		SpeedDescription: "244M parameters · conversion needed",
+		Description:      "Adalat Vividh-ASR Small R-MFT. The Transformers checkpoint has no compatible Whisper.cpp export in the model collection yet.",
+		Language:         "malayalam",
+		ModelType:        "whisper",
+		IsDisabled:       true,
+		DisabledReason:   "No Whisper.cpp-compatible GGML export is available for this variant yet.",
 	},
 	{
 		ID:               "indic-conformer-120m-int8",
@@ -556,6 +609,24 @@ var AvailableModels = []WhisperModelInfo{
 	},
 }
 
+func whisperLanguageCode(filename string) string {
+	for _, model := range AvailableModels {
+		if model.Filename == filename && model.Language == "malayalam" {
+			return "ml"
+		}
+	}
+	return "en"
+}
+
+func isAdalatWhisperModel(filename string) bool {
+	for _, model := range AvailableModels {
+		if model.Filename == filename && strings.HasPrefix(model.ID, "adalat-") {
+			return true
+		}
+	}
+	return false
+}
+
 type ModelStatus struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
@@ -564,6 +635,7 @@ type ModelStatus struct {
 	SpeedLabel       string `json:"speed_label"`
 	SpeedDescription string `json:"speed_description"`
 	Description      string `json:"description"`
+	Parameters       string `json:"parameters,omitempty"`
 	IsDownloaded     bool   `json:"is_downloaded"`
 	IsActive         bool   `json:"is_active"`
 	IsDownloading    bool   `json:"is_downloading"`
@@ -571,6 +643,7 @@ type ModelStatus struct {
 	Language         string `json:"language"`
 	ModelType        string `json:"model_type"`
 	IsDisabled       bool   `json:"is_disabled"`
+	DisabledReason   string `json:"disabled_reason,omitempty"`
 }
 
 var (
@@ -634,7 +707,7 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			isActive = m.Filename == cfg.LLMActiveModel
 		}
 
-		isDisabled := false
+		isDisabled := m.IsDisabled
 		isConformerActive := activeFilename == "indicconformer.int8.onnx" || activeFilename == "indicconformer.fp32.onnx"
 		isGemmaAudioActive := activeFilename == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 		if isConformerActive && m.ModelType == "llm" && m.ID != "gemma4-e2b" && m.ID != "sarvam-1-3b" {
@@ -651,6 +724,7 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			SpeedLabel:       m.SpeedLabel,
 			SpeedDescription: m.SpeedDescription,
 			Description:      m.Description,
+			Parameters:       m.Parameters,
 			IsDownloaded:     isDownloaded,
 			IsActive:         isActive,
 			IsDownloading:    isDownloading,
@@ -658,6 +732,7 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 			Language:         m.Language,
 			ModelType:        m.ModelType,
 			IsDisabled:       isDisabled,
+			DisabledReason:   m.DisabledReason,
 		})
 	}
 	return out
@@ -792,6 +867,12 @@ func (s *SettingsApp) DownloadModel(id string) {
 		downloadLock.Unlock()
 		return
 	}
+	if targetModel.IsDisabled {
+		downloadLock.Lock()
+		delete(downloadProgress, id)
+		downloadLock.Unlock()
+		return
+	}
 
 	go func() {
 		defer func() {
@@ -893,7 +974,7 @@ func (s *SettingsApp) DownloadModel(id string) {
 				downloadLock.Lock()
 				downloadProgress[id] = percent
 				downloadLock.Unlock()
-				
+
 				speedStr := formatBytes(speed) + "/s"
 				etaStr := formatDuration(eta)
 				wailsRuntime.EventsEmit(s.ctx, "model-download-progress", id, percent, speedStr, etaStr)
@@ -938,7 +1019,9 @@ func (s *SettingsApp) SetActiveModel(id string) error {
 	if targetModel == nil {
 		return fmt.Errorf("unknown model ID: %s", id)
 	}
-
+	if targetModel.IsDisabled {
+		return fmt.Errorf("%s", targetModel.DisabledReason)
+	}
 	// For the conformer model (.zip), verify the extracted folder exists.
 	// For all other models, ensure the binary file is in the data folder.
 	if err := s.ensureModelInDataFolder(targetModel.Filename); err != nil {
@@ -1310,7 +1393,6 @@ func (s *SettingsApp) GetTransliterations() ([]WordMapping, error) {
 	return GetTransliterations()
 }
 
-
 func unzip(src string, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -1390,7 +1472,7 @@ func (s *SettingsApp) RegenerateMeetingSummary(id string) (string, error) {
 		return "", err
 	}
 	if detail.Meeting.FullTranscript == "" {
-		return "No dialogue transcript found for this meeting.", nil
+		return "", fmt.Errorf("no dialogue transcript found for this meeting")
 	}
 
 	engine := GetMeetingEngine()
@@ -1399,7 +1481,7 @@ func (s *SettingsApp) RegenerateMeetingSummary(id string) (string, error) {
 	}
 
 	go func() {
-		summary, shortSummary, err := generateMeetingSummary(detail.Meeting.FullTranscript)
+		summary, shortSummary, err := generateMeetingSummary(id, detail.Meeting.FullTranscript)
 		if err != nil {
 			summary = fmt.Sprintf("Summary generation encountered an error: %v\n\nFull dialogue is saved in transcript.", err)
 			shortSummary = ""
@@ -1593,3 +1675,9 @@ func (s *SettingsApp) IsExtensionConnected() bool {
 	return globalExtensionServer.activeClient != nil
 }
 
+// GetExtensionParticipants allows newly opened settings windows to recover the roster.
+func (s *SettingsApp) GetExtensionParticipants() []string {
+	globalExtensionServer.mutex.Lock()
+	defer globalExtensionServer.mutex.Unlock()
+	return append([]string{}, globalExtensionServer.knownParticipants...)
+}

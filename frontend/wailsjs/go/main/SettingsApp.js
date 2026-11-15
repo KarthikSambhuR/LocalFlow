@@ -50,6 +50,10 @@ export function GetDictionaryWords() {
   return window['go']['main']['SettingsApp']['GetDictionaryWords']();
 }
 
+export function GetExtensionParticipants() {
+  return window['go']['main']['SettingsApp']['GetExtensionParticipants']();
+}
+
 export function GetExtensionPath() {
   return window['go']['main']['SettingsApp']['GetExtensionPath']();
 }
