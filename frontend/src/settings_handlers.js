@@ -10,6 +10,42 @@ import hfLogo from './assets/images/hf-logo.png';
 import cactusLogo from './assets/images/cactus-logo.jpeg';
 
 
+export async function setupPillStylePicker() {
+  const picker = document.getElementById('pillStylePicker');
+  if (!picker) return;
+
+  const cards = picker.querySelectorAll('.pill-style-card');
+  const setActive = (style) => {
+    cards.forEach(c => {
+      const isMatch = c.getAttribute('data-style') === style;
+      c.classList.toggle('active', isMatch);
+      c.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+    });
+  };
+
+  if (window.go?.main?.SettingsApp) {
+    try {
+      const cfg = await window.go.main.SettingsApp.GetConfig();
+      setActive(cfg.pill_style || 'bars');
+    } catch (_) {}
+  }
+
+  cards.forEach(card => {
+    card.onclick = async () => {
+      const style = card.getAttribute('data-style');
+      setActive(style);
+      if (window.go?.main?.SettingsApp?.SetPillStyle) {
+        try {
+          await window.go.main.SettingsApp.SetPillStyle(style);
+          showToast(`Overlay style set to ${card.querySelector('.pill-style-name')?.textContent || style}`, 'success', 2000);
+        } catch (err) {
+          showToast('Failed to save overlay style: ' + err, 'error');
+        }
+      }
+    };
+  });
+}
+
 export async function setupAmp() {
   const slider = document.getElementById('ampSlider');
   const disp   = document.getElementById('ampValue');

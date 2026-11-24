@@ -481,30 +481,48 @@ settingsModal.innerHTML = `
       <div class="insights-wrap" id="insightsRoot"></div>
     </div>
     <div class="section" id="sec-dictionary">
-      <div class="vocab-shell">
-        <div class="vocab-header">
+      <div class="vocab-page">
+        <div class="vocab-page-header">
           <div>
             <h2 class="vocab-title">Custom Vocabulary</h2>
-            <p class="vocab-subtitle">Bias Whisper toward names, acronyms, and domain terms inside its 224-token prompt budget.</p>
+            <p class="vocab-subtitle">Bias Whisper toward names, acronyms, and domain terms during transcription.</p>
           </div>
-          <span id="dictTokenBadge" class="vocab-token-pill">0 / 224 tokens</span>
         </div>
 
-        <div class="vocab-meter-track">
-          <div id="dictTokenProgress" class="vocab-meter-fill" style="width: 0%;"></div>
-        </div>
+        <div class="vocab-two-col">
+          <div class="vocab-main-col">
+            <div class="vocab-composer">
+              <input type="text" id="dictWordInput" class="lf-input" placeholder="Add a word, brand name, or phrase and press Enter..." />
+              <button id="addDictWordBtn" class="lf-btn-primary">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Keyword
+              </button>
+            </div>
 
-        <div class="vocab-composer">
-          <input type="text" id="dictWordInput" class="lf-input" placeholder="Add a word, brand name, or phrase and press Enter..." />
-          <button id="addDictWordBtn" class="lf-btn-primary">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add
-          </button>
-        </div>
+            <div class="vocab-list-section">
+              <div class="vocab-list-label">Active Keywords</div>
+              <div id="dictWordsList" class="dict-chips-grid"></div>
+            </div>
+          </div>
 
-        <div class="vocab-list-section">
-          <div class="vocab-list-label">Active Keywords</div>
-          <div id="dictWordsList" class="dict-chips-grid"></div>
+          <aside class="vocab-side-col">
+            <div class="tactile-panel">
+              <div class="tactile-panel-head">
+                <div>
+                  <h3 class="tactile-panel-title">Context Budget</h3>
+                  <p class="tactile-panel-desc">Whisper prompt capacity</p>
+                </div>
+                <span id="dictTokenBadge" class="vocab-token-pill">0 / 224</span>
+              </div>
+              <div class="vocab-meter-track">
+                <div id="dictTokenProgress" class="vocab-meter-fill" style="width: 0%;"></div>
+              </div>
+              <div class="vocab-tips">
+                <div class="vocab-tip-item">Keep keywords short and distinct (proper nouns, acronyms, product names).</div>
+                <div class="vocab-tip-item">Staying under 150 tokens leaves headroom for surrounding speech context.</div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
@@ -835,6 +853,40 @@ settingsModal.innerHTML = `
                 </div>
               </div>
             </div>
+
+            <div class="setting-row" style="flex-direction: column; align-items: stretch; gap: 12px;">
+              <div class="setting-info">
+                <span class="setting-title">Dictation Overlay Style</span>
+                <span class="setting-desc">Choose how the floating overlay visualizes your voice and processing state</span>
+              </div>
+              <div class="pill-style-grid" id="pillStylePicker">
+                <button type="button" class="pill-style-card" data-style="bars">
+                  <div class="pill-preview pill-preview-pill">
+                    <div class="pv-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  </div>
+                  <span class="pill-style-name">Classic Bars</span>
+                </button>
+                <button type="button" class="pill-style-card" data-style="spectrum">
+                  <div class="pill-preview pill-preview-pill">
+                    <div class="pv-spectrum"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  </div>
+                  <span class="pill-style-name">Fine Spectrum</span>
+                </button>
+                <button type="button" class="pill-style-card" data-style="wave">
+                  <div class="pill-preview pill-preview-pill">
+                    <svg viewBox="0 0 56 20" width="56" height="20" fill="none"><path d="M 3 10 Q 10 3, 17 10 T 31 10 T 45 10 T 53 10" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  </div>
+                  <span class="pill-style-name">Smooth Wave</span>
+                </button>
+                <button type="button" class="pill-style-card" data-style="bubble">
+                  <div class="pill-preview pill-preview-bubble">
+                    <span class="pv-bubble-ring"></span>
+                    <span class="pv-bubble-core"></span>
+                  </div>
+                  <span class="pill-style-name">Audio Bubble</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -915,47 +967,47 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-manglish">
-      <div class="vocab-shell">
-        <div class="vocab-header">
+      <div class="vocab-page">
+        <div class="vocab-page-header">
           <div>
             <h2 class="vocab-title">Language Personalization</h2>
             <p class="vocab-subtitle">Define exact Malayalam-to-Latin word replacements and phrasing examples for AI refinement.</p>
           </div>
         </div>
 
-        <!-- Primary: Exact Word Rules -->
-        <div class="tactile-panel">
-          <div class="tactile-panel-head">
-            <div>
-              <h3 class="tactile-panel-title">Word Replacement Rules</h3>
-              <p class="tactile-panel-desc">Map specific Malayalam words directly to your preferred Latin spelling.</p>
+        <div class="personalization-two-col">
+          <!-- Left: Exact Word Rules -->
+          <div class="tactile-panel">
+            <div class="tactile-panel-head">
+              <div>
+                <h3 class="tactile-panel-title">Word Replacement Rules</h3>
+                <p class="tactile-panel-desc">Map specific Malayalam words directly to your preferred Latin spelling.</p>
+              </div>
             </div>
+            <div class="rule-composer">
+              <input type="text" id="translitMalInput" class="lf-input" placeholder="Malayalam (e.g. ഹലോ)" />
+              <span class="rule-arrow"><svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+              <input type="text" id="translitEngInput" class="lf-input" placeholder="Latin (e.g. Hello)" />
+              <button id="addTranslitBtn" class="lf-btn-primary">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add
+              </button>
+            </div>
+            <div id="translitWordsList" class="mappings-list-body"></div>
           </div>
-          <div class="rule-composer">
-            <input type="text" id="translitMalInput" class="lf-input" placeholder="Malayalam word (e.g. ഹലോ)" />
-            <span class="rule-arrow"><svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
-            <input type="text" id="translitEngInput" class="lf-input" placeholder="Latin spelling (e.g. Hello)" />
-            <button id="addTranslitBtn" class="lf-btn-primary">
-              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Rule
-            </button>
-          </div>
-          <div id="translitWordsList" class="mappings-list-body"></div>
-        </div>
 
-        <!-- Secondary: Phrasing Style Examples (Collapsible) -->
-        <div class="tactile-panel open" id="manglishPanel">
-          <div class="tactile-panel-head collapsible" id="manglishPanelHeader" role="button" tabindex="0" aria-expanded="true">
-            <div>
-              <h3 class="tactile-panel-title">Phrasing &amp; Rhythm Examples</h3>
-              <p class="tactile-panel-desc">Show how you write Manglish sentences so refinement matches your natural tone.</p>
+          <!-- Right: Phrasing Style Examples -->
+          <div class="tactile-panel open" id="manglishPanel">
+            <div class="tactile-panel-head" id="manglishPanelHeader">
+              <div>
+                <h3 class="tactile-panel-title">Phrasing &amp; Rhythm Examples</h3>
+                <p class="tactile-panel-desc">Guide how refinement formats natural Manglish sentences.</p>
+              </div>
+              <svg class="models-panel-chevron" id="manglishPanelChevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="display: none;">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
             </div>
-            <svg class="models-panel-chevron" id="manglishPanelChevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="transform: rotate(90deg); transition: transform 0.2s ease;">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </div>
-          <div class="personalization-card-body" id="manglishPanelBody">
-            <div class="examples-compact-grid">
+            <div class="examples-compact-grid" id="manglishPanelBody">
               <div class="example-row">
                 <span class="example-prompt"><kbd>01</kbd> ഹലോ സുഖമാണോ എന്ത് ചെയ്യുന്നു</span>
                 <input type="text" id="manglishEx1" class="lf-input" placeholder="e.g. Hello, sukhamano enth cheyyunnu?" />

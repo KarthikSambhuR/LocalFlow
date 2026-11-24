@@ -222,6 +222,12 @@ func (s *SettingsApp) SetLLMEnableThinking(enabled bool) {
 	saveConfig(cfg)
 }
 
+func (s *SettingsApp) SetPillStyle(style string) error {
+	cfg := loadConfig()
+	cfg.PillStyle = normalizePillStyle(style)
+	return saveConfig(cfg)
+}
+
 func (s *SettingsApp) GetPlatform() string {
 	return runtime.GOOS
 }

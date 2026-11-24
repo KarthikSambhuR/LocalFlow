@@ -20,7 +20,8 @@ import {
   setupDictionary,
   setupManglishPersonalization,
   setupBilingualRouting,
-  setupModelsSettings
+  setupModelsSettings,
+  setupPillStylePicker
 } from './settings_handlers.js';
 import { setupMeetingsTab } from './meetings_handler.js';
 
@@ -251,5 +252,6 @@ export async function initSettingsApp() {
   setupDataFolderSettings();
   setupMicrophoneSettings();
   setupBilingualRouting();
+  setupPillStylePicker();
   setupOnboarding();
 }

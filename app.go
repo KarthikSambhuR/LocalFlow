@@ -788,6 +788,7 @@ func (a *App) listenToKeyboard() {
 
 	cfg = loadConfig()
 	cacheKeyboardShortcutConfig(cfg)
+	activePillStyle := cfg.PillStyle
 
 	evChan := startSuppressingKeyboardHook(func() (uint16, uint16) {
 		// Low-level keyboard hooks are subject to a Windows timeout. Read an
@@ -805,6 +806,10 @@ func (a *App) listenToKeyboard() {
 			// Periodically refresh keybind configuration from disk
 			cfg = loadConfig()
 			cacheKeyboardShortcutConfig(cfg)
+			if cfg.PillStyle != activePillStyle {
+				activePillStyle = cfg.PillStyle
+				runtime.EventsEmit(a.ctx, "pill-style", activePillStyle)
+			}
 
 			// Keep process/model startup work off the keyboard event loop. Starting
 			// llama-server or loading Whisper can take seconds, and a blocked event
@@ -1327,6 +1332,10 @@ func pasteCtrlV() {
 	synthKey(vkV, true)
 	synthKey(vkV, false)
 	synthKey(vkLControl, false)
+}
+
+func (a *App) GetPillStyle() string {
+	return loadConfig().PillStyle
 }
 
 func (a *App) SetMeetingBilingual(enabled bool) error {

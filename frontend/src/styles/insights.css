@@ -246,14 +246,12 @@
   opacity: 0.12;
 }
 
-/* Heatmap Levels (Using neon aquamarine tint shades) */
-.level-0 { background: rgba(238, 254, 255, 0.05); }
-.level-1 { background: #0c3325; }
-.level-2 { background: #135c3f; }
-.level-3 { background: #23a672; }
-.level-4 { 
-  background: #AAFFD4;
-}
+/* Heatmap Levels (Monochrome T3/Antigravity graduated intensity) */
+.level-0 { background: rgba(255, 255, 255, 0.05); }
+.level-1 { background: rgba(255, 255, 255, 0.16); }
+.level-2 { background: rgba(255, 255, 255, 0.34); }
+.level-3 { background: rgba(255, 255, 255, 0.58); }
+.level-4 { background: rgba(255, 255, 255, 0.90); }
 
 .calendar-legend {
   display: flex;

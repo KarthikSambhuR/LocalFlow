@@ -264,7 +264,7 @@
 }
 
 .model-status-pill.active {
-  background: rgba(170, 255, 212, 0.12);
+  background: rgba(255, 255, 255, 0.12);
   border-color: transparent;
   color: var(--accent);
 }

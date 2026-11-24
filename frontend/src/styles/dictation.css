@@ -2,7 +2,7 @@
    DICTATION PILL (Floating Mesh)
    ══════════════════════════════ */
 :root {
-  --accent: #5E9BFF;
+  --accent: #F4F4F5;
 }
 
 *, *::before, *::after {
@@ -24,7 +24,7 @@ html, body {
   width: 96px;
   height: 36px;
   background: #000000;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   display: flex;
   align-items: center;
@@ -35,14 +35,39 @@ html, body {
   transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.module.style-spectrum {
+  width: 108px;
+  height: 38px;
+}
+
+.module.style-bubble {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+}
+
 .module.active, .module.processing {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-.visualizer {
-  display: flex;
+/* Hide all visualizers by default; enable only the active style */
+.visualizer,
+.spectrum-visualizer,
+.wave-visualizer,
+.bubble-visualizer {
+  display: none;
   align-items: center;
+  justify-content: center;
+}
+
+.module.style-bars .visualizer { display: flex; }
+.module.style-spectrum .spectrum-visualizer { display: flex; }
+.module.style-wave .wave-visualizer { display: flex; }
+.module.style-bubble .bubble-visualizer { display: flex; }
+
+/* 1. Classic 9-bar visualizer */
+.visualizer {
   gap: 4px;
 }
 
@@ -54,6 +79,51 @@ html, body {
   transition: height 0.08s ease-out;
 }
 
+/* 2. Dense fine-line spectrum visualizer */
+.spectrum-visualizer {
+  gap: 1.5px;
+}
+
+.spectrum-bar {
+  width: 1.5px;
+  height: 3px;
+  background: #ffffff;
+  border-radius: 9999px;
+  transition: height 0.06s ease-out;
+}
+
+/* 3. Smooth sine-wave visualizer */
+.wave-visualizer svg {
+  display: block;
+}
+
+/* 4. Circular audio bubble visualizer */
+.bubble-visualizer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.bubble-core {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, rgba(255, 255, 255, 0.78) 100%);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+  transition: transform 0.08s ease-out, background 0.2s ease;
+}
+
+.bubble-ring {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  opacity: 0.25;
+  transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+}
+
+/* Processing spinner for non-bubble styles */
 .processing-ring {
   position: absolute;
   top: 50%;
@@ -68,12 +138,40 @@ html, body {
   transition: opacity 0.2s;
 }
 
-.module.processing .processing-ring {
+.module.processing:not(.style-bubble) .processing-ring {
   opacity: 1;
   animation: spinDictation 0.6s linear infinite;
 }
 
-.module.processing .visualizer { opacity: 0; }
+.module.processing:not(.style-bubble) .visualizer,
+.module.processing:not(.style-bubble) .spectrum-visualizer,
+.module.processing:not(.style-bubble) .wave-visualizer {
+  opacity: 0;
+}
+
+/* Bubble breathing animation during processing */
+.module.style-bubble.processing .bubble-core {
+  animation: bubbleBreatheCore 1.5s ease-in-out infinite;
+}
+
+.module.style-bubble.processing .bubble-ring {
+  animation: bubbleBreatheRing 1.5s ease-in-out infinite;
+}
+
+.module.style-bubble.refining .bubble-core {
+  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #93c5fd 100%);
+  box-shadow: 0 0 12px rgba(147, 197, 253, 0.45);
+}
+
+@keyframes bubbleBreatheCore {
+  0%, 100% { transform: scale(0.78); opacity: 0.7; }
+  50%      { transform: scale(1.18); opacity: 1; }
+}
+
+@keyframes bubbleBreatheRing {
+  0%, 100% { transform: scale(0.92); opacity: 0.15; }
+  50%      { transform: scale(1.42); opacity: 0.55; }
+}
 
 @keyframes spinDictation {
   from { transform: translate(-50%, -50%) rotate(0deg); }
@@ -88,10 +186,23 @@ html, body {
   opacity: 0;
 }
 
-.module.loading-model .visualizer {
+.module.loading-model .visualizer,
+.module.loading-model .spectrum-visualizer,
+.module.loading-model .wave-visualizer,
+.module.loading-model .bubble-visualizer {
   opacity: 1;
 }
 
-.module.loading-model .bar {
-  background: #f5a623; /* Warm orangeish yellow color */
+.module.loading-model .bar,
+.module.loading-model .spectrum-bar {
+  background: #f5a623;
+}
+
+.module.loading-model .wave-path {
+  stroke: #f5a623;
+}
+
+.module.loading-model .bubble-core {
+  background: #f5a623;
+  box-shadow: 0 0 10px rgba(245, 166, 35, 0.45);
 }

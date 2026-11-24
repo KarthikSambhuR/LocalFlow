@@ -86,9 +86,10 @@ type Config struct {
 	MeetingLLMModel            string  `json:"meeting_llm_model"`
 
 	// Window geometry — persisted so the home/settings window reopens at the same size.
-	WindowWidth     int  `json:"window_width"`
-	WindowHeight    int  `json:"window_height"`
-	WindowMaximized bool `json:"window_maximized"`
+	WindowWidth     int    `json:"window_width"`
+	WindowHeight    int    `json:"window_height"`
+	WindowMaximized bool   `json:"window_maximized"`
+	PillStyle       string `json:"pill_style"`
 }
 
 func loadConfig() Config {
@@ -127,6 +128,7 @@ func loadConfig() Config {
 		WindowWidth:                1100,
 		WindowHeight:               720,
 		WindowMaximized:            false,
+		PillStyle:                  "bars",
 	}
 
 	newPath := getConfigPath()
@@ -226,6 +228,7 @@ func loadConfig() Config {
 	if cfg.BilingualConformerModel == "" {
 		cfg.BilingualConformerModel = "indicconformer.int8.onnx"
 	}
+	cfg.PillStyle = normalizePillStyle(cfg.PillStyle)
 
 	if statErr == nil {
 		configCacheMu.Lock()
@@ -265,6 +268,15 @@ func normalizeLLMContextSize(size int) int {
 		}
 	}
 	return valid[len(valid)-1]
+}
+
+func normalizePillStyle(style string) string {
+	switch strings.ToLower(strings.TrimSpace(style)) {
+	case "bars", "spectrum", "wave", "bubble":
+		return strings.ToLower(strings.TrimSpace(style))
+	default:
+		return "bars"
+	}
 }
 
 func saveConfig(cfg Config) error {
