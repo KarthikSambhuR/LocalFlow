@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
@@ -63,6 +64,29 @@ type keyEvent struct {
 	cancel  bool
 }
 
+type keyboardShortcutConfig struct {
+	key1Rawcode uint16
+	key2Rawcode uint16
+	capture     bool
+}
+
+var activeKeyboardShortcut atomic.Pointer[keyboardShortcutConfig]
+
+func cacheKeyboardShortcutConfig(cfg Config) {
+	activeKeyboardShortcut.Store(&keyboardShortcutConfig{
+		key1Rawcode: cfg.Keybind1Rawcode,
+		key2Rawcode: cfg.Keybind2Rawcode,
+		capture:     cfg.KeybindCaptureActive,
+	})
+}
+
+func getCachedKeyboardShortcutConfig() keyboardShortcutConfig {
+	if cfg := activeKeyboardShortcut.Load(); cfg != nil {
+		return *cfg
+	}
+	return keyboardShortcutConfig{key1Rawcode: vkLControl, key2Rawcode: vkLWin}
+}
+
 type kbdLLHookStruct struct {
 	vkCode      uint32
 	scanCode    uint32
@@ -88,9 +112,10 @@ type App struct {
 	interimTranscripts      []string
 	streamingActive         bool
 	streamingWG             sync.WaitGroup
-	llmMutex         sync.Mutex
-	llmPort          int
-	runningLLMConfig Config
+	llmMutex                sync.Mutex
+	llmSyncInProgress       atomic.Bool
+	llmPort                 int
+	runningLLMConfig        Config
 	routingDecided          bool
 	useConformer            bool
 }
@@ -562,11 +587,12 @@ func (a *App) startup(ctx context.Context) {
 	// 5. Setup System Tray
 	a.setupTray()
 
-	// 5.5 Setup LLM initial state
-	a.syncLLMServerState(cfg)
-
 	// 6. Start Global Hook in a Goroutine
 	go a.listenToKeyboard()
+
+	// 6.5 Sync the LLM server separately so initial model startup never delays
+	// installation of the keyboard hook.
+	a.syncLLMServerStateAsync(cfg)
 
 	// 7. Start update checker in background
 	go StartBackgroundUpdateCheck(a.ctx)
@@ -581,19 +607,16 @@ func (a *App) shutdown(ctx context.Context) {
 
 func (a *App) listenToKeyboard() {
 	var (
-		isRecording          = false
-		isProcessing         = false
-		lCtrlPressed         = false
-		lWinPressed          = false
-		lShiftPressed        = false
-		lF23Pressed          = false
-		copilotKeyPressed    = false
-		acceptingUntil       time.Time
-		keyMutex             sync.RWMutex
-		key1Rawcode          uint16
-		key2Rawcode          uint16
-		keybindCaptureActive bool
+		isRecording       = false
+		isProcessing      = false
+		lCtrlPressed      = false
+		lWinPressed       = false
+		lShiftPressed     = false
+		lF23Pressed       = false
+		copilotKeyPressed = false
+		acceptingUntil    time.Time
 	)
+	var modelEnsureInProgress atomic.Bool
 
 	// 7. Initialize Microphone persistently (don't init/uninit on every key press)
 	mctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
@@ -662,26 +685,88 @@ func (a *App) listenToKeyboard() {
 	if err != nil {
 		fmt.Println("Error initializing audio device:", err)
 	}
+	deviceOps := make(chan func(), 32)
+	go func() {
+		for operation := range deviceOps {
+			operation()
+		}
+	}()
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	const keyReleaseDebounce = 75 * time.Millisecond
+	const trailingAudioWindow = 400 * time.Millisecond
+	var releaseTimer *time.Timer
+	var releaseCh <-chan time.Time
+	cancelReleaseTimer := func() {
+		if releaseTimer != nil {
+			if !releaseTimer.Stop() {
+				select {
+				case <-releaseTimer.C:
+				default:
+				}
+			}
+			releaseTimer = nil
+			releaseCh = nil
+		}
+	}
+	defer cancelReleaseTimer()
+
+	stopRecordingAndTranscribe := func(trail time.Duration) {
+		a.mutex.Lock()
+		isRecording = false
+		isProcessing = true
+		acceptingUntil = time.Now().Add(trail)
+		a.mutex.Unlock()
+
+		// Tell UI to shrink and show processing spinner
+		runtime.EventsEmit(a.ctx, "recording-state", "processing")
+
+		// Keep accepting samples briefly after key release to capture trailing speech.
+		go func() {
+			defer func() {
+				a.mutex.Lock()
+				isProcessing = false
+				a.mutex.Unlock()
+			}()
+
+			time.Sleep(trail)
+
+			deviceOps <- func() {
+				if device != nil {
+					if err := device.Stop(); err != nil {
+						fmt.Println("Error stopping audio device:", err)
+					}
+				}
+			}
+
+			a.mutex.Lock()
+			// Add a tiny silence pad just in case even with the trailing window it's below Whisper minimums
+			padding := make([]float32, 1600)
+			a.audioBuffer = append(a.audioBuffer, padding...)
+			acceptingUntil = time.Time{}
+			a.streamingActive = false
+			a.mutex.Unlock()
+
+			// Wait for background worker to fully finish
+			a.streamingWG.Wait()
+
+			a.transcribe()
+		}()
+	}
+
 	cfg = loadConfig()
-	key1Rawcode = cfg.Keybind1Rawcode
-	key2Rawcode = cfg.Keybind2Rawcode
-	keybindCaptureActive = cfg.KeybindCaptureActive
+	cacheKeyboardShortcutConfig(cfg)
 
 	evChan := startSuppressingKeyboardHook(func() (uint16, uint16) {
-		cfg := loadConfig()
-		keyMutex.Lock()
-		key1Rawcode = cfg.Keybind1Rawcode
-		key2Rawcode = cfg.Keybind2Rawcode
-		keybindCaptureActive = cfg.KeybindCaptureActive
-		keyMutex.Unlock()
-		if cfg.KeybindCaptureActive {
+		// Low-level keyboard hooks are subject to a Windows timeout. Read an
+		// immutable in-memory snapshot here; never touch the config file.
+		cfg := getCachedKeyboardShortcutConfig()
+		if cfg.capture {
 			return 0, 0
 		}
-		return cfg.Keybind1Rawcode, cfg.Keybind2Rawcode
+		return cfg.key1Rawcode, cfg.key2Rawcode
 	})
 
 	for {
@@ -689,45 +774,53 @@ func (a *App) listenToKeyboard() {
 		case <-ticker.C:
 			// Periodically refresh keybind configuration from disk
 			cfg = loadConfig()
-			keyMutex.Lock()
-			key1Rawcode = cfg.Keybind1Rawcode
-			key2Rawcode = cfg.Keybind2Rawcode
-			keybindCaptureActive = cfg.KeybindCaptureActive
-			keyMutex.Unlock()
+			cacheKeyboardShortcutConfig(cfg)
 
-			// Periodically sync LLM server state
-			a.syncLLMServerState(cfg)
+			// Keep process/model startup work off the keyboard event loop. Starting
+			// llama-server or loading Whisper can take seconds, and a blocked event
+			// loop would process queued key-down/key-up events only after release.
+			a.syncLLMServerStateAsync(cfg)
 
 			if cfg.ActiveMicrophone != activeMicName {
-				activeMicName = cfg.ActiveMicrophone
-				if device != nil {
-					device.Uninit()
-				}
+				a.mutex.Lock()
+				canReinitializeMic := !isRecording && !isProcessing
+				a.mutex.Unlock()
+				if canReinitializeMic {
+					activeMicName = cfg.ActiveMicrophone
+					micName := activeMicName
+					deviceOps <- func() {
+						if device != nil {
+							device.Uninit()
+							device = nil
+						}
 
-				var selectedID unsafe.Pointer
-				if activeMicName != "" && activeMicName != "Default" {
-					devices, err := mctx.Devices(malgo.Capture)
-					if err == nil {
-						for _, info := range devices {
-							if info.Name() == activeMicName {
-								selectedID = info.ID.Pointer()
-								break
+						var selectedID unsafe.Pointer
+						if micName != "" && micName != "Default" {
+							devices, err := mctx.Devices(malgo.Capture)
+							if err == nil {
+								for _, info := range devices {
+									if info.Name() == micName {
+										selectedID = info.ID.Pointer()
+										break
+									}
+								}
 							}
 						}
+
+						micConfig := malgo.DefaultDeviceConfig(malgo.Capture)
+						micConfig.Capture.Format = malgo.FormatF32
+						micConfig.Capture.Channels = 1
+						micConfig.SampleRate = 16000
+						if selectedID != nil {
+							micConfig.Capture.DeviceID = selectedID
+						}
+
+						var err error
+						device, err = malgo.InitDevice(mctx.Context, micConfig, malgo.DeviceCallbacks{Data: onRec})
+						if err != nil {
+							fmt.Println("Error reinitializing audio device:", err)
+						}
 					}
-				}
-
-				deviceConfig = malgo.DefaultDeviceConfig(malgo.Capture)
-				deviceConfig.Capture.Format = malgo.FormatF32
-				deviceConfig.Capture.Channels = 1
-				deviceConfig.SampleRate = 16000
-				if selectedID != nil {
-					deviceConfig.Capture.DeviceID = selectedID
-				}
-
-				device, err = malgo.InitDevice(mctx.Context, deviceConfig, malgo.DeviceCallbacks{Data: onRec})
-				if err != nil {
-					fmt.Println("Error reinitializing audio device:", err)
 				}
 			}
 
@@ -735,19 +828,26 @@ func (a *App) listenToKeyboard() {
 			recordingNow := isRecording
 			processingNow := isProcessing
 			a.mutex.Unlock()
-			if !recordingNow && !processingNow {
-				a.ensureActiveModel()
+			if !recordingNow && !processingNow && modelEnsureInProgress.CompareAndSwap(false, true) {
+				go func() {
+					defer modelEnsureInProgress.Store(false)
+					a.ensureActiveModel()
+				}()
+			}
+
+		case <-releaseCh:
+			releaseTimer = nil
+			releaseCh = nil
+			a.mutex.Lock()
+			recordingNow := isRecording
+			a.mutex.Unlock()
+			if recordingNow {
+				stopRecordingAndTranscribe(trailingAudioWindow - keyReleaseDebounce)
 			}
 
 		case ev := <-evChan:
-			cfg = loadConfig()
-			keyMutex.Lock()
-			key1Rawcode = cfg.Keybind1Rawcode
-			key2Rawcode = cfg.Keybind2Rawcode
-			keybindCaptureActive = cfg.KeybindCaptureActive
-			keyMutex.Unlock()
-
 			if ev.cancel {
+				cancelReleaseTimer()
 				a.mutex.Lock()
 				wasRecording := isRecording
 				isRecording = false
@@ -756,9 +856,13 @@ func (a *App) listenToKeyboard() {
 				a.streamingActive = false
 				a.mutex.Unlock()
 
-				if wasRecording && device != nil {
-					if err := device.Stop(); err != nil {
-						fmt.Println("Error stopping audio device on cancel:", err)
+				if wasRecording {
+					deviceOps <- func() {
+						if device != nil {
+							if err := device.Stop(); err != nil {
+								fmt.Println("Error stopping audio device on cancel:", err)
+							}
+						}
 					}
 				}
 
@@ -780,12 +884,12 @@ func (a *App) listenToKeyboard() {
 				continue
 			}
 
-			keyMutex.RLock()
-			currentKey1Rawcode := key1Rawcode
-			currentKey2Rawcode := key2Rawcode
-			currentKeybindCaptureActive := keybindCaptureActive
-			keyMutex.RUnlock()
+			shortcut := getCachedKeyboardShortcutConfig()
+			currentKey1Rawcode := shortcut.key1Rawcode
+			currentKey2Rawcode := shortcut.key2Rawcode
+			currentKeybindCaptureActive := shortcut.capture
 			if currentKeybindCaptureActive {
+				cancelReleaseTimer()
 				lCtrlPressed = false
 				lWinPressed = false
 				lShiftPressed = false
@@ -833,13 +937,13 @@ func (a *App) listenToKeyboard() {
 				a.setShortcutKeysDown(lWinPressed || lShiftPressed || lF23Pressed || copilotKeyPressed)
 				shouldBeRecording = (lWinPressed && lShiftPressed && lF23Pressed) || copilotKeyPressed
 			} else {
-				if ev.rawcode == currentKey1Rawcode {
+				if isSameHotkeyKey(ev.rawcode, currentKey1Rawcode) {
 					if ev.down {
 						lCtrlPressed = true
 					} else {
 						lCtrlPressed = false
 					}
-				} else if ev.rawcode == currentKey2Rawcode {
+				} else if isSameHotkeyKey(ev.rawcode, currentKey2Rawcode) {
 					if ev.down {
 						lWinPressed = true
 					} else {
@@ -855,6 +959,10 @@ func (a *App) listenToKeyboard() {
 			recordingNow := isRecording
 			processingNow := isProcessing
 			a.mutex.Unlock()
+
+			if shouldBeRecording {
+				cancelReleaseTimer()
+			}
 
 			if shouldBeRecording && !recordingNow && !processingNow {
 				a.mutex.Lock()
@@ -877,51 +985,20 @@ func (a *App) listenToKeyboard() {
 				// Tell UI to show the INITIALIZING spinner
 				runtime.EventsEmit(a.ctx, "recording-state", "initializing")
 
-				if device != nil {
-					if err := device.Start(); err != nil {
-						fmt.Println("Error starting audio device:", err)
+				deviceOps <- func() {
+					if device != nil {
+						if err := device.Start(); err != nil {
+							fmt.Println("Error starting audio device:", err)
+						}
 					}
 				}
 
 			} else if !shouldBeRecording && recordingNow {
-				a.mutex.Lock()
-				isRecording = false
-				isProcessing = true
-				acceptingUntil = time.Now().Add(400 * time.Millisecond)
-				a.mutex.Unlock()
-
-				// Tell UI to shrink and show processing spinner
-				runtime.EventsEmit(a.ctx, "recording-state", "processing")
-
-				// Keep accepting samples briefly after key release to capture trailing speech.
-				go func() {
-					defer func() {
-						a.mutex.Lock()
-						isProcessing = false
-						a.mutex.Unlock()
-					}()
-
-					time.Sleep(400 * time.Millisecond)
-
-					if device != nil {
-						if err := device.Stop(); err != nil {
-							fmt.Println("Error stopping audio device:", err)
-						}
-					}
-
-					a.mutex.Lock()
-					// Add a tiny silence pad just in case even with the 400ms trail it's below Whisper minimums
-					padding := make([]float32, 1600)
-					a.audioBuffer = append(a.audioBuffer, padding...)
-					acceptingUntil = time.Time{}
-					a.streamingActive = false
-					a.mutex.Unlock()
-
-					// Wait for background worker to fully finish
-					a.streamingWG.Wait()
-
-					a.transcribe()
-				}()
+				// Debounce brief key-up bounces (e.g. transient Ctrl/Win release events while holding).
+				if releaseTimer == nil {
+					releaseTimer = time.NewTimer(keyReleaseDebounce)
+					releaseCh = releaseTimer.C
+				}
 			}
 		} // close select
 	} // close for
@@ -977,9 +1054,11 @@ func startSuppressingKeyboardHook(getHotkey func() (uint16, uint16)) <-chan keyE
 					otherHotkeyDown = isOtherHotkeyDown(pressed, rawcode, key1Rawcode, key2Rawcode)
 				}
 
-				select {
-				case events <- keyEvent{rawcode: rawcode, down: isDown}:
-				default:
+				if isHotkeyKey {
+					select {
+					case events <- keyEvent{rawcode: rawcode, down: isDown}:
+					default:
+					}
 				}
 
 				if isDown {
@@ -1126,7 +1205,23 @@ func isWinRawcode(rawcode uint16) bool {
 }
 
 func isSameHotkeyKey(rawcode uint16, configured uint16) bool {
+	if isCtrlRawcode(rawcode) && isCtrlRawcode(configured) {
+		return true
+	}
+	if isWinRawcode(rawcode) && isWinRawcode(configured) {
+		return true
+	}
 	return rawcode == configured
+}
+
+func isConfiguredHotkeyKeyPressed(pressed map[uint16]bool, configured uint16) bool {
+	if isCtrlRawcode(configured) {
+		return pressed[vkLControl] || pressed[vkRControl]
+	}
+	if isWinRawcode(configured) {
+		return pressed[vkLWin] || pressed[vkRWin]
+	}
+	return pressed[configured]
 }
 
 func isOtherHotkeyDown(pressed map[uint16]bool, rawcode uint16, key1Rawcode uint16, key2Rawcode uint16) bool {
@@ -1143,17 +1238,17 @@ func isOtherHotkeyDown(pressed map[uint16]bool, rawcode uint16, key1Rawcode uint
 		return false
 	}
 	if isSameHotkeyKey(rawcode, key1Rawcode) {
-		return pressed[key2Rawcode]
+		return isConfiguredHotkeyKeyPressed(pressed, key2Rawcode)
 	}
 	if isSameHotkeyKey(rawcode, key2Rawcode) {
-		return pressed[key1Rawcode]
+		return isConfiguredHotkeyKeyPressed(pressed, key1Rawcode)
 	}
 	if isWinRawcode(rawcode) {
 		if isWinRawcode(key1Rawcode) {
-			return pressed[key2Rawcode]
+			return isConfiguredHotkeyKeyPressed(pressed, key2Rawcode)
 		}
 		if isWinRawcode(key2Rawcode) {
-			return pressed[key1Rawcode]
+			return isConfiguredHotkeyKeyPressed(pressed, key1Rawcode)
 		}
 	}
 	return false
@@ -1486,22 +1581,21 @@ func (a *App) ensureActiveModel() {
 
 func findSpeechStart(samples []float32, sampleRate int) int {
 	windowSize := int(0.03 * float64(sampleRate)) // 30ms window (480 samples at 16kHz)
-	threshold := float32(0.005)                  // Energy threshold for active speech
-	
+	threshold := float32(0.005)                   // Energy threshold for active speech
+
 	for i := 0; i <= len(samples)-windowSize; i += windowSize {
 		var sum float32
 		for j := 0; j < windowSize; j++ {
 			sum += samples[i+j] * samples[i+j]
 		}
 		rms := math.Sqrt(float64(sum / float32(windowSize)))
-		
+
 		if rms > float64(threshold) {
 			return i
 		}
 	}
 	return 0 // Fallback to start if no speech is detected
 }
-
 
 func (a *App) detectLanguage(samples []float32, cfg Config) string {
 	a.whisperMutex.Lock()
@@ -1943,8 +2037,6 @@ Assistant: അവൻ അവിടെ പോയിട്ടുണ്ടെന്�
 	if onlyMalayalam {
 		malayalamOnlyInstruction = "\nSince the input is Malayalam transcription, you MUST output the corrected text ONLY in Malayalam script (Malayalam language). Do NOT translate the Malayalam words into English, and do NOT write them in Manglish (Latin/English letters). Your output must be strictly in Malayalam script."
 	}
-
-
 
 	var manglishInstruction string
 	var examples string
@@ -2453,6 +2545,16 @@ func (a *App) startLLMServer(cfg Config) {
 	}(port)
 }
 
+func (a *App) syncLLMServerStateAsync(cfg Config) {
+	if !a.llmSyncInProgress.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer a.llmSyncInProgress.Store(false)
+		a.syncLLMServerState(cfg)
+	}()
+}
+
 func (a *App) syncLLMServerState(cfg Config) {
 	a.llmMutex.Lock()
 	isRunning := a.llmCmd != nil && a.llmCmd.Process != nil
@@ -2722,9 +2824,9 @@ func cleanSoundTags(text string) string {
 }
 
 type LLMContentItem struct {
-	Type       string                 `json:"type"`
-	Text       string                 `json:"text,omitempty"`
-	InputAudio *LLMInputAudioContent  `json:"input_audio,omitempty"`
+	Type       string                `json:"type"`
+	Text       string                `json:"text,omitempty"`
+	InputAudio *LLMInputAudioContent `json:"input_audio,omitempty"`
 }
 
 type LLMInputAudioContent struct {
@@ -2866,4 +2968,3 @@ func containsMalayalam(s string) bool {
 	}
 	return false
 }
-

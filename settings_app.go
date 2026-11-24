@@ -184,13 +184,21 @@ func (s *SettingsApp) SetKeybinds(key1 uint16, name1 string, key2 uint16, name2 
 	cfg.Keybind2Rawcode = key2
 	cfg.Keybind2Name = name2
 	cfg.KeybindCaptureActive = false
-	saveConfig(cfg)
+	if err := saveConfig(cfg); err != nil {
+		fmt.Println("Failed to save keybinds:", err)
+		return
+	}
+	cacheKeyboardShortcutConfig(cfg)
 }
 
 func (s *SettingsApp) SetKeybindCaptureActive(active bool) {
 	cfg := loadConfig()
 	cfg.KeybindCaptureActive = active
-	saveConfig(cfg)
+	if err := saveConfig(cfg); err != nil {
+		fmt.Println("Failed to save keybind capture state:", err)
+		return
+	}
+	cacheKeyboardShortcutConfig(cfg)
 }
 
 func (s *SettingsApp) SetStartOnStartup(enabled bool) error {
