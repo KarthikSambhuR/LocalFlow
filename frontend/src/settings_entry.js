@@ -57,6 +57,7 @@ function setupUpdater() {
     const progressText = document.getElementById('updateProgressText');
 
     const checkStatus = async () => {
+      let nextDelayMs = 15000;
       try {
         const state = await window.go.main.SettingsApp.GetUpdateStatus();
         if (state.status === 'available' || state.status === 'downloading') {
@@ -66,20 +67,22 @@ function setupUpdater() {
           const pct = state.percent || 0;
           if (progressBar) progressBar.style.width = `${pct}%`;
           if (progressText) progressText.textContent = `Downloading... ${pct}%`;
+          nextDelayMs = 1000;
         } else if (state.status === 'downloaded') {
           notification.style.display = 'block';
           if (progressContainer) progressContainer.style.display = 'none';
           btn.style.display = 'flex';
+          return; // Terminal state until restart
         } else {
           notification.style.display = 'none';
         }
       } catch (err) {
         console.error('Failed to get update status:', err);
       }
+      setTimeout(checkStatus, nextDelayMs);
     };
 
     checkStatus();
-    setInterval(checkStatus, 1000);
   }
 
   btn.addEventListener('click', async () => {

@@ -5,6 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
+)
+
+var (
+	configCacheMu      sync.RWMutex
+	cachedConfig       Config
+	cachedConfigPath   string
+	cachedConfigMod    time.Time
+	cachedConfigLoaded bool
 )
 
 func getBaseAppDir() string {
@@ -119,14 +129,26 @@ func loadConfig() Config {
 		WindowMaximized:            false,
 	}
 
+	newPath := getConfigPath()
+	stat, statErr := os.Stat(newPath)
+	if statErr == nil {
+		configCacheMu.RLock()
+		if cachedConfigLoaded && cachedConfigPath == newPath && stat.ModTime().Equal(cachedConfigMod) {
+			cfg := cachedConfig
+			configCacheMu.RUnlock()
+			return cfg
+		}
+		configCacheMu.RUnlock()
+	}
+
 	// Migrate legacy config file if present in current directory but not in AppDir
 	legacyPath := "localflow_config.json"
-	newPath := getConfigPath()
-	if _, err := os.Stat(newPath); err != nil {
+	if statErr != nil {
 		if _, errLegacy := os.Stat(legacyPath); errLegacy == nil {
 			if data, errRead := os.ReadFile(legacyPath); errRead == nil {
 				_ = os.WriteFile(newPath, data, 0644)
 				_ = os.Remove(legacyPath)
+				stat, statErr = os.Stat(newPath)
 			}
 		}
 	}
@@ -204,6 +226,15 @@ func loadConfig() Config {
 	if cfg.BilingualConformerModel == "" {
 		cfg.BilingualConformerModel = "indicconformer.int8.onnx"
 	}
+
+	if statErr == nil {
+		configCacheMu.Lock()
+		cachedConfig = cfg
+		cachedConfigPath = newPath
+		cachedConfigMod = stat.ModTime()
+		cachedConfigLoaded = true
+		configCacheMu.Unlock()
+	}
 	return cfg
 }
 
@@ -241,5 +272,17 @@ func saveConfig(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(getConfigPath(), data, 0644)
+	cfgPath := getConfigPath()
+	if err := os.WriteFile(cfgPath, data, 0644); err != nil {
+		return err
+	}
+	if stat, err := os.Stat(cfgPath); err == nil {
+		configCacheMu.Lock()
+		cachedConfig = cfg
+		cachedConfigPath = cfgPath
+		cachedConfigMod = stat.ModTime()
+		cachedConfigLoaded = true
+		configCacheMu.Unlock()
+	}
+	return nil
 }
