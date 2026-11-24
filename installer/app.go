@@ -43,9 +43,22 @@ func (a *App) GetDefaultInstallDir() string {
 
 // SelectFolder opens a native directory picker and returns the path.
 func (a *App) SelectFolder(defaultPath string) (string, error) {
+	initialDir := filepath.Clean(defaultPath)
+	for initialDir != "" && initialDir != "." {
+		if info, err := os.Stat(initialDir); err == nil && info.IsDir() {
+			break
+		}
+		parent := filepath.Dir(initialDir)
+		if parent == initialDir {
+			initialDir = ""
+			break
+		}
+		initialDir = parent
+	}
+
 	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		DefaultDirectory: defaultPath,
-		Title:            "Select Installation Directory",
+		DefaultDirectory: initialDir,
+		Title:            "Select Installation Folder",
 	})
 	if err != nil {
 		return "", err
