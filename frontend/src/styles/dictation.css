@@ -1,6 +1,21 @@
 /* ══════════════════════════════
-   DICTATION PILL (Floating Mesh) - Unmodified
+   DICTATION PILL (Floating Mesh)
    ══════════════════════════════ */
+:root {
+  --accent: #AAFFD4;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
 .module {
   position: fixed;
   bottom: 80px;
