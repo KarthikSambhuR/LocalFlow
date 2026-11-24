@@ -10,16 +10,16 @@ export function CloseWindow() {
   return window['go']['main']['App']['CloseWindow']();
 }
 
+export function GetDefaultInstallDir() {
+  return window['go']['main']['App']['GetDefaultInstallDir']();
+}
+
 export function Install(arg1, arg2, arg3) {
   return window['go']['main']['App']['Install'](arg1, arg2, arg3);
 }
 
 export function LaunchApp(arg1) {
   return window['go']['main']['App']['LaunchApp'](arg1);
-}
-
-export function PerformUninstall() {
-  return window['go']['main']['App']['PerformUninstall']();
 }
 
 export function SelectFolder(arg1) {

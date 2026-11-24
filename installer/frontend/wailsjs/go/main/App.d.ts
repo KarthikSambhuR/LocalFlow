@@ -5,10 +5,10 @@ export function CheckWritePermission(arg1:string):Promise<boolean>;
 
 export function CloseWindow():Promise<void>;
 
+export function GetDefaultInstallDir():Promise<string>;
+
 export function Install(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
 
 export function LaunchApp(arg1:string):Promise<void>;
-
-export function PerformUninstall():Promise<void>;
 
 export function SelectFolder(arg1:string):Promise<string>;

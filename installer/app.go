@@ -2,9 +2,9 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +15,8 @@ import (
 	"time"
 	"unsafe"
 
+	ole "github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows/registry"
 )
@@ -31,7 +33,15 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// SelectFolder opens a native directory picker and returns the path
+// GetDefaultInstallDir returns the recommended per-user install directory (%LOCALAPPDATA%\LocalFlow).
+func (a *App) GetDefaultInstallDir() string {
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		return filepath.Join(localAppData, "LocalFlow")
+	}
+	return `C:\Program Files\LocalFlow`
+}
+
+// SelectFolder opens a native directory picker and returns the path.
 func (a *App) SelectFolder(defaultPath string) (string, error) {
 	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
 		DefaultDirectory: defaultPath,
@@ -46,37 +56,79 @@ func (a *App) SelectFolder(defaultPath string) (string, error) {
 	return path, nil
 }
 
-// CheckWritePermission checks if the directory is writable
+// CheckWritePermission checks if the directory is writable.
 func (a *App) CheckWritePermission(path string) (bool, error) {
-	err := os.MkdirAll(path, 0755)
-	if err != nil {
+	if err := os.MkdirAll(path, 0755); err != nil {
 		return false, err
 	}
 	testFile := filepath.Join(path, ".lf_write_test")
-	err = os.WriteFile(testFile, []byte("test"), 0644)
-	if err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 		return false, err
 	}
 	_ = os.Remove(testFile)
 	return true, nil
 }
 
-// Install extracts the embedded payload.zip to the target directory, creates shortcuts and registers uninstaller.
+func safeExtractPath(targetDir, entryName string) (string, error) {
+	cleanTarget := filepath.Clean(targetDir)
+	destPath := filepath.Join(cleanTarget, entryName)
+	rel, err := filepath.Rel(cleanTarget, destPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("unsafe zip entry path: %s", entryName)
+	}
+	return destPath, nil
+}
+
+func extractZipEntryBuffered(destPath string, file *zip.File, retries int) error {
+	var lastErr error
+	for attempt := 0; attempt <= retries; attempt++ {
+		outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+		if err == nil {
+			inFile, errOpen := file.Open()
+			if errOpen != nil {
+				outFile.Close()
+				return fmt.Errorf("failed to open zip entry %s: %w", file.Name, errOpen)
+			}
+			bw := bufio.NewWriterSize(outFile, 256*1024)
+			_, copyErr := io.Copy(bw, inFile)
+			flushErr := bw.Flush()
+			inFile.Close()
+			closeErr := outFile.Close()
+			if copyErr == nil && flushErr == nil && closeErr == nil {
+				return nil
+			}
+			if copyErr != nil {
+				lastErr = copyErr
+			} else if flushErr != nil {
+				lastErr = flushErr
+			} else {
+				lastErr = closeErr
+			}
+		} else {
+			lastErr = err
+		}
+		if attempt < retries {
+			time.Sleep(400 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("failed writing %s: %w", destPath, lastErr)
+}
+
+// Install extracts payload.zip (including standalone uninstall.exe), creates shortcuts via COM, and registers uninstaller.
 func (a *App) Install(targetDir string, createDesktopShortcut, createStartMenuShortcut bool) error {
-	// 1. Ensure directory exists
-	err := os.MkdirAll(targetDir, 0755)
-	if err != nil {
+	targetDir = filepath.Clean(targetDir)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Create data folder and grant write permissions to all Users
 	dataDir := filepath.Join(targetDir, "data")
 	_ = os.MkdirAll(dataDir, 0755)
-	cmdPerm := exec.Command("icacls", dataDir, "/grant", "Users:(OI)(CI)F", "/T")
-	cmdPerm.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	_ = cmdPerm.Run()
+	if isSystemProgramFilesPath(targetDir) {
+		cmdPerm := exec.Command("icacls", dataDir, "/grant", "Users:(OI)(CI)F", "/T")
+		cmdPerm.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+		_ = cmdPerm.Run()
+	}
 
-	// 2. Read embedded zip payload
 	payload, err := GetPayloadZip()
 	if err != nil {
 		return fmt.Errorf("failed to load installer payload: %w", err)
@@ -88,83 +140,68 @@ func (a *App) Install(targetDir string, createDesktopShortcut, createStartMenuSh
 	}
 
 	totalFiles := len(zipReader.File)
+	lastEmit := time.Time{}
 	for i, file := range zipReader.File {
-		// Send progress to frontend
-		progressPct := int(float64(i) / float64(totalFiles) * 80) // extraction is first 80%
-		runtime.EventsEmit(a.ctx, "install-progress", map[string]interface{}{
-			"percentage": progressPct,
-			"status":     fmt.Sprintf("Extracting %s...", file.Name),
-		})
-
-		filePath := filepath.Join(targetDir, file.Name)
+		filePath, err := safeExtractPath(targetDir, file.Name)
+		if err != nil {
+			return err
+		}
 
 		if file.FileInfo().IsDir() {
-			err = os.MkdirAll(filePath, file.Mode())
-			if err != nil {
+			if err := os.MkdirAll(filePath, file.Mode()); err != nil {
 				return fmt.Errorf("failed to create subfolder %s: %w", file.Name, err)
 			}
 			continue
 		}
 
-		err = os.MkdirAll(filepath.Dir(filePath), 0755)
-		if err != nil {
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
 			return fmt.Errorf("failed to create parent directory for %s: %w", file.Name, err)
 		}
 
-		outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
-		if err != nil {
-			return fmt.Errorf("failed to create file %s: %w", file.Name, err)
+		if err := extractZipEntryBuffered(filePath, file, 0); err != nil {
+			return err
 		}
 
-		inFile, err := file.Open()
-		if err != nil {
-			outFile.Close()
-			return fmt.Errorf("failed to read zip entry %s: %w", file.Name, err)
-		}
-
-		_, err = io.Copy(outFile, inFile)
-		inFile.Close()
-		outFile.Close()
-		if err != nil {
-			return fmt.Errorf("failed to extract file %s: %w", file.Name, err)
+		now := time.Now()
+		if now.Sub(lastEmit) >= 60*time.Millisecond || i == totalFiles-1 {
+			lastEmit = now
+			progressPct := int(float64(i+1) / float64(totalFiles) * 85)
+			runtime.EventsEmit(a.ctx, "install-progress", map[string]interface{}{
+				"percentage": progressPct,
+				"status":     fmt.Sprintf("Installing %s...", filepath.Base(file.Name)),
+			})
 		}
 	}
 
 	runtime.EventsEmit(a.ctx, "install-progress", map[string]interface{}{
-		"percentage": 85,
-		"status":     "Configuring shortcuts and system integration...",
+		"percentage": 90,
+		"status":     "Creating shortcuts...",
 	})
 
-	// 3. Create Shortcuts
 	exePath := filepath.Join(targetDir, "LocalFlow.exe")
 	if createDesktopShortcut {
-		desktopPath := getDesktopPath()
-		shortcutPath := filepath.Join(desktopPath, "LocalFlow.lnk")
-		_ = createShortcut(shortcutPath, exePath, "", targetDir)
+		shortcutPath := filepath.Join(getDesktopPath(targetDir), "LocalFlow.lnk")
+		if err := createShortcutCOM(shortcutPath, exePath, "", targetDir); err != nil {
+			return fmt.Errorf("failed to create Desktop shortcut: %w", err)
+		}
 	}
 
 	if createStartMenuShortcut {
-		// ProgramData is common start menu for requireAdministrator apps
-		startMenuPath := filepath.Join(os.Getenv("ProgramData"), `Microsoft\Windows\Start Menu\Programs`)
-		shortcutPath := filepath.Join(startMenuPath, "LocalFlow.lnk")
-		_ = createShortcut(shortcutPath, exePath, "", targetDir)
-	}
-
-	// 4. Copy ourselves as uninstaller
-	selfPath, err := os.Executable()
-	if err == nil {
-		uninstallPath := filepath.Join(targetDir, "uninstall.exe")
-		// Copy installer exe to target directory as uninstall.exe
-		_ = copyFile(selfPath, uninstallPath)
+		shortcutPath := filepath.Join(getStartMenuPath(targetDir), "LocalFlow.lnk")
+		_ = os.MkdirAll(filepath.Dir(shortcutPath), 0755)
+		if err := createShortcutCOM(shortcutPath, exePath, "", targetDir); err != nil {
+			return fmt.Errorf("failed to create Start Menu shortcut: %w", err)
+		}
 	}
 
 	runtime.EventsEmit(a.ctx, "install-progress", map[string]interface{}{
-		"percentage": 95,
+		"percentage": 96,
 		"status":     "Registering uninstaller...",
 	})
 
-	// 5. Add Registry keys for Add/Remove Programs
-	_ = registerUninstaller(targetDir)
+	if err := registerUninstaller(targetDir); err != nil {
+		return fmt.Errorf("failed to register uninstaller: %w", err)
+	}
 
 	runtime.EventsEmit(a.ctx, "install-progress", map[string]interface{}{
 		"percentage": 100,
@@ -174,7 +211,7 @@ func (a *App) Install(targetDir string, createDesktopShortcut, createStartMenuSh
 	return nil
 }
 
-// LaunchApp launches the main app and closes the installer
+// LaunchApp launches LocalFlow.exe detached and closes the installer.
 func (a *App) LaunchApp(targetDir string) {
 	exePath := filepath.Join(targetDir, "LocalFlow.exe")
 	cmd := exec.Command(exePath)
@@ -183,7 +220,7 @@ func (a *App) LaunchApp(targetDir string) {
 	runtime.Quit(a.ctx)
 }
 
-// CloseWindow closes the installer window
+// CloseWindow closes the installer window.
 func (a *App) CloseWindow() {
 	runtime.Quit(a.ctx)
 }
@@ -193,63 +230,46 @@ func showMessageBox(title, text string, style uintptr) int {
 	messageBox := user32.NewProc("MessageBoxW")
 	lpText, _ := syscall.UTF16PtrFromString(text)
 	lpCaption, _ := syscall.UTF16PtrFromString(title)
-	ret, _, _ := messageBox.Call(
-		0,
-		uintptr(unsafe.Pointer(lpText)),
-		uintptr(unsafe.Pointer(lpCaption)),
-		style,
-	)
+	ret, _, _ := messageBox.Call(0, uintptr(unsafe.Pointer(lpText)), uintptr(unsafe.Pointer(lpCaption)), style)
 	return int(ret)
 }
 
 func CheckAndRunUninstall() {
-	selfPath, errSelf := os.Executable()
-	isUninstallMode := false
-	if errSelf == nil && strings.ToLower(filepath.Base(selfPath)) == "uninstall.exe" {
-		isUninstallMode = true
-	}
 	for _, arg := range os.Args[1:] {
 		if arg == "--uninstall" {
-			isUninstallMode = true
+			if dir, err := getInstallLocation(); err == nil {
+				uninstallExe := filepath.Join(dir, "uninstall.exe")
+				if _, statErr := os.Stat(uninstallExe); statErr == nil {
+					_ = exec.Command(uninstallExe).Start()
+					os.Exit(0)
+				}
+			}
+			os.Exit(0)
 		}
-	}
-
-	if isUninstallMode {
-		err := PerformUninstallDirect()
-		if err != nil {
-			showMessageBox("Uninstallation Failed", fmt.Sprintf("Error during uninstall: %v", err), 0x00000010) // MB_ICONERROR
-		} else {
-			showMessageBox("Uninstallation Complete", "LocalFlow has been successfully removed from your computer.", 0x00000040) // MB_ICONINFORMATION
-		}
-		os.Exit(0)
 	}
 }
 
 func getInstallLocation() (string, error) {
-	// 1. Check HKLM
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.QUERY_VALUE)
-	if err == nil {
-		val, _, errVal := k.GetStringValue("InstallLocation")
-		k.Close()
-		if errVal == nil && val != "" {
-			return val, nil
+	for _, root := range []registry.Key{registry.CURRENT_USER, registry.LOCAL_MACHINE} {
+		k, err := registry.OpenKey(root, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.QUERY_VALUE)
+		if err == nil {
+			val, _, errVal := k.GetStringValue("InstallLocation")
+			k.Close()
+			if errVal == nil && val != "" {
+				return val, nil
+			}
 		}
 	}
 
-	// 2. Check HKCU
-	kUser, errUser := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.QUERY_VALUE)
-	if errUser == nil {
-		val, _, errVal := kUser.GetStringValue("InstallLocation")
-		kUser.Close()
-		if errVal == nil && val != "" {
-			return val, nil
+	for _, dir := range []string{
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "LocalFlow"),
+		`C:\Program Files\LocalFlow`,
+	} {
+		if dir != "" {
+			if _, err := os.Stat(filepath.Join(dir, "LocalFlow.exe")); err == nil {
+				return dir, nil
+			}
 		}
-	}
-
-	// 3. Check default Program Files
-	defaultDir := `C:\Program Files\LocalFlow`
-	if _, errStat := os.Stat(filepath.Join(defaultDir, "LocalFlow.exe")); errStat == nil {
-		return defaultDir, nil
 	}
 
 	return "", fmt.Errorf("could not detect LocalFlow installation directory")
@@ -268,42 +288,15 @@ func CheckAndRunSilentUpdate() {
 	}
 
 	if isSilentUpdate {
-		err := PerformSilentUpdateDirect(targetDirOverride)
-		if err != nil {
-			showMessageBox("LocalFlow Update Error", fmt.Sprintf("Failed to apply update: %v", err), 0x00000010) // MB_ICONERROR
+		if err := PerformSilentUpdateDirect(targetDirOverride); err != nil {
+			showMessageBox("LocalFlow Update Error", fmt.Sprintf("Failed to apply update: %v", err), 0x00000010)
 			os.Exit(1)
 		}
 		os.Exit(0)
 	}
 }
 
-func extractFileWithRetry(filePath string, file *zip.File) error {
-	var lastErr error
-	for attempt := 0; attempt < 8; attempt++ {
-		outFile, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
-		if err == nil {
-			inFile, errOpen := file.Open()
-			if errOpen != nil {
-				outFile.Close()
-				return fmt.Errorf("failed to open zip entry %s: %w", file.Name, errOpen)
-			}
-			_, copyErr := io.Copy(outFile, inFile)
-			inFile.Close()
-			outFile.Close()
-			if copyErr == nil {
-				return nil
-			}
-			lastErr = copyErr
-		} else {
-			lastErr = err
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return fmt.Errorf("failed writing %s after retries: %w", filePath, lastErr)
-}
-
 func PerformSilentUpdateDirect(targetDirOverride string) error {
-	// 1. Resolve install location (prioritize explicit argument, then registry/default)
 	targetDir := targetDirOverride
 	if targetDir == "" {
 		var err error
@@ -312,13 +305,12 @@ func PerformSilentUpdateDirect(targetDirOverride string) error {
 			return fmt.Errorf("could not find install location: %w", err)
 		}
 	}
+	targetDir = filepath.Clean(targetDir)
 
-	// 2. Terminate running LocalFlow and background helper processes to release file locks
 	_ = exec.Command("taskkill", "/f", "/im", "LocalFlow.exe").Run()
 	_ = exec.Command("taskkill", "/f", "/im", "llama-server.exe").Run()
-	time.Sleep(1500 * time.Millisecond) // Wait for process locks to release
+	time.Sleep(800 * time.Millisecond)
 
-	// 3. Read embedded zip payload
 	payload, err := GetPayloadZip()
 	if err != nil {
 		return err
@@ -329,49 +321,48 @@ func PerformSilentUpdateDirect(targetDirOverride string) error {
 		return err
 	}
 
-	// 4. Extract and overwrite files with retry handling for locked files
 	for _, file := range zipReader.File {
-		filePath := filepath.Join(targetDir, file.Name)
+		filePath, err := safeExtractPath(targetDir, file.Name)
+		if err != nil {
+			return err
+		}
 		if file.FileInfo().IsDir() {
 			_ = os.MkdirAll(filePath, file.Mode())
 			continue
 		}
-
 		_ = os.MkdirAll(filepath.Dir(filePath), 0755)
-
-		if err := extractFileWithRetry(filePath, file); err != nil {
+		if err := extractZipEntryBuffered(filePath, file, 8); err != nil {
 			return err
 		}
 	}
 
-	// Update registry display version if registered
 	_ = registerUninstaller(targetDir)
 
-	// 5. Clean up: delete the update installer and state file from TEMP
 	selfPath, _ := os.Executable()
 	tempDir := os.Getenv("TEMP")
 	_ = os.Remove(filepath.Join(tempDir, "localflow_update_state.json"))
 
-	// Rename ourselves so that the newly started LocalFlow.exe doesn't find the installer
 	trashPath := selfPath + ".trash"
-	_ = os.Remove(trashPath) // Clear any stale trash file
+	_ = os.Remove(trashPath)
 	if errRename := os.Rename(selfPath, trashPath); errRename == nil {
 		selfPath = trashPath
 	}
 
-	// Use a bat script to delete the update installer (it cannot delete itself while running)
 	batchScript := filepath.Join(tempDir, "localflow_update_cleanup.bat")
 	scriptContent := fmt.Sprintf(`@echo off
-timeout /t 2 /nobreak > nul
-del "%s"
+for /L %%%%i in (1,1,10) do (
+  del "%s" 2>nul
+  if not exist "%s" goto done
+  timeout /t 1 /nobreak > nul
+)
+:done
 del "%%~f0"
-`, selfPath)
+`, selfPath, selfPath)
 	_ = os.WriteFile(batchScript, []byte(scriptContent), 0644)
 	cleanupCmd := exec.Command("cmd.exe", "/c", batchScript)
 	cleanupCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
 	_ = cleanupCmd.Start()
 
-	// 6. Start updated app detached
 	exePath := filepath.Join(targetDir, "LocalFlow.exe")
 	cmd := exec.Command(exePath)
 	cmd.Dir = targetDir
@@ -380,242 +371,98 @@ del "%%~f0"
 	return nil
 }
 
-func (a *App) PerformUninstall() error {
-	return PerformUninstallDirect()
+func isSystemProgramFilesPath(targetDir string) bool {
+	lower := strings.ToLower(filepath.Clean(targetDir))
+	return strings.Contains(lower, `\program files`)
 }
 
-func PerformUninstallDirect() error {
-	selfPath, _ := os.Executable()
-	targetDir := filepath.Dir(selfPath)
-
-	// 1. Remove Startup registry value if it exists
-	kRun, errRun := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
-	if errRun == nil {
-		_ = kRun.DeleteValue("LocalFlow")
-		kRun.Close()
-	}
-
-	// 2. Remove Registry Uninstall entry
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `Software\Microsoft\Windows\CurrentVersion\Uninstall`, registry.ALL_ACCESS)
-	if err == nil {
-		_ = registry.DeleteKey(k, "LocalFlow")
-		k.Close()
-	}
-
-	// 3. Remove Shortcuts
-	// Use USERPROFILE so this resolves to the real user's Desktop even when running elevated
-	desktopPath := filepath.Join(os.Getenv("USERPROFILE"), "Desktop")
-	_ = os.Remove(filepath.Join(desktopPath, "LocalFlow.lnk"))
-
-	startMenuPath := filepath.Join(os.Getenv("ProgramData"), `Microsoft\Windows\Start Menu\Programs`)
-	_ = os.Remove(filepath.Join(startMenuPath, "LocalFlow.lnk"))
-
-	// 4. Resolve the data directory (checking for custom folder in config)
-	defaultDataDir := filepath.Join(targetDir, "data")
-	dataDir := defaultDataDir
-
-	configPath := filepath.Join(defaultDataDir, "localflow_config.json")
-	if configData, err := os.ReadFile(configPath); err == nil {
-		var cfg struct {
-			DataFolder string `json:"data_folder"`
-		}
-		if json.Unmarshal(configData, &cfg) == nil {
-			if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
-				dataDir = cfg.DataFolder
-			}
+func getDesktopPath(targetDir string) string {
+	if !isSystemProgramFilesPath(targetDir) {
+		if up := os.Getenv("USERPROFILE"); up != "" {
+			return filepath.Join(up, "Desktop")
 		}
 	}
-
-	// 5. Ask user if they want to retain data (recordings, database, audio cache)
-	// MB_YESNO = 0x00000004, MB_ICONQUESTION = 0x00000020
-	ret := showMessageBox("Retain App Data?", "Do you want to retain your recordings history, database, and audio cache?", 0x00000004|0x00000020)
-	retainData := (ret == 6) // IDYES = 6
-
-	// 6. Delete other files in Go beforehand
-	if retainData {
-		// Keep localflow.db and audio_cache, delete everything else in dataDir
-		_ = os.RemoveAll(filepath.Join(dataDir, "models"))
-		_ = os.RemoveAll(filepath.Join(dataDir, "fonts"))
-		_ = os.Remove(filepath.Join(dataDir, "localflow_config.json"))
-
-		if dataDir != defaultDataDir {
-			_ = os.RemoveAll(defaultDataDir)
-		} else {
-			// Clean up files in defaultDataDir except localflow.db and audio_cache
-			if entries, errData := os.ReadDir(defaultDataDir); errData == nil {
-				for _, entry := range entries {
-					name := entry.Name()
-					if name == "localflow.db" || name == "audio_cache" {
-						continue
-					}
-					_ = os.RemoveAll(filepath.Join(defaultDataDir, name))
-				}
-			}
-		}
-
-		// Clean up files in targetDir except the uninstall.exe and data folder
-		if entries, errDir := os.ReadDir(targetDir); errDir == nil {
-			for _, entry := range entries {
-				name := entry.Name()
-				if name == "uninstall.exe" || name == "data" {
-					continue
-				}
-				_ = os.RemoveAll(filepath.Join(targetDir, name))
-			}
-		}
-	} else {
-		// Delete everything in dataDir and defaultDataDir
-		_ = os.RemoveAll(dataDir)
-		_ = os.RemoveAll(defaultDataDir)
-
-		// Clean up files in targetDir except uninstall.exe
-		if entries, errDir := os.ReadDir(targetDir); errDir == nil {
-			for _, entry := range entries {
-				name := entry.Name()
-				if name == "uninstall.exe" {
-					continue
-				}
-				_ = os.RemoveAll(filepath.Join(targetDir, name))
-			}
-		}
-	}
-
-	// 7. Write the bat script to delete uninstall.exe and targetDir if appropriate
-	tempDir := os.Getenv("TEMP")
-	batchScript := filepath.Join(tempDir, "uninstall_localflow.bat")
-	
-	var scriptContent string
-	if retainData {
-		scriptContent = fmt.Sprintf(`@echo off
-:loop
-del "%s"
-if exist "%s" goto loop
-rd "%s" 2>nul
-del "%%~f0"
-`, selfPath, selfPath, targetDir)
-	} else {
-		scriptContent = fmt.Sprintf(`@echo off
-:loop
-del "%s"
-if exist "%s" goto loop
-rd /s /q "%s"
-del "%%~f0"
-`, selfPath, selfPath, targetDir)
-	}
-
-	_ = os.WriteFile(batchScript, []byte(scriptContent), 0644)
-	
-	// Start batch script detached without spawning a console window
-	cmd := exec.Command("cmd.exe", "/c", batchScript)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: 0x08000000,
-	}
-	_ = cmd.Start()
-
-	return nil
-}
-
-// Helpers
-
-func getDesktopPath() string {
-	// 1. Try to find the logged-in user's redirected personal Desktop from HKEY_USERS
-	// We look for loaded user hives (SIDs starting with S-1-5-21- and not ending in _Classes)
-	if kUsers, err := registry.OpenKey(registry.USERS, "", registry.ENUMERATE_SUB_KEYS); err == nil {
-		defer kUsers.Close()
-		subkeys, err := kUsers.ReadSubKeyNames(-1)
-		if err == nil {
-			for _, sid := range subkeys {
-				if strings.HasPrefix(sid, "S-1-5-21-") && !strings.HasSuffix(sid, "_Classes") {
-					// Open the User Shell Folders key for this user
-					path := sid + `\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders`
-					if kFolder, err := registry.OpenKey(registry.USERS, path, registry.QUERY_VALUE); err == nil {
-						val, _, err := kFolder.GetStringValue("Desktop")
-						kFolder.Close()
-						if err == nil && val != "" {
-							// If it contains %USERPROFILE%, we expand it using the profile image path
-							if strings.Contains(strings.ToLower(val), "%userprofile%") {
-								if kProfile, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\`+sid, registry.QUERY_VALUE); err == nil {
-									profilePath, _, err := kProfile.GetStringValue("ProfileImagePath")
-									kProfile.Close()
-									if err == nil && profilePath != "" {
-										val = strings.Replace(val, "%USERPROFILE%", profilePath, -1)
-										val = strings.Replace(val, "%userprofile%", profilePath, -1)
-									}
-								}
-							}
-							return val
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 2. Try Common Desktop from registry (so it's visible to all users when installed as admin)
-	k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders`, registry.QUERY_VALUE)
-	if err == nil {
-		defer k.Close()
-		val, _, err := k.GetStringValue("Common Desktop")
-		if err == nil && val != "" {
-			return val
-		}
-	}
-	
-	// Fallback 1: Public Desktop env
 	if pub := os.Getenv("PUBLIC"); pub != "" {
 		return filepath.Join(pub, "Desktop")
 	}
-	
-	// Fallback 2: USERPROFILE Desktop
 	if up := os.Getenv("USERPROFILE"); up != "" {
 		return filepath.Join(up, "Desktop")
 	}
-	
 	return `C:\Users\Public\Desktop`
 }
 
-func createShortcut(shortcutPath, targetPath, arguments, workingDir string) error {
-	psCommand := fmt.Sprintf(
-		`$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%s'); $Shortcut.TargetPath = '%s'; $Shortcut.Arguments = '%s'; $Shortcut.WorkingDirectory = '%s'; $Shortcut.Save()`,
-		shortcutPath, targetPath, arguments, workingDir,
-	)
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCommand)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Run()
+func getStartMenuPath(targetDir string) string {
+	if !isSystemProgramFilesPath(targetDir) {
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, `Microsoft\Windows\Start Menu\Programs`)
+		}
+	}
+	return filepath.Join(os.Getenv("ProgramData"), `Microsoft\Windows\Start Menu\Programs`)
 }
 
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+// createShortcutCOM creates a .lnk file using native Windows COM IShellLinkW (no PowerShell process).
+func createShortcutCOM(shortcutPath, targetPath, arguments, workingDir string) error {
+	if err := ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED); err != nil {
+		// S_FALSE (1) or RPC_E_CHANGED_MODE are fine if COM is already initialized on this thread
+		if oleErr, ok := err.(*ole.OleError); !ok || (oleErr.Code() != 1 && oleErr.Code() != 0x80010106) {
+			return err
+		}
+	} else {
+		defer ole.CoUninitialize()
+	}
+
+	unk, err := oleutil.CreateObject("WScript.Shell")
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer unk.Release()
 
-	out, err := os.Create(dst)
+	wsh, err := unk.QueryInterface(ole.IID_IDispatch)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer wsh.Release()
 
-	_, err = io.Copy(out, in)
+	cs, err := oleutil.CallMethod(wsh, "CreateShortcut", shortcutPath)
+	if err != nil {
+		return err
+	}
+	shortcut := cs.ToIDispatch()
+	defer shortcut.Release()
+
+	if _, err := oleutil.PutProperty(shortcut, "TargetPath", targetPath); err != nil {
+		return err
+	}
+	if arguments != "" {
+		if _, err := oleutil.PutProperty(shortcut, "Arguments", arguments); err != nil {
+			return err
+		}
+	}
+	if _, err := oleutil.PutProperty(shortcut, "WorkingDirectory", workingDir); err != nil {
+		return err
+	}
+	_, err = oleutil.CallMethod(shortcut, "Save")
 	return err
 }
 
 func registerUninstaller(installDir string) error {
-	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.ALL_ACCESS)
+	root := registry.CURRENT_USER
+	if isSystemProgramFilesPath(installDir) {
+		root = registry.LOCAL_MACHINE
+	}
+	k, _, err := registry.CreateKey(root, `Software\Microsoft\Windows\CurrentVersion\Uninstall\LocalFlow`, registry.ALL_ACCESS)
 	if err != nil {
 		return err
 	}
 	defer k.Close()
 
-	k.SetStringValue("DisplayName", "LocalFlow")
-	k.SetStringValue("DisplayVersion", "1.5.0")
-	k.SetStringValue("Publisher", "KarthikSambhuR")
-	k.SetStringValue("UninstallString", fmt.Sprintf(`"%s" --uninstall`, filepath.Join(installDir, "uninstall.exe")))
-	k.SetStringValue("InstallLocation", installDir)
-	k.SetStringValue("DisplayIcon", filepath.Join(installDir, "LocalFlow.exe"))
-	k.SetDWordValue("NoModify", 1)
-	k.SetDWordValue("NoRepair", 1)
+	_ = k.SetStringValue("DisplayName", "LocalFlow")
+	_ = k.SetStringValue("DisplayVersion", "1.5.0")
+	_ = k.SetStringValue("Publisher", "KarthikSambhuR")
+	_ = k.SetStringValue("UninstallString", fmt.Sprintf(`"%s"`, filepath.Join(installDir, "uninstall.exe")))
+	_ = k.SetStringValue("InstallLocation", installDir)
+	_ = k.SetStringValue("DisplayIcon", filepath.Join(installDir, "LocalFlow.exe"))
+	_ = k.SetDWordValue("NoModify", 1)
+	_ = k.SetDWordValue("NoRepair", 1)
 	return nil
 }
