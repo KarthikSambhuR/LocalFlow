@@ -115,6 +115,9 @@ type App struct {
 	llmSyncInProgress       atomic.Bool
 	llmPort                 int
 	runningLLMConfig        Config
+	llmRetryAfter           time.Time
+	llmConsecutiveFailures  int
+	llmLastFailedKey        string
 	routingDecided          bool
 	useConformer            bool
 }
@@ -397,14 +400,14 @@ func launchLlamaServerProcess(cfg Config, modelsDir string, isGemmaAudioSTT bool
 		}
 	}
 
+	exePath := findLlamaServerExe()
+	if exePath == "" {
+		return nil, "", fmt.Errorf("llama-server.exe not found in lib/, exe directory, or PATH")
+	}
+
 	port, err := findFreePort()
 	if err != nil {
 		return nil, "", fmt.Errorf("cannot find free port: %w", err)
-	}
-
-	exePath := findLlamaServerExe()
-	if exePath == "" {
-		exePath = "llama-server.exe"
 	}
 
 	gpuLayers := 0
@@ -532,25 +535,36 @@ func startSettingsLLMServer(cfg Config) {
 	settingsLLMState.activeModel = activeLLM
 }
 
-// findLlamaServerExe locates llama-server.exe using the same search order as App.startLLMServer.
+// findLlamaServerExe locates llama-server.exe in CWD, the executable directory
+// (walking up parent directories for dev/build layouts), or PATH.
 func findLlamaServerExe() string {
 	// 1. Relative to CWD
 	for _, p := range []string{filepath.Join("lib", "llama-server.exe"), filepath.Join("lib", "dll", "llama-server.exe")} {
 		if _, err := os.Stat(p); err == nil {
+			if abs, absErr := filepath.Abs(p); absErr == nil {
+				return abs
+			}
 			return p
 		}
 	}
-	// 2. Relative to exe dir
+	// 2. Relative to exe dir and up to 3 parent directories (handles build/bin/ or build/<dir>/)
 	if exe, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exe)
-		for _, rel := range []string{
-			filepath.Join(exeDir, "lib", "llama-server.exe"),
-			filepath.Join(exeDir, "lib", "dll", "llama-server.exe"),
-			filepath.Join(exeDir, "llama-server.exe"),
-		} {
-			if _, err := os.Stat(rel); err == nil {
-				return rel
+		dir := filepath.Dir(exe)
+		for i := 0; i < 4; i++ {
+			for _, rel := range []string{
+				filepath.Join(dir, "lib", "llama-server.exe"),
+				filepath.Join(dir, "lib", "dll", "llama-server.exe"),
+				filepath.Join(dir, "llama-server.exe"),
+			} {
+				if _, err := os.Stat(rel); err == nil {
+					return rel
+				}
 			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
 		}
 	}
 	// 3. PATH
@@ -2334,7 +2348,32 @@ func (a *App) syncLLMServerState(cfg Config) {
 			runningCfg.LLMContextSize != cfg.LLMContextSize
 
 		if configChanged {
+			failKey := fmt.Sprintf("%s|%s|%s|%d", targetLLM, cfg.ProcessingEngine, cfg.SelectedGPU, cfg.LLMContextSize)
+			a.llmMutex.Lock()
+			if !isRunning && a.llmLastFailedKey == failKey && time.Now().Before(a.llmRetryAfter) {
+				a.llmMutex.Unlock()
+				return
+			}
+			a.llmMutex.Unlock()
+
 			a.startLLMServer(cfg)
+
+			a.llmMutex.Lock()
+			started := a.llmCmd != nil && a.llmCmd.Process != nil
+			if started {
+				a.llmConsecutiveFailures = 0
+				a.llmRetryAfter = time.Time{}
+				a.llmLastFailedKey = ""
+			} else {
+				a.llmConsecutiveFailures++
+				a.llmLastFailedKey = failKey
+				backoff := 5 * time.Second << min(a.llmConsecutiveFailures-1, 4) // 5s -> 10s -> 20s -> 40s -> 80s
+				if backoff > 60*time.Second {
+					backoff = 60 * time.Second
+				}
+				a.llmRetryAfter = time.Now().Add(backoff)
+			}
+			a.llmMutex.Unlock()
 		}
 	}
 }
