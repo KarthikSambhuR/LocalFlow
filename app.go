@@ -35,7 +35,6 @@ import (
 
 	"github.com/atotto/clipboard"
 	"github.com/gen2brain/malgo"
-	"github.com/go-vgo/robotgo"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -1254,12 +1253,13 @@ func isOtherHotkeyDown(pressed map[uint16]bool, rawcode uint16, key1Rawcode uint
 	return false
 }
 
+var procKeybdEvent = user32.NewProc("keybd_event")
+
 func synthKey(rawcode uint16, down bool) {
 	flags := uintptr(0)
 	if !down {
 		flags = keyeventfKeyup
 	}
-	procKeybdEvent := user32.NewProc("keybd_event")
 	procKeybdEvent.Call(uintptr(rawcode), 0, flags, 0)
 }
 
@@ -1284,8 +1284,18 @@ func (a *App) waitForShortcutRelease(timeout time.Duration) {
 }
 
 func releasePasteModifiers() {
-	robotgo.KeyToggle("command", "up")
-	robotgo.KeyToggle("ctrl", "up")
+	synthKey(vkLWin, false)
+	synthKey(vkRWin, false)
+	synthKey(vkLControl, false)
+	synthKey(vkRControl, false)
+}
+
+func pasteCtrlV() {
+	const vkV = 0x56
+	synthKey(vkLControl, true)
+	synthKey(vkV, true)
+	synthKey(vkV, false)
+	synthKey(vkLControl, false)
 }
 
 func (a *App) transcribeOld() {
@@ -1358,7 +1368,7 @@ func (a *App) transcribeOld() {
 			time.Sleep(350 * time.Millisecond)
 
 			// Paste via Ctrl+V — atomic and reliable regardless of focus timing
-			robotgo.KeyTap("v", "ctrl")
+			pasteCtrlV()
 
 			// NOW signal the pill to animate away — the user has their text
 			runtime.EventsEmit(a.ctx, "recording-done")
@@ -1844,7 +1854,7 @@ func (a *App) transcribe() {
 			a.waitForShortcutRelease(2 * time.Second)
 			releasePasteModifiers()
 			time.Sleep(350 * time.Millisecond)
-			robotgo.KeyTap("v", "ctrl")
+			pasteCtrlV()
 		}
 	}
 
