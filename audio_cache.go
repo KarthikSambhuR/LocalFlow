@@ -10,7 +10,6 @@ import (
 
 var (
 	audioCacheDir = "audio_cache"
-	cacheMaxAge   = 7 * 24 * time.Hour // 1 week
 )
 
 // pruneAudioCache deletes WAV files in audio_cache/ that are older than the specified retention days.
@@ -42,17 +41,10 @@ func pruneAudioCache(retentionDays int) {
 	}
 }
 
-// ensureAudioCacheDir makes the audio_cache directory if it doesn't exist.
-func ensureAudioCacheDir() {
-	os.MkdirAll(audioCacheDir, 0755)
-}
-
-// saveAudioToCache writes a float32 PCM recording as a standard WAV file.
-// Filename: audio_cache/recording_2026-03-23T22-57-02.wav
-// Format: IEEE float 32-bit, mono, 16000 Hz — identical to what Whisper receives.
+// saveAudioToCache writes a float32 PCM recording as a standard 16-bit PCM WAV file.
 // Returns the generated base filename and any error.
 func saveAudioToCache(samples []float32) (string, error) {
-	if err := ensureAudioCacheDirErr(); err != nil {
+	if err := os.MkdirAll(audioCacheDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -60,76 +52,21 @@ func saveAudioToCache(samples []float32) (string, error) {
 	baseName := fmt.Sprintf("recording_%s.wav", ts)
 	filename := filepath.Join(audioCacheDir, baseName)
 
-	f, err := os.Create(filename)
-	if err != nil {
+	if err := saveAudioBufferToWavPath(samples, filename); err != nil {
 		return "", err
 	}
-	defer f.Close()
+	return baseName, nil
+}
 
+// saveAudioBufferToWavPath writes a float32 PCM slice to a specific WAV file path
+// using a single buffered write instead of per-sample syscalls.
+func saveAudioBufferToWavPath(samples []float32, filename string) error {
 	const (
 		sampleRate    = 16000
 		numChannels   = 1
 		bitsPerSample = 16
 		audioFmtPCM   = 1 // Standard PCM — universally supported by all browsers
-	)
-
-	numSamples := len(samples)
-	dataSize := uint32(numSamples * 2) // 2 bytes per int16
-	byteRate := uint32(sampleRate * numChannels * bitsPerSample / 8)
-	blockAlign := uint16(numChannels * bitsPerSample / 8)
-
-	write := func(v interface{}) {
-		binary.Write(f, binary.LittleEndian, v)
-	}
-
-	// RIFF header
-	f.WriteString("RIFF")
-	write(uint32(36 + dataSize))
-	f.WriteString("WAVE")
-
-	// fmt chunk
-	f.WriteString("fmt ")
-	write(uint32(16))
-	write(uint16(audioFmtPCM))
-	write(uint16(numChannels))
-	write(uint32(sampleRate))
-	write(byteRate)
-	write(blockAlign)
-	write(uint16(bitsPerSample))
-
-	// data chunk
-	f.WriteString("data")
-	write(dataSize)
-	for _, s := range samples {
-		// Clamp and convert float32 [-1,1] → int16 [-32767, 32767]
-		if s > 1.0 {
-			s = 1.0
-		} else if s < -1.0 {
-			s = -1.0
-		}
-		write(int16(s * 32767))
-	}
-
-	return baseName, nil
-}
-
-func ensureAudioCacheDirErr() error {
-	return os.MkdirAll(audioCacheDir, 0755)
-}
-
-// saveAudioBufferToWavPath writes a float32 PCM slice to a specific WAV file path.
-func saveAudioBufferToWavPath(samples []float32, filename string) error {
-	f, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	const (
-		sampleRate    = 16000
-		numChannels   = 1
-		bitsPerSample = 16
-		audioFmtPCM   = 1
+		headerSize    = 44
 	)
 
 	numSamples := len(samples)
@@ -137,33 +74,31 @@ func saveAudioBufferToWavPath(samples []float32, filename string) error {
 	byteRate := uint32(sampleRate * numChannels * bitsPerSample / 8)
 	blockAlign := uint16(numChannels * bitsPerSample / 8)
 
-	write := func(v interface{}) {
-		binary.Write(f, binary.LittleEndian, v)
-	}
+	buf := make([]byte, headerSize+int(dataSize))
+	copy(buf[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(buf[4:8], 36+dataSize)
+	copy(buf[8:12], "WAVE")
+	copy(buf[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(buf[16:20], 16)
+	binary.LittleEndian.PutUint16(buf[20:22], audioFmtPCM)
+	binary.LittleEndian.PutUint16(buf[22:24], numChannels)
+	binary.LittleEndian.PutUint32(buf[24:28], sampleRate)
+	binary.LittleEndian.PutUint32(buf[28:32], byteRate)
+	binary.LittleEndian.PutUint16(buf[32:34], blockAlign)
+	binary.LittleEndian.PutUint16(buf[34:36], bitsPerSample)
+	copy(buf[36:40], "data")
+	binary.LittleEndian.PutUint32(buf[40:44], dataSize)
 
-	f.WriteString("RIFF")
-	write(uint32(36 + dataSize))
-	f.WriteString("WAVE")
-
-	f.WriteString("fmt ")
-	write(uint32(16))
-	write(uint16(audioFmtPCM))
-	write(uint16(numChannels))
-	write(uint32(sampleRate))
-	write(byteRate)
-	write(blockAlign)
-	write(uint16(bitsPerSample))
-
-	f.WriteString("data")
-	write(dataSize)
+	offset := headerSize
 	for _, s := range samples {
 		if s > 1.0 {
 			s = 1.0
 		} else if s < -1.0 {
 			s = -1.0
 		}
-		write(int16(s * 32767))
+		binary.LittleEndian.PutUint16(buf[offset:offset+2], uint16(int16(s*32767)))
+		offset += 2
 	}
 
-	return nil
+	return os.WriteFile(filename, buf, 0644)
 }
