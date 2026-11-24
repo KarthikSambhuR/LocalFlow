@@ -97,30 +97,20 @@ html, body {
   display: block;
 }
 
-/* 4. Circular audio bubble visualizer */
+/* 4. Organic multi-ring audio bubble visualizer */
 .bubble-visualizer {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  width: 48px;
+  height: 48px;
 }
 
-.bubble-core {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ffffff 0%, rgba(255, 255, 255, 0.78) 100%);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
-  transition: transform 0.08s ease-out, background 0.2s ease;
+.bubble-visualizer svg {
+  display: block;
 }
 
-.bubble-ring {
-  position: absolute;
-  width: 24px;
-  height: 24px;
+.module.style-bubble {
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.45);
-  opacity: 0.25;
-  transition: transform 0.1s ease-out, opacity 0.1s ease-out;
 }
 
 /* Processing spinner for non-bubble styles */
@@ -149,28 +139,17 @@ html, body {
   opacity: 0;
 }
 
-/* Bubble breathing animation during processing */
-.module.style-bubble.processing .bubble-core {
-  animation: bubbleBreatheCore 1.5s ease-in-out infinite;
+.module.style-bubble.processing .bubble-wave-ring {
+  stroke-width: 1.6;
 }
 
-.module.style-bubble.processing .bubble-ring {
-  animation: bubbleBreatheRing 1.5s ease-in-out infinite;
+.module.style-bubble.refining .bubble-wave-ring {
+  stroke: #60a5fa;
+  filter: drop-shadow(0 0 3px rgba(96, 165, 250, 0.55));
 }
 
-.module.style-bubble.refining .bubble-core {
-  background: radial-gradient(circle at 35% 35%, #ffffff 0%, #93c5fd 100%);
-  box-shadow: 0 0 12px rgba(147, 197, 253, 0.45);
-}
-
-@keyframes bubbleBreatheCore {
-  0%, 100% { transform: scale(0.78); opacity: 0.7; }
-  50%      { transform: scale(1.18); opacity: 1; }
-}
-
-@keyframes bubbleBreatheRing {
-  0%, 100% { transform: scale(0.92); opacity: 0.15; }
-  50%      { transform: scale(1.42); opacity: 0.55; }
+.module.loading-model .bubble-wave-ring {
+  stroke: #f5a623;
 }
 
 @keyframes spinDictation {
@@ -200,9 +179,4 @@ html, body {
 
 .module.loading-model .wave-path {
   stroke: #f5a623;
-}
-
-.module.loading-model .bubble-core {
-  background: #f5a623;
-  box-shadow: 0 0 10px rgba(245, 166, 35, 0.45);
 }

@@ -48,18 +48,20 @@ export function mountPillDom() {
   const wavePath = waveWrap.querySelector('.wave-path');
   moduleNode.appendChild(waveWrap);
 
-  // 4. Circular audio bubble visualizer (with breathing processing state)
+  // 4. Organic multi-ring audio bubble visualizer (morphs with voice & breathes on processing)
   const bubbleViz = document.createElement('div');
   bubbleViz.className = 'bubble-visualizer';
   bubbleViz.innerHTML = `
-    <div class="bubble-ring"></div>
-    <div class="bubble-core"></div>
+    <svg viewBox="0 0 48 48" width="48" height="48" fill="none">
+      <path class="bubble-wave-ring bubble-ring-outer" stroke="rgba(255,255,255,0.35)" stroke-width="1.1"/>
+      <path class="bubble-wave-ring bubble-ring-mid" stroke="rgba(255,255,255,0.65)" stroke-width="1.3"/>
+      <path class="bubble-wave-ring bubble-ring-inner" stroke="#ffffff" stroke-width="1.5"/>
+    </svg>
   `;
-  const bubbleCore = bubbleViz.querySelector('.bubble-core');
-  const bubbleRing = bubbleViz.querySelector('.bubble-ring');
+  const bubbleRings = Array.from(bubbleViz.querySelectorAll('.bubble-wave-ring'));
   moduleNode.appendChild(bubbleViz);
 
   root.appendChild(moduleNode);
 
-  return { moduleNode, bars, spectrumBars, wavePath, bubbleCore, bubbleRing };
+  return { moduleNode, bars, spectrumBars, wavePath, bubbleRings };
 }

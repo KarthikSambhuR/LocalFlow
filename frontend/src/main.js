@@ -6,8 +6,7 @@ import { mountPillDom, SPECTRUM_COUNT } from './pill_dom.js';
 let moduleNode = null;
 let spectrumBars = [];
 let wavePath = null;
-let bubbleCore = null;
-let bubbleRing = null;
+let bubbleRings = [];
 
 let currentPillStyle = 'bars';
 const spectrumTargets = new Array(SPECTRUM_COUNT).fill(3);
@@ -15,8 +14,9 @@ const spectrumCurrents = new Array(SPECTRUM_COUNT).fill(3);
 let waveTargetAmp = 1.5;
 let waveCurrentAmp = 1.5;
 let wavePhase = 0;
-let bubbleTargetScale = 1.0;
-let bubbleCurrentScale = 1.0;
+let bubbleTargetAmp = 0.8;
+let bubbleCurrentAmp = 0.8;
+let bubblePhase = 0;
 
 function applyPillStyle(style) {
   const valid = ['bars', 'spectrum', 'wave', 'bubble'];
@@ -34,8 +34,27 @@ function resetVisuals() {
   spectrumCurrents.fill(3);
   waveTargetAmp = 1.5;
   waveCurrentAmp = 1.5;
-  bubbleTargetScale = 1.0;
-  bubbleCurrentScale = 1.0;
+  bubbleTargetAmp = 0.8;
+  bubbleCurrentAmp = 0.8;
+}
+
+function buildOrganicRingPath(baseR, amp, phase, freqOffset) {
+  const cx = 24;
+  const cy = 24;
+  const pts = 40;
+  let d = '';
+  for (let i = 0; i < pts; i++) {
+    const a = (i / pts) * Math.PI * 2;
+    const wobble =
+      Math.sin(a * 4 + phase + freqOffset) * 0.55 +
+      Math.cos(a * 6 - phase * 1.35 + freqOffset * 2) * 0.30 +
+      Math.sin(a * 9 + phase * 0.7) * 0.15;
+    const r = baseR + amp * wobble;
+    const x = cx + Math.cos(a) * r;
+    const y = cy + Math.sin(a) * r;
+    d += i === 0 ? `M ${x.toFixed(1)} ${y.toFixed(1)}` : ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+  }
+  return d + ' Z';
 }
 
 function buildWavePath(amp, phase) {
@@ -73,12 +92,31 @@ function animateFrame() {
       wavePath.setAttribute('d', buildWavePath(waveCurrentAmp, wavePhase));
     }
   } else if (currentPillStyle === 'bubble') {
-    bubbleCurrentScale += (bubbleTargetScale - bubbleCurrentScale) * 0.25;
-    if (bubbleCore && bubbleRing && !state.isProcessing) {
-      bubbleCore.style.transform = `scale(${bubbleCurrentScale.toFixed(3)})`;
-      const ringScale = 1 + (bubbleCurrentScale - 1) * 1.45;
-      bubbleRing.style.transform = `scale(${ringScale.toFixed(3)})`;
-      bubbleRing.style.opacity = `${Math.min(0.65, 0.18 + (bubbleCurrentScale - 1) * 0.65).toFixed(2)}`;
+    if (state.isProcessing) {
+      // Distinct, dramatic inhale/exhale breathing pulse during processing/refining
+      bubblePhase += 0.065;
+      const breathe = 0.5 + 0.5 * Math.sin(bubblePhase); // 0 -> 1 -> 0
+      const easeBreathe = breathe * breathe * (3 - 2 * breathe);
+      const amp = 0.4 + easeBreathe * 1.1;
+      if (bubbleRings.length === 3) {
+        bubbleRings[0].setAttribute('d', buildOrganicRingPath(9.0 + easeBreathe * 10.5, amp, bubblePhase * 0.5, 0));
+        bubbleRings[0].style.opacity = (0.20 + easeBreathe * 0.65).toFixed(2);
+        bubbleRings[1].setAttribute('d', buildOrganicRingPath(6.2 + easeBreathe * 7.8, amp * 0.8, -bubblePhase * 0.4, 1.2));
+        bubbleRings[1].style.opacity = (0.35 + easeBreathe * 0.60).toFixed(2);
+        bubbleRings[2].setAttribute('d', buildOrganicRingPath(3.5 + easeBreathe * 5.2, amp * 0.5, bubblePhase * 0.6, 2.4));
+        bubbleRings[2].style.opacity = (0.55 + easeBreathe * 0.45).toFixed(2);
+      }
+    } else {
+      bubbleCurrentAmp += (bubbleTargetAmp - bubbleCurrentAmp) * 0.25;
+      bubblePhase += 0.09 + bubbleCurrentAmp * 0.015;
+      if (bubbleRings.length === 3) {
+        bubbleRings[0].style.opacity = '';
+        bubbleRings[1].style.opacity = '';
+        bubbleRings[2].style.opacity = '';
+        bubbleRings[0].setAttribute('d', buildOrganicRingPath(14.5 + bubbleCurrentAmp * 0.55, bubbleCurrentAmp * 1.15, bubblePhase, 0));
+        bubbleRings[1].setAttribute('d', buildOrganicRingPath(11.0 + bubbleCurrentAmp * 0.4, bubbleCurrentAmp * 0.9, -bubblePhase * 0.9, 1.4));
+        bubbleRings[2].setAttribute('d', buildOrganicRingPath(7.5 + bubbleCurrentAmp * 0.25, bubbleCurrentAmp * 0.65, bubblePhase * 1.2, 2.8));
+      }
     }
   }
 
@@ -98,11 +136,6 @@ function hideModule() {
   state.isProcessing = false;
   moduleNode.classList.remove('active', 'processing', 'refining', 'loading-model');
   resetVisuals();
-  if (bubbleCore) bubbleCore.style.transform = '';
-  if (bubbleRing) {
-    bubbleRing.style.transform = '';
-    bubbleRing.style.opacity = '';
-  }
   setTimeout(() => {
     if (!state.isActive && state.rafId) {
       cancelAnimationFrame(state.rafId);
@@ -114,11 +147,6 @@ function hideModule() {
 function showProcessing() {
   state.isProcessing = true;
   resetVisuals();
-  if (bubbleCore) bubbleCore.style.transform = '';
-  if (bubbleRing) {
-    bubbleRing.style.transform = '';
-    bubbleRing.style.opacity = '';
-  }
   moduleNode.classList.remove('active', 'refining', 'loading-model');
   moduleNode.classList.add('processing');
 }
@@ -162,8 +190,8 @@ function setVolume(vol) {
   // Smooth sine wave amplitude
   waveTargetAmp = Math.max(1.5, Math.min(11.5, 1.5 + norm * 10.5));
 
-  // Audio bubble scale
-  bubbleTargetScale = 0.92 + norm * 0.65;
+  // Organic bubble wobble amplitude
+  bubbleTargetAmp = 0.8 + norm * 4.2;
 }
 
 function setupWails() {
@@ -194,8 +222,7 @@ async function init() {
     state.bars = pill.bars;
     spectrumBars = pill.spectrumBars;
     wavePath = pill.wavePath;
-    bubbleCore = pill.bubbleCore;
-    bubbleRing = pill.bubbleRing;
+    bubbleRings = pill.bubbleRings;
 
     if (window.go?.main?.App?.GetPillStyle) {
       try {
