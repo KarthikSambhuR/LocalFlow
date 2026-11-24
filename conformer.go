@@ -20,27 +20,41 @@ var (
 	cachedGPU          string
 )
 
-// fft computes the 1D Radix-2 FFT of the input slice.
+// fft computes the 1D Radix-2 Cooley-Tukey FFT iteratively in-place on a copy.
 func fft(x []complex128) []complex128 {
 	n := len(x)
 	if n <= 1 {
 		return x
 	}
-	even := make([]complex128, n/2)
-	odd := make([]complex128, n/2)
-	for i := 0; i < n/2; i++ {
-		even[i] = x[2*i]
-		odd[i] = x[2*i+1]
-	}
-	evenFFT := fft(even)
-	oddFFT := fft(odd)
-
 	y := make([]complex128, n)
-	for k := 0; k < n/2; k++ {
-		angle := -2.0 * math.Pi * float64(k) / float64(n)
-		twiddle := cmplx.Rect(1.0, angle) * oddFFT[k]
-		y[k] = evenFFT[k] + twiddle
-		y[k+n/2] = evenFFT[k] - twiddle
+	copy(y, x)
+
+	// Bit-reversal permutation
+	for i, j := 1, 0; i < n; i++ {
+		bit := n >> 1
+		for ; j&bit != 0; bit >>= 1 {
+			j ^= bit
+		}
+		j ^= bit
+		if i < j {
+			y[i], y[j] = y[j], y[i]
+		}
+	}
+
+	for size := 2; size <= n; size <<= 1 {
+		half := size >> 1
+		angleStep := -2.0 * math.Pi / float64(size)
+		wStep := cmplx.Rect(1.0, angleStep)
+		for i := 0; i < n; i += size {
+			w := complex(1, 0)
+			for j := 0; j < half; j++ {
+				u := y[i+j]
+				t := w * y[i+j+half]
+				y[i+j] = u + t
+				y[i+j+half] = u - t
+				w *= wStep
+			}
+		}
 	}
 	return y
 }
