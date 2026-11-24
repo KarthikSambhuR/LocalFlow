@@ -100,6 +100,16 @@ func initDB() error {
 	if err != nil {
 		return err
 	}
+	db.SetMaxOpenConns(1)
+
+	for _, pragma := range []string{
+		"PRAGMA journal_mode=WAL;",
+		"PRAGMA busy_timeout=5000;",
+		"PRAGMA synchronous=NORMAL;",
+		"PRAGMA foreign_keys=ON;",
+	} {
+		_, _ = db.Exec(pragma)
+	}
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS recordings (
@@ -114,12 +124,6 @@ func initDB() error {
 	if err != nil {
 		return err
 	}
-
-	// Schema migration: add columns if they do not exist
-	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN word_count INTEGER DEFAULT 0;`)
-	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN transcription_time_us INTEGER DEFAULT 0;`)
-	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN raw_transcription TEXT;`)
-	_, _ = db.Exec(`ALTER TABLE recordings ADD COLUMN duration_ms INTEGER DEFAULT 0;`)
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS analytics (
@@ -179,8 +183,6 @@ func initDB() error {
 	if err != nil {
 		return err
 	}
-	// Migrate: add short_summary column if it doesn't exist yet
-	_, _ = db.Exec(`ALTER TABLE meetings ADD COLUMN short_summary TEXT`)
 
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS meeting_segments (
@@ -196,6 +198,20 @@ func initDB() error {
 	`)
 	if err != nil {
 		return err
+	}
+
+	var userVersion int
+	if err := db.QueryRow("PRAGMA user_version;").Scan(&userVersion); err == nil && userVersion < 1 {
+		for _, stmt := range []string{
+			`ALTER TABLE recordings ADD COLUMN word_count INTEGER DEFAULT 0;`,
+			`ALTER TABLE recordings ADD COLUMN transcription_time_us INTEGER DEFAULT 0;`,
+			`ALTER TABLE recordings ADD COLUMN raw_transcription TEXT;`,
+			`ALTER TABLE recordings ADD COLUMN duration_ms INTEGER DEFAULT 0;`,
+			`ALTER TABLE meetings ADD COLUMN short_summary TEXT;`,
+		} {
+			_, _ = db.Exec(stmt)
+		}
+		_, _ = db.Exec("PRAGMA user_version = 1;")
 	}
 
 	// Perform background migration for legacy records that have empty/0 word_count but non-empty transcription
