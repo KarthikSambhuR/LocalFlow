@@ -472,38 +472,25 @@ export function renderHome(records, stats, searchQuery = '') {
 
 export function renderHomeRail(stats) {
   return `
-    <div class="home-stats-grid">
-      <div class="home-stat-card">
-        <div class="home-stat-header">
-          <span class="home-stat-label">Total Words</span>
-          <div class="home-stat-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          </div>
-        </div>
-        <div class="home-stat-value">${formatNumber(stats.totalWords)}</div>
-        <div class="home-stat-footer">Words dictated in total</div>
+    <div class="home-telemetry-strip">
+      <div class="telemetry-cell">
+        <span class="telemetry-val">${formatNumber(stats.totalWords)}</span>
+        <span class="telemetry-lbl">Total words</span>
       </div>
-      
-      <div class="home-stat-card">
-        <div class="home-stat-header">
-          <span class="home-stat-label">Speaking Speed</span>
-          <div class="home-stat-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </div>
-        </div>
-        <div class="home-stat-value">${stats.wpm} <span style="font-size: 16px; font-weight: 700; color: var(--text-muted);">WPM</span></div>
-        <div class="home-stat-footer">Average talking velocity</div>
+      <div class="telemetry-divider"></div>
+      <div class="telemetry-cell">
+        <span class="telemetry-val">${stats.wpm} <small>WPM</small></span>
+        <span class="telemetry-lbl">Speaking speed</span>
       </div>
-      
-      <div class="home-stat-card">
-        <div class="home-stat-header">
-          <span class="home-stat-label">Day Streak</span>
-          <div class="home-stat-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-          </div>
-        </div>
-        <div class="home-stat-value">${stats.streak} <span style="font-size: 16px; font-weight: 700; color: var(--text-muted);">${stats.streak === 1 ? 'Day' : 'Days'}</span></div>
-        <div class="home-stat-footer">Consecutive active days</div>
+      <div class="telemetry-divider"></div>
+      <div class="telemetry-cell">
+        <span class="telemetry-val">${stats.streak} <small>${stats.streak === 1 ? 'day' : 'days'}</small></span>
+        <span class="telemetry-lbl">Active streak</span>
+      </div>
+      <div class="telemetry-divider"></div>
+      <div class="telemetry-cell">
+        <span class="telemetry-val">${formatNumber(stats.todayWords)}</span>
+        <span class="telemetry-lbl">Today</span>
       </div>
     </div>
   `;

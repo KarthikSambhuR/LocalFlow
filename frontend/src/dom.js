@@ -104,14 +104,15 @@ settingsModal.innerHTML = `
       <div class="home-layout">
         <div class="home-stats-bar" id="homeRail"></div>
         <main class="home-main">
-          <div class="recent-header" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-            <div class="section-kicker" style="margin-bottom: 0;">Recent dictation</div>
-            <div class="lf-search-wrap">
-              <span class="lf-search-icon"><svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
-              <input type="text" id="homeSearchInput" class="lf-search-input" placeholder="Search dictations..." />
-              <kbd class="lf-search-kbd">Ctrl+K</kbd>
-            </div>
-            <div class="view-toggle" id="globalViewToggle" style="margin-top: 0;">
+          <div class="recent-header home-toolbar">
+            <div class="section-kicker" style="margin-bottom: 0;">Recent</div>
+            <div class="home-toolbar-right">
+              <div class="lf-search-wrap">
+                <span class="lf-search-icon"><svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+                <input type="text" id="homeSearchInput" class="lf-search-input" placeholder="Search dictations..." />
+                <kbd class="lf-search-kbd">Ctrl+K</kbd>
+              </div>
+              <div class="view-toggle" id="globalViewToggle" style="margin-top: 0;">
               <div class="toggle-pill">
                 <div class="toggle-slider" id="globalToggleSlider"></div>
                 <button type="button" class="toggle-opt toggle-opt-raw" id="globalToggleRaw" data-view="raw">
@@ -128,6 +129,7 @@ settingsModal.innerHTML = `
                 </button>
               </div>
             </div>
+          </div>
           </div>
           <div class="history-list show-refined" id="historyList"></div>
         </main>
@@ -479,65 +481,31 @@ settingsModal.innerHTML = `
       <div class="insights-wrap" id="insightsRoot"></div>
     </div>
     <div class="section" id="sec-dictionary">
-      <div class="personalization-layout">
-        
-        <!-- Intro Banner -->
-        <div class="personalization-intro-card">
-          <div class="personalization-intro-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
-              <path d="M6 6h10M6 10h10"/>
-            </svg>
+      <div class="vocab-shell">
+        <div class="vocab-header">
+          <div>
+            <h2 class="vocab-title">Custom Vocabulary</h2>
+            <p class="vocab-subtitle">Bias Whisper toward names, acronyms, and domain terms inside its 224-token prompt budget.</p>
           </div>
-          <div class="personalization-intro-content">
-            <h2 class="personalization-intro-title">Custom Vocabulary & Keywords</h2>
-            <p class="personalization-intro-desc">
-              Prime speech recognition with domain names, jargon, acronyms, and specialized technical terms. Whisper biases towards these phrases during transcription.
-            </p>
-          </div>
+          <span id="dictTokenBadge" class="vocab-token-pill">0 / 224 tokens</span>
         </div>
 
-        <!-- Token Usage & Word Manager Card -->
-        <div class="personalization-card">
-          <div class="personalization-card-header no-collapse">
-            <div class="personalization-card-title-group">
-              <div class="personalization-card-badge">Context Budget</div>
-              <div>
-                <h3 class="personalization-card-title">Whisper Context Usage</h3>
-                <p class="personalization-card-subtitle">Custom keywords share Whisper's 224-token prompt context window.</p>
-              </div>
-            </div>
-            <span id="dictTokenBadge" class="badge">0 / 224 tokens</span>
-          </div>
-
-          <div class="personalization-card-body open">
-            <div class="model-progress-bar-bg" style="height: 6px; width: 100%; border-radius: 9999px;">
-              <div id="dictTokenProgress" class="model-progress-bar-fill" style="width: 0%; transition: width 0.3s ease;"></div>
-            </div>
-
-            <!-- Add Keyword Input Bar -->
-            <div class="mapping-creator-bar" style="align-items: center; margin-top: 4px;">
-              <div class="mapping-input-col">
-                <input type="text" id="dictWordInput" class="brutal-input personalization-input" placeholder="Add a custom word, brand name, or technical phrase..." />
-              </div>
-              <button id="addDictWordBtn" class="kbd-btn personalization-add-btn">
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Keyword
-              </button>
-            </div>
-
-            <!-- Existing Keywords List Container -->
-            <div class="mappings-list-container">
-              <div class="mappings-list-header">
-                <span>Active Vocabulary</span>
-              </div>
-              <div id="dictWordsList" class="dict-chips-grid">
-                <!-- Words listed as interactive pill chips -->
-              </div>
-            </div>
-          </div>
+        <div class="vocab-meter-track">
+          <div id="dictTokenProgress" class="vocab-meter-fill" style="width: 0%;"></div>
         </div>
 
+        <div class="vocab-composer">
+          <input type="text" id="dictWordInput" class="lf-input" placeholder="Add a word, brand name, or phrase and press Enter..." />
+          <button id="addDictWordBtn" class="lf-btn-primary">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add
+          </button>
+        </div>
+
+        <div class="vocab-list-section">
+          <div class="vocab-list-label">Active Keywords</div>
+          <div id="dictWordsList" class="dict-chips-grid"></div>
+        </div>
       </div>
     </div>
     <div class="section" id="sec-models">
@@ -947,145 +915,77 @@ settingsModal.innerHTML = `
       </div>
     </div>
     <div class="section" id="sec-manglish">
-      <div class="personalization-layout">
-        
-        <!-- Header Banner / Intro -->
-        <div class="personalization-intro-card">
-          <div class="personalization-intro-icon">
-            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"/>
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-            </svg>
-          </div>
-          <div class="personalization-intro-content">
-            <h2 class="personalization-intro-title">Language Personalization & Transliteration</h2>
-            <p class="personalization-intro-desc">
-              Teach the refinement AI your personal writing habits, phrasing style, and word-by-word transliteration preferences from Malayalam into Manglish.
-            </p>
+      <div class="vocab-shell">
+        <div class="vocab-header">
+          <div>
+            <h2 class="vocab-title">Language Personalization</h2>
+            <p class="vocab-subtitle">Define exact Malayalam-to-Latin word replacements and phrasing examples for AI refinement.</p>
           </div>
         </div>
 
-        <!-- Section 1: Transliteration Tone & Phrasing Examples -->
-        <div class="personalization-card open" id="manglishPanel">
-          <div class="personalization-card-header" id="manglishPanelHeader" role="button" tabindex="0" aria-expanded="true">
-            <div class="personalization-card-title-group">
-              <div class="personalization-card-badge">Style Guide</div>
-              <div>
-                <h3 class="personalization-card-title">Transliteration Style & Phrasing Examples</h3>
-                <p class="personalization-card-subtitle">Provide your preferred Latin script spelling for common Malayalam phrases. The model will adapt to match your rhythm.</p>
-              </div>
-            </div>
-            <div class="personalization-chevron-wrap">
-              <svg class="models-panel-chevron" id="manglishPanelChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform: rotate(90deg); transition: transform 0.2s ease;">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
+        <!-- Primary: Exact Word Rules -->
+        <div class="tactile-panel">
+          <div class="tactile-panel-head">
+            <div>
+              <h3 class="tactile-panel-title">Word Replacement Rules</h3>
+              <p class="tactile-panel-desc">Map specific Malayalam words directly to your preferred Latin spelling.</p>
             </div>
           </div>
+          <div class="rule-composer">
+            <input type="text" id="translitMalInput" class="lf-input" placeholder="Malayalam word (e.g. ഹലോ)" />
+            <span class="rule-arrow"><svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+            <input type="text" id="translitEngInput" class="lf-input" placeholder="Latin spelling (e.g. Hello)" />
+            <button id="addTranslitBtn" class="lf-btn-primary">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Rule
+            </button>
+          </div>
+          <div id="translitWordsList" class="mappings-list-body"></div>
+        </div>
 
-          <div class="personalization-card-body" id="manglishPanelBody">
-            <div class="examples-grid">
-              
-              <!-- Example 1 -->
-              <div class="example-box">
-                <div class="example-box-header">
-                  <span class="example-num">01</span>
-                  <span class="example-malayalam-prompt">ഹലോ സുഖമാണോ എന്ത് ചെയ്യുന്നു</span>
-                </div>
-                <input type="text" id="manglishEx1" class="brutal-input personalization-input" placeholder="e.g. Hello, sukhamano enth cheyyunnu?" />
-              </div>
-
-              <!-- Example 2 -->
-              <div class="example-box">
-                <div class="example-box-header">
-                  <span class="example-num">02</span>
-                  <span class="example-malayalam-prompt">എനിക്ക് നാളെ വരാൻ പറ്റില്ല</span>
-                </div>
-                <input type="text" id="manglishEx2" class="brutal-input personalization-input" placeholder="e.g. Enik naale varaan pattilla." />
-              </div>
-
-              <!-- Example 3 -->
-              <div class="example-box">
-                <div class="example-box-header">
-                  <span class="example-num">03</span>
-                  <span class="example-malayalam-prompt">നീ നാളെ കോളേജിൽ വരുന്നുണ്ടോ? നമുക്ക് ഒരുമിച്ച് പോകാം.</span>
-                </div>
-                <input type="text" id="manglishEx3" class="brutal-input personalization-input" placeholder="e.g. Nee naale collegil varunnundo? Namukku orumichu pokam." />
-              </div>
-
-              <!-- Example 4 -->
-              <div class="example-box">
-                <div class="example-box-header">
-                  <span class="example-num">04</span>
-                  <span class="example-malayalam-prompt">ഞാൻ ആ കാര്യം അവളോട് പറഞ്ഞു, പക്ഷെ അവൾക്ക് മനസ്സിലായില്ല.</span>
-                </div>
-                <input type="text" id="manglishEx4" class="brutal-input personalization-input" placeholder="e.g. Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla." />
-              </div>
-
-              <!-- Example 5 -->
-              <div class="example-box">
-                <div class="example-box-header">
-                  <span class="example-num">05</span>
-                  <span class="example-malayalam-prompt">നീ ആ ഫയൽ എനിക്ക് വാട്സാപ്പിൽ അയച്ചു തരുമോ? ഞാൻ ഇപ്പോഴേ ഡൗൺലോഡ് ചെയ്യാം.</span>
-                </div>
-                <input type="text" id="manglishEx5" class="brutal-input personalization-input" placeholder="e.g. Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam." />
-              </div>
-
+        <!-- Secondary: Phrasing Style Examples (Collapsible) -->
+        <div class="tactile-panel open" id="manglishPanel">
+          <div class="tactile-panel-head collapsible" id="manglishPanelHeader" role="button" tabindex="0" aria-expanded="true">
+            <div>
+              <h3 class="tactile-panel-title">Phrasing &amp; Rhythm Examples</h3>
+              <p class="tactile-panel-desc">Show how you write Manglish sentences so refinement matches your natural tone.</p>
             </div>
-
-            <div class="personalization-actions">
-              <span class="personalization-tip">Note: Use Latin/English script characters only.</span>
-              <button id="saveManglishExBtn" class="kbd-btn personalization-save-btn">
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg class="models-panel-chevron" id="manglishPanelChevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="transform: rotate(90deg); transition: transform 0.2s ease;">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+          <div class="personalization-card-body" id="manglishPanelBody">
+            <div class="examples-compact-grid">
+              <div class="example-row">
+                <span class="example-prompt"><kbd>01</kbd> ഹലോ സുഖമാണോ എന്ത് ചെയ്യുന്നു</span>
+                <input type="text" id="manglishEx1" class="lf-input" placeholder="e.g. Hello, sukhamano enth cheyyunnu?" />
+              </div>
+              <div class="example-row">
+                <span class="example-prompt"><kbd>02</kbd> എനിക്ക് നാളെ വരാൻ പറ്റില്ല</span>
+                <input type="text" id="manglishEx2" class="lf-input" placeholder="e.g. Enik naale varaan pattilla." />
+              </div>
+              <div class="example-row">
+                <span class="example-prompt"><kbd>03</kbd> നീ നാളെ കോളേജിൽ വരുന്നുണ്ടോ? നമുക്ക് ഒരുമിച്ച് പോകാം.</span>
+                <input type="text" id="manglishEx3" class="lf-input" placeholder="e.g. Nee naale collegil varunnundo? Namukku orumichu pokam." />
+              </div>
+              <div class="example-row">
+                <span class="example-prompt"><kbd>04</kbd> ഞാൻ ആ കാര്യം അവളോട് പറഞ്ഞു, പക്ഷെ അവൾക്ക് മനസ്സിലായില്ല.</span>
+                <input type="text" id="manglishEx4" class="lf-input" placeholder="e.g. Njan aa kaaryam avalodu paranju, pakshe avalkku manassilayilla." />
+              </div>
+              <div class="example-row">
+                <span class="example-prompt"><kbd>05</kbd> നീ ആ ഫയൽ എനിക്ക് വാട്സാപ്പിൽ അയച്ചു തരുമോ? ഞാൻ ഇപ്പോഴേ ഡൗൺലോഡ് ചെയ്യാം.</span>
+                <input type="text" id="manglishEx5" class="lf-input" placeholder="e.g. Nee aa file enikk WhatsAppil ayachu tharumo? Njan ippozhe download cheyyam." />
+              </div>
+            </div>
+            <div class="tactile-panel-footer">
+              <span class="vocab-subtitle" style="margin: 0;">Latin script only</span>
+              <button id="saveManglishExBtn" class="lf-btn-primary">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
                 Save Preferences
               </button>
             </div>
           </div>
         </div>
-
-        <!-- Section 2: Exact Word-Level Transliteration Mappings -->
-        <div class="personalization-card">
-          <div class="personalization-card-header no-collapse">
-            <div class="personalization-card-title-group">
-              <div class="personalization-card-badge">Dictionary Mappings</div>
-              <div>
-                <h3 class="personalization-card-title">Word-Level Transliteration Rules</h3>
-                <p class="personalization-card-subtitle">Force exact word replacements during refinement (e.g. rewrite "ഹലോ" directly into "Hello").</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="personalization-card-body open">
-            <!-- Add New Mapping Bar -->
-            <div class="mapping-creator-bar">
-              <div class="mapping-input-col">
-                <label class="mapping-input-label">Malayalam Word</label>
-                <input type="text" id="translitMalInput" class="brutal-input personalization-input" placeholder="e.g. ഹലോ" />
-              </div>
-              <div class="mapping-arrow-indicator">
-                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              </div>
-              <div class="mapping-input-col">
-                <label class="mapping-input-label">Preferred Latin Spelling</label>
-                <input type="text" id="translitEngInput" class="brutal-input personalization-input" placeholder="e.g. Hello" />
-              </div>
-              <button id="addTranslitBtn" class="kbd-btn personalization-add-btn">
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Rule
-              </button>
-            </div>
-
-            <!-- Existing Mappings List -->
-            <div class="mappings-list-container">
-              <div class="mappings-list-header">
-                <span>Configured Word Rules</span>
-              </div>
-              <div id="translitWordsList" class="mappings-list-body">
-                <!-- Dynamic entries -->
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
     </div>

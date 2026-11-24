@@ -4,12 +4,12 @@
 .home-layout {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 18px;
 }
 
 .home-stats-bar {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 2px;
 }
 
 .section-kicker {
@@ -35,20 +35,25 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 24px;
-  padding: 20px 24px;
+  gap: 20px;
+  padding: 15px 18px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 12px;
+  box-shadow: var(--specular);
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.16s ease,
+              border-color 0.16s ease,
+              box-shadow 0.16s ease;
   position: relative;
 }
 
 .history-card:hover,
 .history-card.playing {
   background: var(--bg-card-hover);
-  transform: translateY(-1.5px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-color: var(--border-active);
+  transform: translateY(-1px);
+  box-shadow: var(--specular), var(--depth-shadow);
 }
 
 .card-main-content {
@@ -66,13 +71,11 @@
 }
 
 .card-timestamp {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 3px 8px;
-  border-radius: 6px;
-  letter-spacing: 0.03em;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
 }
 
 .card-meta-badges {
@@ -242,10 +245,15 @@
 .card-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
-  opacity: 0.75;
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  gap: 6px;
+  opacity: 0.32;
+  transition: opacity 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-card:hover .card-controls,
+.history-card.playing .card-controls {
+  opacity: 1;
 }
 
 .history-card:hover .card-controls,
