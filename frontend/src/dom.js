@@ -1,28 +1,6 @@
 import logoImg from './assets/images/logo-universal.png';
-import { BAR_COUNT } from './constants.js';
 
 export const root = document.getElementById('root');
-
-// Neo-brutalist / Wispr Flow module container
-export const moduleNode = document.createElement('div');
-moduleNode.className = 'module';
-moduleNode.id = 'module';
-
-export const ring = document.createElement('div');
-ring.className = 'processing-ring';
-moduleNode.appendChild(ring);
-
-export const visualizer = document.createElement('div');
-visualizer.className = 'visualizer';
-
-export const bars = [];
-for (let i = 0; i < BAR_COUNT; i++) {
-  const bar = document.createElement('div');
-  bar.className = 'bar idle';
-  visualizer.appendChild(bar);
-  bars.push(bar);
-}
-moduleNode.appendChild(visualizer);
 
 // ── Settings UI DOM ────────────────────────────────────────────────────────
 export const settingsOverlay = document.createElement('div');
@@ -1091,7 +1069,6 @@ settingsModal.innerHTML = `
 
 settingsOverlay.appendChild(settingsModal);
 root.appendChild(settingsOverlay);
-root.appendChild(moduleNode);
 
 // Custom confirm modal for cleanups
 export const confirmModalOverlay = document.createElement('div');
