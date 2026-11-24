@@ -289,12 +289,9 @@ async function init() {
       setupStartupSettings();
       setupStorageSettings();
       setupDataFolderSettings();
-      setupModelsSettings();
       setupMicrophoneSettings();
       setupBilingualRouting();
       setupOnboarding();
-      setupDictionary();
-      setupManglishPersonalization();
     } else {
       settingsOverlay.style.display = 'none';
       setupWails();

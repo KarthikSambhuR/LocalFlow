@@ -800,6 +800,9 @@ function whisperVariantCategory(variant, model) {
   return 'multi';
 }
 
+let modelsEventsRegistered = false;
+let latestRenderModels = null;
+
 export async function setupModelsSettings() {
   const modelsDownloadedSTT = document.getElementById('modelsDownloadedSTT');
   const modelsDownloadedLLM = document.getElementById('modelsDownloadedLLM');
@@ -1222,27 +1225,32 @@ export async function setupModelsSettings() {
     }
   };
 
-  window.runtime.EventsOn('model-download-progress', (id, percent, speed, eta) => {
-    const fill = document.getElementById(`bar-${id}`);
-    const txt = document.getElementById(`text-${id}`);
-    if (fill && txt) {
-      fill.style.width = `${percent}%`;
-      if (speed && eta) {
-        txt.textContent = `Downloading... ${percent}% (${speed}, ETA: ${eta})`;
-      } else {
-        txt.textContent = `Downloading... ${percent}%`;
+  latestRenderModels = renderModels;
+
+  if (!modelsEventsRegistered && window.runtime?.EventsOn) {
+    modelsEventsRegistered = true;
+    window.runtime.EventsOn('model-download-progress', (id, percent, speed, eta) => {
+      const fill = document.getElementById(`bar-${id}`);
+      const txt = document.getElementById(`text-${id}`);
+      if (fill && txt) {
+        fill.style.width = `${percent}%`;
+        if (speed && eta) {
+          txt.textContent = `Downloading... ${percent}% (${speed}, ETA: ${eta})`;
+        } else {
+          txt.textContent = `Downloading... ${percent}%`;
+        }
       }
-    }
-  });
+    });
 
-  window.runtime.EventsOn('model-download-done', (id) => {
-    renderModels();
-  });
+    window.runtime.EventsOn('model-download-done', () => {
+      if (latestRenderModels) latestRenderModels();
+    });
 
-  window.runtime.EventsOn('model-download-error', (id, errMsg) => {
-    alert(`Download failed for model ${id}: ${errMsg}`);
-    renderModels();
-  });
+    window.runtime.EventsOn('model-download-error', (id, errMsg) => {
+      alert(`Download failed for model ${id}: ${errMsg}`);
+      if (latestRenderModels) latestRenderModels();
+    });
+  }
 
   await renderModels();
 }
