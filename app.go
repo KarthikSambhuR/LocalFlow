@@ -648,36 +648,42 @@ func (a *App) listenToKeyboard() {
 
 	var device *malgo.Device
 
+	var lastVolEmit time.Time
 	onRec := func(pSample2, pSample []byte, frameCount uint32) {
-		a.mutex.Lock()
-		active := isRecording || time.Now().Before(acceptingUntil)
-		a.mutex.Unlock()
-
-		if !active {
-			return
-		}
 		if len(pSample) == 0 || frameCount == 0 {
 			return
 		}
 
-		if !a.isMicReady {
+		samples := (*[1 << 30]float32)(unsafe.Pointer(&pSample[0]))[:frameCount]
+
+		a.mutex.Lock()
+		active := isRecording || time.Now().Before(acceptingUntil)
+		if !active {
+			a.mutex.Unlock()
+			return
+		}
+		firstMicFrame := !a.isMicReady
+		if firstMicFrame {
 			a.isMicReady = true
+		}
+		a.audioBuffer = append(a.audioBuffer, samples...)
+		a.mutex.Unlock()
+
+		if firstMicFrame {
 			runtime.EventsEmit(a.ctx, "recording-state", "listening")
 		}
 
-		samples := (*[1 << 30]float32)(unsafe.Pointer(&pSample[0]))[:frameCount]
-
-		// Calculate volume for the UI visualizer
-		var sum float32
-		for _, s := range samples {
-			sum += s * s
+		// Throttle UI visualizer updates to ~30 Hz to reduce Wails IPC overhead.
+		now := time.Now()
+		if now.Sub(lastVolEmit) >= 33*time.Millisecond {
+			lastVolEmit = now
+			var sum float32
+			for _, s := range samples {
+				sum += s * s
+			}
+			vol := float32(math.Sqrt(float64(sum / float32(len(samples)))))
+			runtime.EventsEmit(a.ctx, "volume-data", vol*100)
 		}
-		vol := float32(math.Sqrt(float64(sum / float32(len(samples)))))
-		runtime.EventsEmit(a.ctx, "volume-data", vol*100)
-
-		a.mutex.Lock()
-		a.audioBuffer = append(a.audioBuffer, samples...)
-		a.mutex.Unlock()
 	}
 
 	device, err = malgo.InitDevice(mctx.Context, deviceConfig, malgo.DeviceCallbacks{Data: onRec})
@@ -967,7 +973,7 @@ func (a *App) listenToKeyboard() {
 				a.mutex.Lock()
 				isRecording = true
 				a.isMicReady = false
-				a.audioBuffer = make([]float32, 0)
+				a.audioBuffer = make([]float32, 0, 16000*10)
 				a.transcribedSamplesCount = 0
 				a.interimTranscripts = make([]string, 0)
 				a.routingDecided = false
@@ -1687,7 +1693,7 @@ func (a *App) transcribe() {
 
 		fmt.Println("No audio captured for transcription")
 		runtime.EventsEmit(a.ctx, "recording-done")
-		time.Sleep(650 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 		runtime.WindowHide(a.ctx)
 		hideOverlayWindow()
 		return
@@ -1853,13 +1859,13 @@ func (a *App) transcribe() {
 		} else {
 			a.waitForShortcutRelease(2 * time.Second)
 			releasePasteModifiers()
-			time.Sleep(350 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			pasteCtrlV()
 		}
 	}
 
 	runtime.EventsEmit(a.ctx, "recording-done")
-	time.Sleep(650 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	runtime.WindowHide(a.ctx)
 	hideOverlayWindow()
 }
