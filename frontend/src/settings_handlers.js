@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { loadDashboard, showCustomConfirm } from './dashboard.js';
+import { escapeHtml, showToast } from './ui_utils.js';
 import openaiLogo from './assets/images/openai-logo.png';
 import ai4bharatLogo from './assets/images/ai4bharat-logo.png';
 import sarvamLogo from './assets/images/sarvam-logo.jpg';
@@ -452,7 +453,7 @@ export async function setupStartupSettings() {
     } catch (err) {
       startupToggle.checked = !nextValue;
       console.error('Failed to update startup setting', err);
-      alert('Could not update the Windows startup setting. Please try again.');
+      showToast('Could not update the Windows startup setting.', 'error');
     }
   });
 
@@ -464,7 +465,7 @@ export async function setupStartupSettings() {
     } catch (err) {
       minimizedToggle.checked = !nextValue;
       console.error('Failed to update start minimized setting', err);
-      alert('Could not update the start minimized setting. Please try again.');
+      showToast('Could not update the start minimized setting.', 'error');
     }
   });
 }
@@ -1109,7 +1110,7 @@ export async function setupModelsSettings() {
                 await window.go.main.SettingsApp.SetActiveModel(btn.dataset.id);
                 window.dispatchEvent(new CustomEvent('active-model-changed'));
               } catch (err) {
-                alert(err);
+                showToast(String(err), 'error');
               }
               renderModels();
             };
@@ -1129,7 +1130,7 @@ export async function setupModelsSettings() {
                   try {
                     await window.go.main.SettingsApp.DeleteModel(filename);
                   } catch (err) {
-                    alert(err);
+                    showToast(String(err), 'error');
                   }
                   renderModels();
                 }
@@ -1247,7 +1248,7 @@ export async function setupModelsSettings() {
     });
 
     window.runtime.EventsOn('model-download-error', (id, errMsg) => {
-      alert(`Download failed for model ${id}: ${errMsg}`);
+      showToast(`Download failed for ${id}: ${errMsg}`, 'error');
       if (latestRenderModels) latestRenderModels();
     });
   }
@@ -1554,14 +1555,14 @@ export async function setupManglishPersonalization() {
       if (!input) continue;
       const val = input.value.trim();
       if (!val) {
-        alert("Please fill out all Manglish transcription boxes!");
+        showToast("Please fill out all Manglish transcription boxes.", "warning");
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Preferences';
         input.focus();
         return;
       }
       if (/[\u0D00-\u0D7F]/.test(val)) {
-        alert("Please write in Manglish (using English letters/Latin script only, no Malayalam script characters)!");
+        showToast("Please write in Manglish using Latin script only.", "warning");
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Preferences';
         input.focus();
@@ -1639,26 +1640,26 @@ export async function setupManglishPersonalization() {
       const malVal = malInput.value.trim();
       const engVal = engInput.value.trim();
       if (!malVal || !engVal) {
-        alert("Please enter both Malayalam word(s) and preferred transliteration!");
+        showToast("Please enter both Malayalam word(s) and preferred transliteration.", "warning");
         return;
       }
       
       const malWords = malVal.split(',').map(w => w.trim()).filter(Boolean);
       if (malWords.length === 0) {
-        alert("Please enter at least one Malayalam word!");
+        showToast("Please enter at least one Malayalam word.", "warning");
         return;
       }
 
       for (const w of malWords) {
         if (!/[\u0D00-\u0D7F]/.test(w)) {
-          alert(`"${w}" must contain Malayalam characters!`);
+          showToast(`"${w}" must contain Malayalam characters.`, "warning");
           malInput.focus();
           return;
         }
       }
 
       if (/[\u0D00-\u0D7F]/.test(engVal)) {
-        alert("The translit preferred spelling must be in English letters/Latin script (no Malayalam script characters)!");
+        showToast("Preferred spelling must be in Latin script only.", "warning");
         engInput.focus();
         return;
       }

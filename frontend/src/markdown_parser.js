@@ -1,3 +1,5 @@
+import { escapeHtml } from './ui_utils.js';
+
 // Robust Pure-Markdown Parser supporting:
 // - Tables (| Col 1 | Col 2 |)
 // - Headings (#, ##, ###, ####)
@@ -218,15 +220,4 @@ function parseInline(text) {
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
   return s;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>"']/g, m => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  })[m]);
 }

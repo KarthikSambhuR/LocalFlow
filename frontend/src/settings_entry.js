@@ -1,5 +1,6 @@
 import './style.css';
 import { settingsOverlay, settingsModal } from './dom.js';
+import { showToast } from './ui_utils.js';
 import {
   loadDashboard,
   setupGlobalToggle,
@@ -95,7 +96,7 @@ function setupUpdater() {
         btn.disabled = false;
         btn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Restart to Update`;
         console.error('Update failed:', err);
-        alert('Failed to launch update: ' + err);
+        showToast('Failed to launch update: ' + err, 'error');
       }
     }
   });
@@ -142,6 +143,64 @@ function setupTheme() {
   });
 }
 
+function setupKeyboardShortcuts(switchSection) {
+  const sectionOrder = ['home', 'meetings', 'insights', 'dictionary', 'manglish', 'models', 'settings'];
+  document.addEventListener('keydown', (e) => {
+    const tag = document.activeElement?.tagName;
+    const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable;
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      const meetingsActive = document.getElementById('sec-meetings')?.classList.contains('active');
+      const targetInput = meetingsActive
+        ? document.getElementById('meetingSearchInput')
+        : document.getElementById('homeSearchInput');
+      if (targetInput) {
+        if (!meetingsActive && !document.getElementById('sec-home')?.classList.contains('active')) {
+          switchSection('home');
+        }
+        setTimeout(() => targetInput.focus(), 30);
+      }
+      return;
+    }
+
+    if (e.key === '/' && !isTyping) {
+      e.preventDefault();
+      const meetingsActive = document.getElementById('sec-meetings')?.classList.contains('active');
+      const targetInput = meetingsActive
+        ? document.getElementById('meetingSearchInput')
+        : document.getElementById('homeSearchInput');
+      targetInput?.focus();
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.custom-dropdown.open').forEach(d => d.classList.remove('open'));
+      document.querySelectorAll('.meeting-modal-overlay.active, .custom-modal-overlay.active').forEach(m => {
+        m.classList.remove('active');
+      });
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '7') {
+      e.preventDefault();
+      const idx = parseInt(e.key, 10) - 1;
+      if (sectionOrder[idx]) switchSection(sectionOrder[idx]);
+    }
+  });
+}
+
+async function updateHeaderStatusPill() {
+  const txt = document.getElementById('headerStatusText');
+  if (!txt || !window.go?.main?.SettingsApp) return;
+  try {
+    const cfg = await window.go.main.SettingsApp.GetConfig();
+    const model = (cfg.active_model || 'tiny.en').replace(/^ggml-/, '').replace(/\.(bin|gguf|onnx|cact)$/i, '');
+    const engine = cfg.processing_engine === 'vulkan' ? 'Vulkan GPU' : 'CPU';
+    txt.textContent = `${model} • ${engine}`;
+  } catch (_) {}
+}
+
 export async function initSettingsApp() {
   setupTheme();
   setupWindowTitlebar();
@@ -176,6 +235,8 @@ export async function initSettingsApp() {
   }
 
   navItems.forEach(item => item.addEventListener('click', () => switchSection(item.getAttribute('data-section'))));
+  setupKeyboardShortcuts(switchSection);
+  updateHeaderStatusPill();
 
   settingsOverlay.classList.add('active');
   const route = await window.go.main.SettingsApp.GetInitialRoute();

@@ -1,5 +1,8 @@
 import { state } from './state.js';
 import { PLAY_SVG, PAUSE_SVG } from './constants.js';
+import { formatTimeMMSS } from './ui_utils.js';
+
+let scrubberRaf = null;
 
 export function ensureAudioCtx() {
   if (!state.audioCtx) {
@@ -11,6 +14,10 @@ export function ensureAudioCtx() {
 }
 
 export function stopCurrentTrack() {
+  if (scrubberRaf) {
+    cancelAnimationFrame(scrubberRaf);
+    scrubberRaf = null;
+  }
   if (state.currentSource) {
     try { state.currentSource.stop(); } catch(e) {}
     state.currentSource.disconnect();
@@ -21,6 +28,8 @@ export function stopCurrentTrack() {
     const card = state.currentPlayBtn.closest('.history-card');
     if (card) {
       card.classList.remove('playing');
+      const fill = card.querySelector('.audio-scrubber-fill');
+      if (fill) fill.style.width = '0%';
     }
     state.currentPlayBtn = null;
   }
@@ -94,18 +103,41 @@ export async function playRecord(url, playBtn) {
     const source = state.audioCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(state.gainNode);
+    const startAt = state.audioCtx.currentTime;
+    const duration = audioBuffer.duration || 0;
     source.start(0);
 
     state.currentSource = source;
     state.currentPlayBtn = playBtn;
     playBtn.innerHTML = PAUSE_SVG;
 
+    const fill = card?.querySelector('.audio-scrubber-fill');
+    const timeLabel = card?.querySelector('.audio-scrubber-time');
+    const tickScrubber = () => {
+      if (state.currentSource !== source) return;
+      const elapsed = Math.min(duration, Math.max(0, state.audioCtx.currentTime - startAt));
+      if (fill && duration > 0) {
+        fill.style.width = `${(elapsed / duration) * 100}%`;
+      }
+      if (timeLabel) {
+        timeLabel.textContent = `${formatTimeMMSS(elapsed)} / ${formatTimeMMSS(duration)}`;
+      }
+      scrubberRaf = requestAnimationFrame(tickScrubber);
+    };
+    if (card && duration > 0) {
+      tickScrubber();
+    }
+
     source.onended = () => {
       if (state.currentSource === source) {
+        if (scrubberRaf) {
+          cancelAnimationFrame(scrubberRaf);
+          scrubberRaf = null;
+        }
         state.currentSource = null;
         state.currentPlayBtn = null;
         playBtn.innerHTML = PLAY_SVG;
-        const card = playBtn.closest('.history-card');
+        if (fill) fill.style.width = '0%';
         if (card) {
           card.classList.remove('playing');
         }

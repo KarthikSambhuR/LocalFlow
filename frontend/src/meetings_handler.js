@@ -1,5 +1,6 @@
 import { showCustomConfirm } from './dashboard.js';
 import { renderFullMarkdown } from './markdown_parser.js';
+import { escapeHtml, showToast } from './ui_utils.js';
 
 let meetingTimerInterval = null;
 let meetingElapsedSeconds = 0;
@@ -602,6 +603,18 @@ export async function setupMeetingsTab() {
     liveSpeakerBadge.textContent = count === 1 ? '1 speaker' : `${count} speakers`;
   };
 
+  const searchInput = document.getElementById('meetingSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      if (!pastList) return;
+      pastList.querySelectorAll('.meeting-row-card').forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = !q || text.includes(q) ? '' : 'none';
+      });
+    });
+  }
+
   // ── Meeting Card Rows List (1 per row) ──────────────────────────────────────
   const loadPastMeetings = async () => {
     if (!window.go?.main?.SettingsApp?.GetMeetingsList || !pastList) return;
@@ -836,7 +849,7 @@ export async function setupMeetingsTab() {
       }, 1000);
 
     } catch (err) {
-      alert('Error starting meeting: ' + err);
+      showToast('Error starting meeting: ' + err, 'error');
       startMeetingBtn.disabled = false;
     }
   };
@@ -861,7 +874,7 @@ export async function setupMeetingsTab() {
         showHubView();
 
       } catch (err) {
-        alert('Error ending meeting: ' + err);
+        showToast('Error ending meeting: ' + err, 'error');
         stopMeetingBtn.disabled = false;
       }
     };
@@ -889,7 +902,7 @@ export async function setupMeetingsTab() {
     } catch (err) {
       generatingMeetingIDs.delete(meetingId);
       loadPastMeetings();
-      alert('Regeneration failed: ' + err);
+      showToast('Regeneration failed: ' + err, 'error');
       if (regenSummaryBtn) regenSummaryBtn.disabled = false;
     }
   };
@@ -935,7 +948,7 @@ export async function setupMeetingsTab() {
 
   // ── Wails Event Listeners (Background & Multi-Threading) ─────────────────────
   if (window.runtime) {
-    window.runtime.EventsOn('meeting-warning', message => alert(message));
+    window.runtime.EventsOn('meeting-warning', message => showToast(message, 'warning'));
     // Mic level
     window.runtime.EventsOff('meeting-level-mic');
     window.runtime.EventsOn('meeting-level-mic', (vol) => {
@@ -1048,15 +1061,4 @@ function stripMarkdown(md) {
     .replace(/- \[[ x]\]\s*/gi, '') // checkboxes
     .replace(/\n+/g, ' ')          // newlines → spaces
     .trim();
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/[&<>"']/g, m => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  })[m]);
 }

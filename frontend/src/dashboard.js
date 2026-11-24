@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { PLAY_SVG } from './constants.js';
 import { playRecord } from './audio.js';
+import { escapeHtml, showToast } from './ui_utils.js';
 
 export function formatDurationUs(us) {
   if (!us || us <= 0) return '';
@@ -11,15 +12,6 @@ export function formatDurationUs(us) {
   } else {
     return `${(us / 1000000).toFixed(2)} s`;
   }
-}
-
-export function escapeHtml(value = '') {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 export function countWords(text = '') {
@@ -89,13 +81,52 @@ export function computeStats(records = []) {
   return { totalWords, totalMs, todayWords, wpm, streak, longest, byDay };
 }
 
+let cachedRecords = [];
+let cachedStats = null;
+let homeSearchBound = false;
+
 export async function loadDashboard(targetSection) {
-  const records = await window.go.main.SettingsApp.GetRecordings();
+  const list = document.getElementById('historyList');
+  if (list && cachedRecords.length === 0) {
+    list.innerHTML = `
+      <div class="lf-skeleton-card"></div>
+      <div class="lf-skeleton-card"></div>
+      <div class="lf-skeleton-card"></div>
+    `;
+  }
+  const [records, analytics] = await Promise.all([
+    window.go.main.SettingsApp.GetRecordings(),
+    window.go.main.SettingsApp.GetAnalytics(),
+  ]);
   const safeRecords = records || [];
-  const analytics = await window.go.main.SettingsApp.GetAnalytics();
   const safeAnalytics = analytics || [];
   const stats = computeStats(safeAnalytics);
-  renderHome(safeRecords, stats);
+  cachedRecords = safeRecords;
+  cachedStats = stats;
+
+  const searchInput = document.getElementById('homeSearchInput');
+  if (searchInput && !homeSearchBound) {
+    homeSearchBound = true;
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      const filtered = q
+        ? cachedRecords.filter(r =>
+            (r.transcription || '').toLowerCase().includes(q) ||
+            (r.raw_transcription || '').toLowerCase().includes(q)
+          )
+        : cachedRecords;
+      renderHome(filtered, cachedStats, q);
+    });
+  }
+
+  const q = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const initialRecords = q
+    ? safeRecords.filter(r =>
+        (r.transcription || '').toLowerCase().includes(q) ||
+        (r.raw_transcription || '').toLowerCase().includes(q)
+      )
+    : safeRecords;
+  renderHome(initialRecords, stats, q);
   renderInsights(stats);
 }
 
@@ -252,14 +283,20 @@ export function setupGlobalToggle() {
   }, 300);
 }
 
-export function renderHome(records, stats) {
+export function renderHome(records, stats, searchQuery = '') {
   const list = document.getElementById('historyList');
   const rail = document.getElementById('homeRail');
   if (!list) return;
-  if (rail) rail.innerHTML = renderHomeRail(stats);
+  if (rail && stats) rail.innerHTML = renderHomeRail(stats);
 
   if (!records.length) {
-    list.innerHTML = `
+    list.innerHTML = searchQuery
+      ? `
+      <div class="empty-state">
+        <h4>No matching dictations</h4>
+        <p>No transcriptions matched "${escapeHtml(searchQuery)}".</p>
+      </div>`
+      : `
       <div class="empty-state">
         <div class="empty-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -318,6 +355,10 @@ export function renderHome(records, stats) {
             <span class="transcript-refined-text">${displayFinal}</span>
             <span class="transcript-raw-text" style="display: none;">${displayRaw}</span>
             <span class="transcript-diff-text" style="display: none;">${displayDiff}</span>
+          </div>
+          <div class="audio-scrubber">
+            <div class="audio-scrubber-track"><div class="audio-scrubber-fill"></div></div>
+            <span class="audio-scrubber-time">0:00 / 0:00</span>
           </div>
         </div>
       </div>
@@ -389,7 +430,7 @@ export function renderHome(records, stats) {
               await loadDashboard();
             } catch (err) {
               console.error('Failed to update recording:', err);
-              alert('Error saving transcript: ' + err);
+              showToast('Error saving transcript: ' + err, 'error');
             }
           };
         };
@@ -408,7 +449,7 @@ export function renderHome(records, stats) {
                 await loadDashboard();
               } catch (err) {
                 console.error('Failed to delete recording:', err);
-                alert('Error deleting recording: ' + err);
+                showToast('Error deleting recording: ' + err, 'error');
               }
             }
           });

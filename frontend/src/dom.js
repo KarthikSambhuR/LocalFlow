@@ -90,14 +90,27 @@ settingsModal.innerHTML = `
     </div>
     <div class="settings-content">
     <div class="content-header">
-      <span class="section-title">Home</span>
+      <div class="header-breadcrumb">
+        <span class="crumb-root">LocalFlow</span>
+        <span class="crumb-sep">/</span>
+        <span class="section-title">Home</span>
+      </div>
+      <div class="header-status-pill" id="headerStatusPill" title="Active transcription engine">
+        <span class="header-status-dot"></span>
+        <span id="headerStatusText">Ready</span>
+      </div>
     </div>
     <div class="section" id="sec-home">
       <div class="home-layout">
         <div class="home-stats-bar" id="homeRail"></div>
         <main class="home-main">
-          <div class="recent-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div class="recent-header" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
             <div class="section-kicker" style="margin-bottom: 0;">Recent dictation</div>
+            <div class="lf-search-wrap">
+              <span class="lf-search-icon"><svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+              <input type="text" id="homeSearchInput" class="lf-search-input" placeholder="Search dictations..." />
+              <kbd class="lf-search-kbd">Ctrl+K</kbd>
+            </div>
             <div class="view-toggle" id="globalViewToggle" style="margin-top: 0;">
               <div class="toggle-pill">
                 <div class="toggle-slider" id="globalToggleSlider"></div>
@@ -127,8 +140,12 @@ settingsModal.innerHTML = `
         <div class="meeting-subview" id="meetingHubView">
           <!-- Hub Top Bar -->
           <div class="meeting-hub-header">
-            <div class="meeting-hub-title-group">
+            <div class="meeting-hub-title-group" style="display: flex; align-items: center; gap: 10px;">
               <span class="meetings-count-pill" id="pastMeetingsCount">0 meetings</span>
+              <div class="lf-search-wrap" style="max-width: 240px;">
+                <span class="lf-search-icon"><svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+                <input type="text" id="meetingSearchInput" class="lf-search-input" placeholder="Search meetings..." />
+              </div>
             </div>
             
             <div class="meeting-hub-actions">
@@ -763,16 +780,24 @@ settingsModal.innerHTML = `
               </div>
             </div>
 
-            <div class="setting-row llm-choice-setting" id="llmContextSizeSelection">
-              <div class="setting-info">
-                <span class="setting-title">Context Window</span>
-                <span class="setting-desc">Token limit for refinement memory</span>
+            <details class="settings-advanced-drawer">
+              <summary>
+                <span>Advanced LLM Options</span>
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </summary>
+              <div class="settings-advanced-body">
+                <div class="setting-row llm-choice-setting" id="llmContextSizeSelection">
+                  <div class="setting-info">
+                    <span class="setting-title">Context Window</span>
+                    <span class="setting-desc">Token limit for refinement memory</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="width: 140px;">
+                    <span id="llmContextLabel" class="badge">4K</span>
+                  </div>
+                </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <input type="range" id="llmContextSlider" min="0" max="4" step="1" value="1" class="brutal-slider" style="width: 140px;">
-                <span id="llmContextLabel" class="badge">4K</span>
-              </div>
-            </div>
+            </details>
           </div>
         </div>
 
@@ -845,13 +870,13 @@ settingsModal.innerHTML = `
           </div>
         </div>
 
-        <!-- STORAGE & RETENTION -->
-        <div class="settings-group-section">
-          <div class="settings-section-header">
-            <span class="settings-section-tag">Storage & Retention</span>
-            <p class="settings-section-desc">Manage local audio recordings, history retention, and database cache</p>
-          </div>
-          <div class="settings-card">
+        <!-- STORAGE & RETENTION (Progressive Disclosure) -->
+        <details class="settings-advanced-drawer">
+          <summary>
+            <span>Storage, Retention &amp; Data Folder</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </summary>
+          <div class="settings-advanced-body">
             <div class="setting-row">
               <div class="setting-info">
                 <span class="setting-title">Audio Retention</span>
@@ -917,7 +942,7 @@ settingsModal.innerHTML = `
               </button>
             </div>
           </div>
-        </div>
+        </details>
 
       </div>
     </div>
