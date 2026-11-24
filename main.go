@@ -39,13 +39,6 @@ func main() {
 		}
 	}
 
-	// Initialize ONNX Runtime environment
-	if err := InitONNXEnvironment(); err != nil {
-		println("Warning: ONNX Runtime initialization failed:", err.Error())
-	} else {
-		defer DestroyONNXEnvironment()
-	}
-
 	// Unset any inherited visible devices so we can enumerate all GPUs
 	os.Unsetenv("GGML_VK_VISIBLE_DEVICES")
 
@@ -97,6 +90,11 @@ func main() {
 	}
 	if launchHome {
 		startDetachedHomeWindow()
+	}
+	if err := InitONNXEnvironment(); err != nil {
+		println("Warning: ONNX Runtime initialization failed:", err.Error())
+	} else {
+		defer DestroyONNXEnvironment()
 	}
 	runPillOverlay(checkMutex)
 }
@@ -178,39 +176,18 @@ func runSettingsWindow(route string) {
 	// Load saved window geometry so we can pass it as the initial size.
 	cfg := loadConfig()
 
-	// assetHandler serves WAV files and custom TrueType font files from the local storage
-	// directory via the Wails AssetServer. This avoids WebView2 CORS blocks.
+	// assetHandler serves WAV files from the local audio cache directory via the
+	// Wails AssetServer using http.ServeFile for streaming and Range seeking.
 	assetHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/audio/") {
 			fileName := strings.TrimPrefix(r.URL.Path, "/audio/")
 			filePath := filepath.Join(audioCacheDir, filepath.Base(fileName))
-			data, err := os.ReadFile(filePath)
-			if err != nil {
+			if _, err := os.Stat(filePath); err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			w.Header().Set("Content-Type", "audio/wav")
 			w.Header().Set("Cache-Control", "no-store")
-			w.Write(data)
-			return
-		}
-
-		if strings.HasPrefix(r.URL.Path, "/fonts/") {
-			fileName := strings.TrimPrefix(r.URL.Path, "/fonts/")
-			cfg := loadConfig()
-			dataDir := getBaseAppDir()
-			if cfg.DataFolder != "" && cfg.DataFolder != "Default" {
-				dataDir = cfg.DataFolder
-			}
-			filePath := filepath.Join(dataDir, "fonts", filepath.Base(fileName))
-			data, err := os.ReadFile(filePath)
-			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			w.Header().Set("Content-Type", "font/ttf")
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
-			w.Write(data)
+			http.ServeFile(w, r, filePath)
 			return
 		}
 

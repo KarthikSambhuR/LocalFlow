@@ -1205,22 +1205,11 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 			dataDir = cfg.DataFolder
 		}
 
-		fontsDir := filepath.Join(dataDir, "fonts")
 		modelsDir := filepath.Join(dataDir, "models")
-		_ = os.MkdirAll(fontsDir, 0755)
 		_ = os.MkdirAll(modelsDir, 0755)
 
-		// 1. Download Urbanist Variable Font
-		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 0, "Downloading Urbanist font...")
-		urbanistURL := "https://raw.githubusercontent.com/google/fonts/main/ofl/urbanist/Urbanist%5Bwght%5D.ttf"
-		urbanistPath := filepath.Join(fontsDir, "Urbanist-Variable.ttf")
-		if err := downloadFileDirect(urbanistURL, urbanistPath); err != nil {
-			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download Urbanist font: %v", err))
-			return
-		}
-
-		// 3. Download Whisper Tiny Model
-		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 20, "Downloading default Whisper Tiny model (75 MB)...")
+		// Download Whisper Tiny Model (Urbanist font is already bundled in frontend/public/fonts)
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 5, "Downloading default Whisper Tiny model (75 MB)...")
 
 		var tinyModel *WhisperModelInfo
 		for i := range AvailableModels {
@@ -1265,10 +1254,9 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 			StartTime:  startTime,
 			LastUpdate: startTime,
 			OnProgress: func(percent int, speed float64, eta time.Duration) {
-				overallPercent := 20 + int(float64(percent)*0.8)
 				speedStr := formatBytes(speed) + "/s"
 				etaStr := formatDuration(eta)
-				wailsRuntime.EventsEmit(s.ctx, "setup-progress", overallPercent, fmt.Sprintf("Downloading Whisper Tiny model... %d%% (%s, ETA: %s)", percent, speedStr, etaStr))
+				wailsRuntime.EventsEmit(s.ctx, "setup-progress", percent, fmt.Sprintf("Downloading Whisper Tiny model... %d%% (%s, ETA: %s)", percent, speedStr, etaStr))
 			},
 		}
 
@@ -1292,27 +1280,6 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 100, "Downloads complete!")
 		wailsRuntime.EventsEmit(s.ctx, "setup-done")
 	}()
-}
-
-func downloadFileDirect(url string, filepath string) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
 }
 
 func (s *SettingsApp) AddDictionaryWord(word string) error {

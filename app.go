@@ -356,34 +356,22 @@ func getOrStartLLMServer(cfg Config) int {
 	return 0
 }
 
-// startSettingsLLMServer starts llama-server for the SettingsApp window when the
-// pill overlay process is not running. It mirrors App.startLLMServer but uses the
-// package-level settingsLLMState instead of an App struct.
-func startSettingsLLMServer(cfg Config) {
-	settingsLLMState.Lock()
-	defer settingsLLMState.Unlock()
-
-	// Kill any previous instance
-	if settingsLLMState.cmd != nil && settingsLLMState.cmd.Process != nil {
-		_ = settingsLLMState.cmd.Process.Kill()
-		_ = settingsLLMState.cmd.Wait()
-		settingsLLMState.cmd = nil
-		settingsLLMState.port = 0
-		removeLlamaServerPort()
-	}
-
+// launchLlamaServerProcess resolves the model, allocates a free port, starts
+// llama-server.exe, enrolls it in the job object, and polls /health asynchronously
+// before invoking onReady(readyPort, cmd).
+func launchLlamaServerProcess(cfg Config, modelsDir string, isGemmaAudioSTT bool, onReady func(readyPort int, cmd *exec.Cmd)) (*exec.Cmd, string, error) {
 	activeLLM := cfg.LLMActiveModel
+	if isGemmaAudioSTT {
+		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	}
 	if activeLLM == "" {
-		activeLLM = "s1-mini-q4_k_m.gguf"
+		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 	}
 
-	modelsDir := getModelsDirectory()
 	modelPath := filepath.Join(modelsDir, activeLLM)
 	if _, err := os.Stat(modelPath); err != nil {
-		// Try s1-mini or Gemma default, then any .gguf
 		found := false
-		candidates := []string{"s1-mini-q4_k_m.gguf", "gemma-4-E2B-it-UD-Q4_K_XL.gguf"}
-		for _, cand := range candidates {
+		for _, cand := range []string{"gemma-4-E2B-it-UD-Q4_K_XL.gguf", "s1-mini-q4_k_m.gguf"} {
 			candidatePath := filepath.Join(modelsDir, cand)
 			if _, e := os.Stat(candidatePath); e == nil {
 				modelPath = candidatePath
@@ -394,33 +382,29 @@ func startSettingsLLMServer(cfg Config) {
 		}
 		if !found {
 			entries, _ := os.ReadDir(modelsDir)
-			for _, entry := range entries {
-				name := entry.Name()
-				if !entry.IsDir() && strings.HasSuffix(strings.ToLower(name), ".gguf") && !strings.Contains(strings.ToLower(name), "mmproj") {
+			for _, e := range entries {
+				name := e.Name()
+				if !e.IsDir() && strings.HasSuffix(strings.ToLower(name), ".gguf") && !strings.Contains(strings.ToLower(name), "mmproj") {
 					modelPath = filepath.Join(modelsDir, name)
 					activeLLM = name
 					found = true
 					break
 				}
 			}
-			if !found {
-				fmt.Printf("startSettingsLLMServer: no .gguf model found in %s\n", modelsDir)
-				return
-			}
+		}
+		if !found {
+			return nil, "", fmt.Errorf("no .gguf model found in %s", modelsDir)
 		}
 	}
 
 	port, err := findFreePort()
 	if err != nil {
-		fmt.Printf("startSettingsLLMServer: cannot find free port: %v\n", err)
-		return
+		return nil, "", fmt.Errorf("cannot find free port: %w", err)
 	}
 
-	// Locate llama-server.exe
 	exePath := findLlamaServerExe()
 	if exePath == "" {
-		fmt.Println("startSettingsLLMServer: llama-server.exe not found")
-		return
+		exePath = "llama-server.exe"
 	}
 
 	gpuLayers := 0
@@ -453,23 +437,26 @@ func startSettingsLLMServer(cfg Config) {
 		"--jinja",
 	}
 
-	// Attach mmproj if Gemma multimodal
-	if strings.Contains(strings.ToLower(activeLLM), "gemma") {
+	if isGemmaAudioSTT || strings.Contains(strings.ToLower(activeLLM), "gemma") {
 		mmprojPath := filepath.Join(modelsDir, "gemma-4-e2b-mmproj-BF16.gguf")
-		if _, e := os.Stat(mmprojPath); e == nil {
+		if _, err := os.Stat(mmprojPath); err == nil {
 			args = append(args, "--mmproj", mmprojPath)
 		}
 	}
 
-	fmt.Printf("startSettingsLLMServer: %s %s (GPU index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
+	fmt.Printf("Starting llama-server: %s %s (GPU device index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
 	cmd := exec.Command(exePath, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000,
+	}
 
 	env := os.Environ()
 	dllDir := filepath.Dir(exePath)
 	if !strings.HasSuffix(strings.ToLower(dllDir), "dll") {
-		if _, e := os.Stat(filepath.Join(dllDir, "dll")); e == nil {
-			dllDir = filepath.Join(dllDir, "dll")
+		candidateDll := filepath.Join(dllDir, "dll")
+		if _, err := os.Stat(candidateDll); err == nil {
+			dllDir = candidateDll
 		}
 	}
 	env = append(env, fmt.Sprintf("PATH=%s;%s", dllDir, os.Getenv("PATH")))
@@ -481,15 +468,10 @@ func startSettingsLLMServer(cfg Config) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("startSettingsLLMServer: failed to start: %v\n", err)
-		return
+		return nil, "", fmt.Errorf("failed to start llama-server: %w", err)
 	}
 	assignToJobObject(cmd)
-
-	settingsLLMState.cmd = cmd
-	settingsLLMState.port = 0 // set once health check passes
-	settingsLLMState.activeModel = activeLLM
-	fmt.Printf("startSettingsLLMServer: PID %d on port %d\n", cmd.Process.Pid, port)
+	fmt.Println("llama-server.exe started successfully with PID:", cmd.Process.Pid, "on port:", port)
 
 	go func(readyPort int, startedCmd *exec.Cmd) {
 		healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", readyPort)
@@ -505,20 +487,49 @@ func startSettingsLLMServer(cfg Config) {
 			if err == nil {
 				resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {
-					settingsLLMState.Lock()
-					if settingsLLMState.cmd == startedCmd {
-						settingsLLMState.port = readyPort
-						writeLlamaServerPort(readyPort)
-						fmt.Printf("startSettingsLLMServer: ready on port %d\n", readyPort)
-					}
-					settingsLLMState.Unlock()
+					onReady(readyPort, startedCmd)
 					return
 				}
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
-		fmt.Println("startSettingsLLMServer: health check timed out")
+		fmt.Println("llama-server readiness timeout: server did not become ready within 120 seconds")
 	}(port, cmd)
+
+	return cmd, activeLLM, nil
+}
+
+// startSettingsLLMServer starts llama-server for the SettingsApp window when the
+// pill overlay process is not running.
+func startSettingsLLMServer(cfg Config) {
+	settingsLLMState.Lock()
+	defer settingsLLMState.Unlock()
+
+	if settingsLLMState.cmd != nil && settingsLLMState.cmd.Process != nil {
+		_ = settingsLLMState.cmd.Process.Kill()
+		_ = settingsLLMState.cmd.Wait()
+		settingsLLMState.cmd = nil
+		settingsLLMState.port = 0
+		removeLlamaServerPort()
+	}
+
+	cmd, activeLLM, err := launchLlamaServerProcess(cfg, getModelsDirectory(), false, func(readyPort int, startedCmd *exec.Cmd) {
+		settingsLLMState.Lock()
+		if settingsLLMState.cmd == startedCmd {
+			settingsLLMState.port = readyPort
+			writeLlamaServerPort(readyPort)
+			fmt.Printf("startSettingsLLMServer: ready on port %d\n", readyPort)
+		}
+		settingsLLMState.Unlock()
+	})
+	if err != nil {
+		fmt.Printf("startSettingsLLMServer: %v\n", err)
+		return
+	}
+
+	settingsLLMState.cmd = cmd
+	settingsLLMState.port = 0
+	settingsLLMState.activeModel = activeLLM
 }
 
 // findLlamaServerExe locates llama-server.exe using the same search order as App.startLLMServer.
@@ -2357,208 +2368,23 @@ func (a *App) startLLMServer(cfg Config) {
 	}
 
 	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-	activeLLM := cfg.LLMActiveModel
-	if isGemmaAudioSTT {
-		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-	}
-
-	if activeLLM == "" {
-		activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-	}
-
-	modelPath := filepath.Join(a.getModelsDir(), activeLLM)
-	if _, err := os.Stat(modelPath); err != nil {
-		// Fallback: check if gemma exists or any .gguf file exists in models directory
-		found := false
-		gemmaCandidate := filepath.Join(a.getModelsDir(), "gemma-4-E2B-it-UD-Q4_K_XL.gguf")
-		if _, errG := os.Stat(gemmaCandidate); errG == nil {
-			modelPath = gemmaCandidate
-			activeLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-			found = true
-		} else {
-			entries, _ := os.ReadDir(a.getModelsDir())
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".gguf") && !strings.Contains(strings.ToLower(e.Name()), "mmproj") {
-					modelPath = filepath.Join(a.getModelsDir(), e.Name())
-					activeLLM = e.Name()
-					found = true
-					break
-				}
-			}
+	cmd, _, err := launchLlamaServerProcess(cfg, a.getModelsDir(), isGemmaAudioSTT, func(readyPort int, startedCmd *exec.Cmd) {
+		a.llmMutex.Lock()
+		if a.llmCmd == startedCmd {
+			a.llmPort = readyPort
+			writeLlamaServerPort(readyPort)
+			fmt.Printf("llama-server is ready on port %d\n", readyPort)
 		}
-
-		if !found {
-			fmt.Printf("Cannot start llama-server: model file %s does not exist in %s\n", activeLLM, a.getModelsDir())
-			return
-		}
-	}
-
-	port, err := findFreePort()
+		a.llmMutex.Unlock()
+	})
 	if err != nil {
-		fmt.Printf("Failed to find a free port for llama-server: %v\n", err)
+		fmt.Printf("Cannot start llama-server: %v\n", err)
 		return
 	}
-
-	exePath := ""
-	// 1. Try relative to CWD
-	p1 := filepath.Join("lib", "llama-server.exe")
-	p2 := filepath.Join("lib", "dll", "llama-server.exe")
-	if _, err := os.Stat(p1); err == nil {
-		exePath = p1
-	} else if _, err := os.Stat(p2); err == nil {
-		exePath = p2
-	}
-
-	// 2. Try relative to exe dir
-	if exePath == "" {
-		if exe, err := os.Executable(); err == nil {
-			exeDir := filepath.Dir(exe)
-			p1 := filepath.Join(exeDir, "lib", "llama-server.exe")
-			p2 := filepath.Join(exeDir, "lib", "dll", "llama-server.exe")
-			p3 := filepath.Join(exeDir, "llama-server.exe")
-			if _, err := os.Stat(p1); err == nil {
-				exePath = p1
-			} else if _, err := os.Stat(p2); err == nil {
-				exePath = p2
-			} else if _, err := os.Stat(p3); err == nil {
-				exePath = p3
-			}
-		}
-	}
-
-	// 3. Look in PATH
-	if exePath == "" {
-		pathEnv := os.Getenv("PATH")
-		for _, dir := range filepath.SplitList(pathEnv) {
-			p := filepath.Join(dir, "llama-server.exe")
-			if _, err := os.Stat(p); err == nil {
-				exePath = p
-				break
-			}
-			// If this PATH directory is "lib/dll", check its parent "lib"
-			dirLower := strings.ToLower(dir)
-			if strings.HasSuffix(dirLower, filepath.Join("lib", "dll")) || strings.HasSuffix(dirLower, "lib/dll") {
-				parentDir := filepath.Dir(dir)
-				p = filepath.Join(parentDir, "llama-server.exe")
-				if _, err := os.Stat(p); err == nil {
-					exePath = p
-					break
-				}
-			}
-		}
-	}
-
-	if exePath == "" {
-		exePath = "llama-server.exe"
-	}
-
-	gpuLayers := 0
-	gpuIndex := 0
-	if cfg.ProcessingEngine == "vulkan" {
-		gpuLayers = 999
-		if cfg.SelectedGPU != "Default" {
-			gpus := GetGPUDevicesList()
-			for i, name := range gpus {
-				if name == cfg.SelectedGPU {
-					gpuIndex = i
-					break
-				}
-			}
-		}
-	}
-
-	args := []string{
-		"-m", modelPath,
-		"-ngl", fmt.Sprintf("%d", gpuLayers),
-		"--port", fmt.Sprintf("%d", port),
-		"--host", "127.0.0.1",
-		"-c", fmt.Sprintf("%d", cfg.LLMContextSize),
-		"--reasoning", "off",
-		"--jinja",
-	}
-
-	// Load mmproj if exists and using Gemma multimodal model
-	if isGemmaAudioSTT || strings.Contains(strings.ToLower(activeLLM), "gemma") {
-		mmprojName := "gemma-4-e2b-mmproj-BF16.gguf"
-		mmprojPath := filepath.Join(a.getModelsDir(), mmprojName)
-		if _, err := os.Stat(mmprojPath); err == nil {
-			args = append(args, "--mmproj", mmprojPath)
-		}
-	}
-
-	fmt.Printf("Starting llama-server: %s %s (GPU device index: %d)\n", exePath, strings.Join(args, " "), gpuIndex)
-	cmd := exec.Command(exePath, args...)
-
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: 0x08000000,
-	}
-
-	env := os.Environ()
-	// Ensure lib/dll directory is in PATH for llama-server dependencies
-	dllDir := filepath.Dir(exePath)
-	if !strings.HasSuffix(strings.ToLower(dllDir), "dll") {
-		candidateDll := filepath.Join(dllDir, "dll")
-		if _, err := os.Stat(candidateDll); err == nil {
-			dllDir = candidateDll
-		}
-	}
-	currentPath := os.Getenv("PATH")
-	env = append(env, fmt.Sprintf("PATH=%s;%s", dllDir, currentPath))
-
-	if cfg.ProcessingEngine == "vulkan" {
-		env = append(env, fmt.Sprintf("GGML_VK_VISIBLE_DEVICES=%d", gpuIndex))
-	}
-	cmd.Env = env
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Start()
-	if err != nil {
-		fmt.Printf("Failed to start llama-server: %v\n", err)
-		return
-	}
-
-	// Enroll in the Windows Job Object so the OS kills llama-server automatically
-	// if this process exits for any reason (crash, kill, panic, etc.).
-	assignToJobObject(cmd)
 
 	a.llmCmd = cmd
-	a.llmPort = 0 // Not ready yet; will be set once health check passes
+	a.llmPort = 0
 	a.runningLLMConfig = cfg
-	fmt.Println("llama-server.exe started successfully with PID:", cmd.Process.Pid, "on port:", port)
-
-	// Wait for the server to become ready in the background before enabling the port.
-	go func(readyPort int) {
-		healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", readyPort)
-		client := &http.Client{
-			Timeout: 3 * time.Second,
-			Transport: &http.Transport{
-				DisableKeepAlives: true,
-			},
-		}
-		deadline := time.Now().Add(120 * time.Second)
-		for time.Now().Before(deadline) {
-			resp, err := client.Get(healthURL)
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					a.llmMutex.Lock()
-					// Only publish the port if this is still the active server process.
-					if a.llmCmd == cmd {
-						a.llmPort = readyPort
-						writeLlamaServerPort(readyPort)
-						fmt.Printf("llama-server is ready on port %d\n", readyPort)
-					}
-					a.llmMutex.Unlock()
-					return
-				}
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-		fmt.Println("llama-server readiness timeout: server did not become ready within 120 seconds")
-	}(port)
 }
 
 func (a *App) syncLLMServerStateAsync(cfg Config) {
