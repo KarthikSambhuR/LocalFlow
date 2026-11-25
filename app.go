@@ -359,6 +359,10 @@ func getOrStartLLMServer(cfg Config) int {
 	return 0
 }
 
+func isGemmaAudioSTTModel(activeModel string) bool {
+	return activeModel == "gemma-4-e2b-mmproj-BF16.gguf" || activeModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+}
+
 // launchLlamaServerProcess resolves the model, allocates a free port, starts
 // llama-server.exe, enrolls it in the job object, and polls /health asynchronously
 // before invoking onReady(readyPort, cmd).
@@ -1469,12 +1473,7 @@ func (a *App) ensureActiveModel() {
 		activeModel = "ggml-tiny.en.bin"
 	}
 
-	if activeModel == "gemma-4-e2b-mmproj-BF16.gguf" || activeModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf" {
-		activeModel = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
-		if cfg.ActiveModel != activeModel {
-			cfg.ActiveModel = activeModel
-			_ = saveConfig(cfg)
-		}
+	if isGemmaAudioSTTModel(activeModel) {
 		return
 	}
 
@@ -1721,26 +1720,16 @@ func (a *App) transcribe() {
 	// rawResult holds the unmodified Whisper output; result may be overwritten by LLM.
 	rawResult := result
 
-	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	isGemmaAudioSTT := isGemmaAudioSTTModel(cfg.ActiveModel)
 	var llmTimeUs int64
 	if isGemmaAudioSTT && result != "" {
 		runtime.EventsEmit(a.ctx, "recording-state", "refining")
-		a.llmMutex.Lock()
-		port := a.llmPort
-		a.llmMutex.Unlock()
+		port := a.waitForLLMServerPort(60 * time.Second)
 
 		if port > 0 {
 			llmStart := time.Now()
 			url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
-			var prompt string
-			if cfg.LLMEnabled {
-				translitMappings, _ := GetTransliterations()
-				manglishEnabled := cfg.ManglishEnabled
-				onlyMalayalam := containsMalayalam(result) && !manglishEnabled
-				prompt = getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5)
-			} else {
-				prompt = "You are a precise editor for speech-to-text dictation. The user speaks Malayalam and English. You are given a sequence of transcribed audio chunks joined together. Review the text and fix any grammatical flow issues, punctuation, or missing words/incomplete words at the chunk boundaries. Do not rewrite the text, do not translate it, and do not add any comments. Output ONLY the polished Malayalam or English text."
-			}
+			prompt := buildGemmaAudioConsolidationPrompt(cfg, dictWords, result)
 			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
 			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {
@@ -2295,7 +2284,7 @@ func (a *App) startLLMServer(cfg Config) {
 		a.llmPort = 0
 	}
 
-	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	isGemmaAudioSTT := isGemmaAudioSTTModel(cfg.ActiveModel)
 	cmd, _, err := launchLlamaServerProcess(cfg, a.getModelsDir(), isGemmaAudioSTT, func(readyPort int, startedCmd *exec.Cmd) {
 		a.llmMutex.Lock()
 		if a.llmCmd == startedCmd {
@@ -2331,7 +2320,7 @@ func (a *App) syncLLMServerState(cfg Config) {
 	runningCfg := a.runningLLMConfig
 	a.llmMutex.Unlock()
 
-	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	isGemmaAudioSTT := isGemmaAudioSTTModel(cfg.ActiveModel)
 	shouldRun := cfg.LLMEnabled || isGemmaAudioSTT || isMeetingLLMBusy()
 
 	if isRunning && !shouldRun {
@@ -2346,7 +2335,7 @@ func (a *App) syncLLMServerState(cfg Config) {
 		}
 
 		runningLLM := runningCfg.LLMActiveModel
-		if runningCfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf" {
+		if isGemmaAudioSTTModel(runningCfg.ActiveModel) {
 			runningLLM = "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
 		}
 
@@ -2540,7 +2529,7 @@ func (a *App) transcribeChunk(chunk []float32) string {
 		whisperBuf = boosted
 	}
 
-	isGemmaAudioSTT := cfg.ActiveModel == "gemma-4-E2B-it-UD-Q4_K_XL.gguf"
+	isGemmaAudioSTT := isGemmaAudioSTTModel(cfg.ActiveModel)
 	if isGemmaAudioSTT {
 		text, err := a.transcribeAudioWithGemma(whisperBuf)
 		if err != nil {
@@ -2685,11 +2674,99 @@ func encodeAudioToBase64Wav(samples []float32) (string, error) {
 	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-func (a *App) transcribeAudioWithGemma(samples []float32) (string, error) {
-	a.llmMutex.Lock()
-	port := a.llmPort
-	a.llmMutex.Unlock()
+func (a *App) waitForLLMServerPort(timeout time.Duration) int {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		a.llmMutex.Lock()
+		port := a.llmPort
+		hasCmd := a.llmCmd != nil && a.llmCmd.Process != nil
+		a.llmMutex.Unlock()
 
+		if port > 0 {
+			return port
+		}
+		if !hasCmd {
+			a.syncLLMServerStateAsync(loadConfig())
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return 0
+}
+
+func buildGemmaAudioChunkPrompt(cfg Config) string {
+	lang := strings.TrimSpace(cfg.GemmaAudioLanguage)
+	if lang == "" {
+		lang = "auto"
+	}
+
+	var langInstr string
+	if strings.EqualFold(lang, "auto") {
+		langInstr = "Automatically detect the spoken language (including English, Malayalam, and any of the 22 scheduled languages of India) and transcribe accurately in that detected language and its native script."
+		if cfg.GemmaAudioManglish {
+			langInstr += " However, if the spoken language is Malayalam, transcribe it in natural Manglish (Malayalam written in Latin/English script mixed with English) instead of Malayalam script."
+		}
+	} else if strings.EqualFold(lang, "Malayalam") && cfg.GemmaAudioManglish {
+		langInstr = "The speaker is speaking Malayalam (possibly mixed with English). Transcribe into natural Manglish (Malayalam written in Latin/English script, keeping English words as-is). Do NOT use Malayalam script."
+	} else if strings.EqualFold(lang, "English") {
+		langInstr = "The speaker is speaking English. Transcribe accurately in English."
+	} else {
+		langInstr = fmt.Sprintf("The speaker is speaking %s. Transcribe accurately in %s using its native script.", lang, lang)
+		if cfg.GemmaAudioManglish {
+			langInstr += " If any Malayalam is spoken, write the Malayalam parts in natural Manglish (Latin/English script)."
+		}
+	}
+
+	return fmt.Sprintf(
+		"You are a precise speech transcriber. %s Fix any grammar issues, punctuation, or misheard words that do not fit the surrounding context while preserving the speaker's exact meaning. Output ONLY the transcribed text. Do not translate into another language, and do not write explanations, comments, or tags.",
+		langInstr,
+	)
+}
+
+func buildGemmaAudioConsolidationPrompt(cfg Config, dictWords []string, rawResult string) string {
+	lang := strings.TrimSpace(cfg.GemmaAudioLanguage)
+	if lang == "" {
+		lang = "auto"
+	}
+	manglishEnabled := cfg.GemmaAudioManglish || cfg.ManglishEnabled
+
+	if cfg.LLMEnabled {
+		translitMappings, _ := GetTransliterations()
+		onlyMalayalam := (strings.EqualFold(lang, "Malayalam") || containsMalayalam(rawResult)) && !manglishEnabled
+		return getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5)
+	}
+
+	var langInstr string
+	if strings.EqualFold(lang, "auto") {
+		langInstr = "Keep the text in the exact language(s) spoken (supporting English, Malayalam, and all 22 scheduled Indian languages)."
+		if cfg.GemmaAudioManglish {
+			langInstr += " Ensure any Malayalam is written in natural Manglish (Latin/English script) rather than Malayalam script."
+		}
+	} else if strings.EqualFold(lang, "Malayalam") && cfg.GemmaAudioManglish {
+		langInstr = "Ensure the output is in natural Manglish (Malayalam written in Latin/English script mixed with English, never Malayalam script)."
+	} else {
+		langInstr = fmt.Sprintf("Ensure the output strictly matches %s.", lang)
+	}
+
+	if cfg.GemmaAudioManglish {
+		examples := []string{}
+		for _, ex := range []string{cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5} {
+			if strings.TrimSpace(ex) != "" {
+				examples = append(examples, strings.TrimSpace(ex))
+			}
+		}
+		if len(examples) > 0 {
+			langInstr += " Match this Manglish style: " + strings.Join(examples, " | ") + "."
+		}
+	}
+
+	return fmt.Sprintf(
+		"You are a precise editor for speech-to-text dictation. You are given a sequence of transcribed audio chunks joined together. %s Review the text to fix grammar, punctuation, chunk-boundary issues, and any words that do not fit the surrounding context. Do not rewrite the meaning, do not translate into another language, and do not add any comments. Output ONLY the polished text.",
+		langInstr,
+	)
+}
+
+func (a *App) transcribeAudioWithGemma(samples []float32) (string, error) {
+	port := a.waitForLLMServerPort(60 * time.Second)
 	if port == 0 {
 		return "", fmt.Errorf("llama-server is not ready")
 	}
@@ -2699,6 +2776,7 @@ func (a *App) transcribeAudioWithGemma(samples []float32) (string, error) {
 		return "", err
 	}
 
+	cfg := loadConfig()
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
 
 	reqBody := LLMMultimodalRequest{
@@ -2716,7 +2794,7 @@ func (a *App) transcribeAudioWithGemma(samples []float32) (string, error) {
 					},
 					{
 						Type: "text",
-						Text: "You are a precise speech transcriber. The user speaks Malayalam and English. Transcribe this audio chunk exactly into either Malayalam or English script (depending on what is spoken). Output ONLY the raw transcription text. Do not translate. Do not write explanations, comments, or tags.",
+						Text: buildGemmaAudioChunkPrompt(cfg),
 					},
 				},
 			},

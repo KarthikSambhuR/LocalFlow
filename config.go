@@ -79,6 +79,8 @@ type Config struct {
 	BilingualRoutingEnabled    bool    `json:"bilingual_routing_enabled"`
 	BilingualWhisperModel      string  `json:"bilingual_whisper_model"`
 	BilingualConformerModel    string  `json:"bilingual_conformer_model"`
+	GemmaAudioLanguage         string  `json:"gemma_audio_language"`
+	GemmaAudioManglish         bool    `json:"gemma_audio_manglish"`
 
 	// Meeting-specific model configurations (independent of user dictation settings)
 	MeetingModel               string  `json:"meeting_model"`
@@ -122,6 +124,8 @@ func loadConfig() Config {
 		BilingualRoutingEnabled:    false,
 		BilingualWhisperModel:      "ggml-tiny.en.bin",
 		BilingualConformerModel:    "indicconformer.int8.onnx",
+		GemmaAudioLanguage:         "auto",
+		GemmaAudioManglish:         false,
 		MeetingModel:               "ggml-tiny.en.bin",
 		MeetingBilingual:           false,
 		MeetingLLMModel:            "gemma-4-E2B-it-UD-Q4_K_XL.gguf",
@@ -224,6 +228,9 @@ func loadConfig() Config {
 	}
 	if cfg.BilingualWhisperModel == "" {
 		cfg.BilingualWhisperModel = "ggml-tiny.en.bin"
+	}
+	if cfg.GemmaAudioLanguage == "" {
+		cfg.GemmaAudioLanguage = "auto"
 	}
 	if cfg.BilingualConformerModel == "" {
 		cfg.BilingualConformerModel = "indicconformer.int8.onnx"

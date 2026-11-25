@@ -758,6 +758,19 @@ const MODEL_FAMILIES_DEF = [
     ]
   },
   {
+    familyId: 'gemma4-audio',
+    type: 'whisper',
+    name: 'Gemma 4 E2B (Direct Audio)',
+    provider: 'Google',
+    iconKey: 'google',
+    iconClass: 'provider-google',
+    description: 'Direct audio-to-text transcription using Gemma 4 E2B mmproj.',
+    variantMatcher: (m) => m.id === 'gemma4-e2b-audio',
+    variants: [
+      { label: 'mmproj BF16', id: 'gemma4-e2b-audio' }
+    ]
+  },
+  {
     familyId: 's1-mini',
     type: 'llm',
     name: 'S1-mini Normalizer',
@@ -778,10 +791,9 @@ const MODEL_FAMILIES_DEF = [
     iconKey: 'google',
     iconClass: 'provider-google',
     description: 'High-intelligence reasoning and grammar refinement.',
-    variantMatcher: (m) => m.id.startsWith('gemma4'),
+    variantMatcher: (m) => m.id === 'gemma4-e2b',
     variants: [
-      { label: 'E2B Refinement', id: 'gemma4-e2b' },
-      { label: 'Direct Audio STT', id: 'gemma4-e2b-audio' }
+      { label: 'E2B Q4_K_XL', id: 'gemma4-e2b' }
     ]
   },
   {
@@ -837,6 +849,33 @@ function whisperVariantCategory(variant, model) {
   return 'multi';
 }
 
+const GEMMA_AUDIO_LANGUAGES = [
+  { value: 'auto', label: 'Auto-Detect (Recommended)' },
+  { value: 'English', label: 'English' },
+  { value: 'Malayalam', label: 'Malayalam' },
+  { value: 'Assamese', label: 'Assamese' },
+  { value: 'Bengali', label: 'Bengali' },
+  { value: 'Bodo', label: 'Bodo' },
+  { value: 'Dogri', label: 'Dogri' },
+  { value: 'Gujarati', label: 'Gujarati' },
+  { value: 'Hindi', label: 'Hindi' },
+  { value: 'Kannada', label: 'Kannada' },
+  { value: 'Kashmiri', label: 'Kashmiri' },
+  { value: 'Konkani', label: 'Konkani' },
+  { value: 'Maithili', label: 'Maithili' },
+  { value: 'Manipuri (Meitei)', label: 'Manipuri (Meitei)' },
+  { value: 'Marathi', label: 'Marathi' },
+  { value: 'Nepali', label: 'Nepali' },
+  { value: 'Odia', label: 'Odia' },
+  { value: 'Punjabi', label: 'Punjabi' },
+  { value: 'Sanskrit', label: 'Sanskrit' },
+  { value: 'Santali', label: 'Santali' },
+  { value: 'Sindhi', label: 'Sindhi' },
+  { value: 'Tamil', label: 'Tamil' },
+  { value: 'Telugu', label: 'Telugu' },
+  { value: 'Urdu', label: 'Urdu' },
+];
+
 let modelsEventsRegistered = false;
 let latestRenderModels = null;
 
@@ -851,7 +890,10 @@ export async function setupModelsSettings() {
   const renderModels = async () => {
     if (!window.go?.main?.SettingsApp) return;
     try {
-      const allModels = await window.go.main.SettingsApp.GetModelsList() || [];
+      const [allModels, cfg] = await Promise.all([
+        window.go.main.SettingsApp.GetModelsList().then(res => res || []),
+        window.go.main.SettingsApp.GetConfig().catch(() => null),
+      ]);
       const modelMap = {};
       allModels.forEach(m => { modelMap[m.id] = m; });
 
@@ -987,6 +1029,26 @@ export async function setupModelsSettings() {
           `;
         }
 
+        const gemmaLang = cfg?.gemma_audio_language || 'auto';
+        const gemmaManglish = cfg?.gemma_audio_manglish || false;
+        const gemmaOptionsHtml = (fam.familyId === 'gemma4-audio' && mode === 'downloaded') ? `
+          <div class="model-variant-toolbar" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+            <div class="model-variant-selector-row" style="margin: 0;">
+              <span class="model-variant-selector-label">Language</span>
+              <select id="gemmaAudioLangSelect" style="background: var(--bg-elevated, #1a1a1a); color: var(--text-primary, #fff); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; outline: none;">
+                ${GEMMA_AUDIO_LANGUAGES.map(l => `<option value="${escapeHtml(l.value)}" ${gemmaLang === l.value ? 'selected' : ''}>${escapeHtml(l.label)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="model-variant-selector-row" style="margin: 0; gap: 10px;">
+              <span class="model-variant-selector-label" title="Write Malayalam speech in Latin/English script (Manglish)">Manglish</span>
+              <label class="toggle-switch" title="Write Malayalam speech in Latin/English script (Manglish)">
+                <input type="checkbox" id="gemmaAudioManglishToggle" ${gemmaManglish ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+          </div>
+        ` : '';
+
         card.innerHTML = `
           <div class="model-family-header">
             <div class="model-family-identity">
@@ -1009,6 +1071,7 @@ export async function setupModelsSettings() {
               ${layer1Html}
               ${layer2Html}
             </div>
+            ${gemmaOptionsHtml}
 
             <div class="model-variant-details-bar">
               <div class="model-variant-meta">
@@ -1196,6 +1259,28 @@ export async function setupModelsSettings() {
         });
 
         bindActionButtons();
+
+        const gemmaLangSelect = card.querySelector('#gemmaAudioLangSelect');
+        if (gemmaLangSelect) {
+          gemmaLangSelect.onchange = async (e) => {
+            e.stopPropagation();
+            if (window.go?.main?.SettingsApp?.SetGemmaAudioLanguage) {
+              await window.go.main.SettingsApp.SetGemmaAudioLanguage(gemmaLangSelect.value);
+              showToast(`Gemma Direct Audio language set to ${gemmaLangSelect.options[gemmaLangSelect.selectedIndex]?.text || gemmaLangSelect.value}`, 'success', 2000);
+            }
+          };
+        }
+
+        const gemmaManglishToggle = card.querySelector('#gemmaAudioManglishToggle');
+        if (gemmaManglishToggle) {
+          gemmaManglishToggle.onchange = async (e) => {
+            e.stopPropagation();
+            if (window.go?.main?.SettingsApp?.SetGemmaAudioManglish) {
+              await window.go.main.SettingsApp.SetGemmaAudioManglish(gemmaManglishToggle.checked);
+              showToast(`Gemma Direct Audio Manglish ${gemmaManglishToggle.checked ? 'enabled' : 'disabled'}`, 'success', 2000);
+            }
+          };
+        }
 
         return card;
       };
