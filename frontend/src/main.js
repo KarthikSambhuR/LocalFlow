@@ -310,8 +310,14 @@ function clearHideTimers() {
 }
 
 function clearLivePreview() {
-  if (previewPill) previewPill.classList.remove('visible');
+  if (previewPill) previewPill.classList.remove('visible', 'absorbing');
   if (previewText) previewText.textContent = '';
+}
+
+function absorbLivePreview() {
+  if (!previewPill || !previewPill.classList.contains('visible')) return;
+  previewPill.classList.remove('visible');
+  previewPill.classList.add('absorbing');
 }
 
 function showModule() {
@@ -368,6 +374,7 @@ function resetTargets() {
 
 function showProcessing() {
   clearHideTimers();
+  absorbLivePreview();
   state.isProcessing = true;
   resetTargets();
   moduleNode.classList.remove('active', 'refining', 'loading-model');
@@ -376,6 +383,7 @@ function showProcessing() {
 
 function showRefining() {
   clearHideTimers();
+  absorbLivePreview();
   state.isProcessing = true;
   resetTargets();
   moduleNode.classList.remove('active', 'loading-model');
@@ -436,12 +444,14 @@ function setupWails() {
   });
   window.runtime.EventsOn('live-preview', (text) => {
     if (!previewPill || !previewText) return;
+    if (!state.isActive || state.isProcessing) return;
     const clean = (text || '').trim();
     if (!clean) {
       clearLivePreview();
       return;
     }
     previewText.textContent = clean;
+    previewPill.classList.remove('absorbing');
     previewPill.classList.add('visible');
     previewText.scrollLeft = previewText.scrollWidth;
   });
