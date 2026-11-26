@@ -20,7 +20,7 @@ html, body {
   position: fixed;
   bottom: 80px;
   left: 50%;
-  transform: translateX(-50%) translateY(20px);
+  transform: translateX(-50%) translateY(145px) scale(0.84);
   width: 96px;
   height: 36px;
   background: #000000;
@@ -32,7 +32,9 @@ html, body {
   opacity: 0;
   pointer-events: none;
   z-index: 2147483647;
-  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+  transition: transform 0.46s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.38s ease-out 0.08s;
 }
 
 .module.style-spectrum {
@@ -48,7 +50,9 @@ html, body {
 
 .module.active, .module.processing {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateX(-50%) translateY(0) scale(1);
+  transition: transform 0.52s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Hide all visualizers by default; enable only the active style */

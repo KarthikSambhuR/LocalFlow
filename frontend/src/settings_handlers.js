@@ -71,6 +71,7 @@ export async function setupAmp() {
   const slider = document.getElementById('ampSlider');
   const disp   = document.getElementById('ampValue');
   const toggle = document.getElementById('boostToggle');
+  const duckToggle = document.getElementById('audioDuckingToggle');
   if (!slider) return;
 
   // Load current values from shared config file
@@ -85,6 +86,14 @@ export async function setupAmp() {
   state.currentAmp = initGain;
   disp.textContent = initGain.toFixed(1) + 'x';
   if (toggle) toggle.checked = initEnabled;
+  if (duckToggle) {
+    duckToggle.checked = Boolean(cfg && cfg.audio_ducking_enabled);
+    duckToggle.addEventListener('change', () => {
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetAudioDucking(duckToggle.checked);
+      }
+    });
+  }
 
   const persist = () => {
     if (window.go?.main?.SettingsApp) {

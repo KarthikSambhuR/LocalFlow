@@ -130,6 +130,199 @@ func (s *SettingsApp) UpdateRecording(id int, newText string) error {
 	return UpdateRecording(id, newText)
 }
 
+var (
+	settingsONNXOnce sync.Once
+	settingsONNXErr  error
+)
+
+func ensureSettingsONNX() error {
+	settingsONNXOnce.Do(func() {
+		settingsONNXErr = InitONNXEnvironment()
+	})
+	return settingsONNXErr
+}
+
+func refineHistoryText(rawText string, cfg Config, forceLLM bool) (string, error) {
+	dictWords, _ := GetDictionaryWords()
+	if !forceLLM && !cfg.LLMEnabled {
+		if cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+			return ApplyPhoneticDictionary(rawText, dictWords), nil
+		}
+		return rawText, nil
+	}
+
+	port := getOrStartLLMServer(cfg)
+	if port <= 0 {
+		if forceLLM {
+			return "", fmt.Errorf("no local LLM server available; ensure an LLM model is downloaded in Settings > Models")
+		}
+		if cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+			return ApplyPhoneticDictionary(rawText, dictWords), nil
+		}
+		return rawText, nil
+	}
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
+	translitMappings, _ := GetTransliterations()
+	isConformer := cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx"
+	isSarvam := cfg.LLMActiveModel == "sarvam-1-Q4_K_M.gguf"
+	isGemma := strings.Contains(strings.ToLower(cfg.LLMActiveModel), "gemma")
+	manglishEnabled := cfg.ManglishEnabled && !isSarvam
+	onlyMalayalam := isConformer && (isGemma || isSarvam) && !manglishEnabled
+	prompt := getSystemPrompt(
+		cfg.LLMRefinementMode,
+		cfg.LLMTone,
+		dictWords,
+		translitMappings,
+		isConformer && manglishEnabled,
+		onlyMalayalam,
+		cfg.ManglishExample1,
+		cfg.ManglishExample2,
+		cfg.ManglishExample3,
+		cfg.ManglishExample4,
+		cfg.ManglishExample5,
+		rawText,
+	)
+
+	refined, err := refineTextWithLLM(rawText, url, prompt, cfg.LLMEnableThinking)
+	if err != nil {
+		if forceLLM {
+			return "", err
+		}
+		if cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+			return ApplyPhoneticDictionary(rawText, dictWords), nil
+		}
+		return rawText, nil
+	}
+
+	if cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+		refined = ApplyExactDictionaryPolish(refined, dictWords)
+	}
+	return refined, nil
+}
+
+// RefineRecording re-refines an existing history recording's raw transcript using the active LLM and dictionary.
+func (s *SettingsApp) RefineRecording(id int) (Recording, error) {
+	rec, err := GetRecordingByID(id)
+	if err != nil {
+		return Recording{}, err
+	}
+	source := strings.TrimSpace(rec.RawTranscription)
+	if source == "" {
+		source = strings.TrimSpace(rec.Transcription)
+	}
+	if source == "" {
+		return Recording{}, fmt.Errorf("no transcript text available to refine")
+	}
+
+	start := time.Now()
+	cfg := loadConfig()
+	refined, err := refineHistoryText(source, cfg, true)
+	if err != nil {
+		return Recording{}, err
+	}
+	elapsedUs := time.Since(start).Microseconds()
+
+	if err := UpdateRecordingResult(id, source, refined, elapsedUs); err != nil {
+		return Recording{}, err
+	}
+	return GetRecordingByID(id)
+}
+
+// RetranscribeRecording reloads the cached WAV audio for a history entry and transcribes + refines it with the active model.
+func (s *SettingsApp) RetranscribeRecording(id int) (Recording, error) {
+	rec, err := GetRecordingByID(id)
+	if err != nil {
+		return Recording{}, err
+	}
+	samples, err := loadAudioFromCache(rec.Filename)
+	if err != nil {
+		return Recording{}, err
+	}
+
+	cfg := loadConfig()
+	if cfg.InputBoostEnabled && cfg.InputBoostGain > 1.0 {
+		boosted := make([]float32, len(samples))
+		for i, sample := range samples {
+			v := sample * cfg.InputBoostGain
+			if v > 1.0 {
+				v = 1.0
+			} else if v < -1.0 {
+				v = -1.0
+			}
+			boosted[i] = v
+		}
+		samples = boosted
+	}
+
+	start := time.Now()
+	var rawText string
+
+	switch {
+	case IsParakeetActive(cfg.ActiveModel):
+		if err := ensureSettingsONNX(); err != nil {
+			return Recording{}, fmt.Errorf("ONNX initialization failed: %w", err)
+		}
+		dir := ResolveParakeetModelDir(cfg, cfg.ActiveModel)
+		if err := LoadParakeetSessions(dir, cfg.ActiveModel); err != nil {
+			return Recording{}, err
+		}
+		text, err := TranscribeParakeet(samples)
+		if err != nil {
+			return Recording{}, err
+		}
+		rawText = text
+
+	case IsNeedleWhistleActive(cfg.ActiveModel):
+		if err := ensureSettingsONNX(); err != nil {
+			return Recording{}, fmt.Errorf("ONNX initialization failed: %w", err)
+		}
+		if err := LoadNeedleWhistle(ResolveWhistleModelPath(cfg)); err != nil {
+			return Recording{}, err
+		}
+		text, err := TranscribeNeedleWhistle(samples, "")
+		if err != nil {
+			return Recording{}, err
+		}
+		rawText = text
+
+	case cfg.ActiveModel == "indicconformer.int8.onnx" || cfg.ActiveModel == "indicconformer.fp32.onnx":
+		if err := ensureSettingsONNX(); err != nil {
+			return Recording{}, fmt.Errorf("ONNX initialization failed: %w", err)
+		}
+		if err := LoadConformerSessions(); err != nil {
+			return Recording{}, err
+		}
+		text, err := TranscribeIndicConformer(samples)
+		if err != nil {
+			return Recording{}, err
+		}
+		rawText = text
+
+	case isGemmaAudioSTTModel(cfg.ActiveModel):
+		return Recording{}, fmt.Errorf("re-transcription from history is not supported for Gemma Direct Audio models; please select a Whisper, Parakeet, Whistle, or Conformer model")
+
+	default:
+		rawText = transcribeWhisperWithModel(cfg, cfg.ActiveModel, samples, "")
+	}
+
+	rawText = strings.TrimSpace(cleanSoundTags(rawText))
+	if rawText == "" {
+		return Recording{}, fmt.Errorf("no speech detected during re-transcription")
+	}
+
+	finalText, err := refineHistoryText(rawText, cfg, false)
+	if err != nil {
+		finalText = rawText
+	}
+	elapsedUs := time.Since(start).Microseconds()
+
+	if err := UpdateRecordingResult(id, rawText, finalText, elapsedUs); err != nil {
+		return Recording{}, err
+	}
+	return GetRecordingByID(id)
+}
+
 func (s *SettingsApp) InstallUpdateAndRestart() error {
 	return triggerInstallUpdateAndRestart()
 }
@@ -155,6 +348,12 @@ func (s *SettingsApp) SetInputBoost(enabled bool, gain float32) {
 	cfg := loadConfig()
 	cfg.InputBoostEnabled = enabled
 	cfg.InputBoostGain = gain
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetAudioDucking(enabled bool) {
+	cfg := loadConfig()
+	cfg.AudioDuckingEnabled = enabled
 	saveConfig(cfg)
 }
 

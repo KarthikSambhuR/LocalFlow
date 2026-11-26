@@ -320,7 +320,14 @@ function showModule() {
   state.isActive = true;
   state.isProcessing = false;
   moduleNode.classList.remove('processing', 'refining', 'loading-model');
-  moduleNode.classList.add('active');
+  // Force a layout commit from the resting off-screen position so the slide-up
+  // entrance always animates smoothly even right after the window is shown.
+  void moduleNode.offsetWidth;
+  requestAnimationFrame(() => {
+    if (state.isActive || state.isProcessing) {
+      moduleNode.classList.add('active');
+    }
+  });
   if (!state.rafId) animateFrame();
 }
 
@@ -341,7 +348,7 @@ function performHide() {
         window.runtime.EventsEmit('pill-hidden');
       }
     }
-  }, 450);
+  }, 500);
 }
 
 function hideModule() {

@@ -239,13 +239,20 @@ func transcribeWithWhisper(samples []float32, lang string) string {
 	if cfg.MeetingBilingual && cfg.BilingualWhisperModel != "" {
 		modelName = cfg.BilingualWhisperModel
 	}
+	return transcribeWhisperWithModel(cfg, modelName, samples, lang)
+}
+
+func transcribeWhisperWithModel(cfg Config, modelName string, samples []float32, lang string) string {
 	if modelName == "" {
 		modelName = "ggml-tiny.en.bin"
+	}
+	if len(samples) == 0 {
+		return ""
 	}
 
 	ctx := getMeetingWhisperContext(cfg, modelName)
 	if ctx == nil {
-		fmt.Println("[Meeting STT] getMeetingWhisperContext returned nil")
+		fmt.Println("[Whisper STT] getMeetingWhisperContext returned nil")
 		return ""
 	}
 

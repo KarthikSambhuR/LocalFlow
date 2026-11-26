@@ -123,6 +123,10 @@ type App struct {
 	routingDecided          bool
 	useConformer            bool
 	activeAppCtx            AppContextInfo
+	duckMutex               sync.Mutex
+	duckActive              bool
+	duckGen                 uint64
+	preDuckVolume           float32
 }
 
 var globalApp *App
@@ -143,6 +147,61 @@ func NewApp() *App {
 	globalApp = a
 	globalAppMutex.Unlock()
 	return a
+}
+
+// duckSystemAudio lowers the Windows master volume during active recording and
+// records the prior level so restoreSystemAudio can put it back on release.
+func (a *App) duckSystemAudio() {
+	a.duckMutex.Lock()
+	a.duckGen++
+	gen := a.duckGen
+	a.duckMutex.Unlock()
+
+	go func() {
+		vol, err := getSystemMasterVolume()
+		if err != nil || vol <= 0.12 {
+			return
+		}
+		target := vol * 0.25
+		if target < 0.08 {
+			target = 0.08
+		}
+		if target > 0.20 {
+			target = 0.20
+		}
+
+		a.duckMutex.Lock()
+		if a.duckGen != gen {
+			a.duckMutex.Unlock()
+			return
+		}
+		a.preDuckVolume = vol
+		a.duckActive = true
+		a.duckMutex.Unlock()
+
+		if err := setSystemMasterVolume(target); err != nil {
+			a.duckMutex.Lock()
+			if a.duckGen == gen {
+				a.duckActive = false
+			}
+			a.duckMutex.Unlock()
+		}
+	}()
+}
+
+// restoreSystemAudio restores the Windows master volume captured before ducking.
+func (a *App) restoreSystemAudio() {
+	a.duckMutex.Lock()
+	a.duckGen++
+	if !a.duckActive {
+		a.duckMutex.Unlock()
+		return
+	}
+	prev := a.preDuckVolume
+	a.duckActive = false
+	a.duckMutex.Unlock()
+
+	_ = setSystemMasterVolume(prev)
 }
 
 func getSharedWhisperContext(cfg Config, modelName string) *C.struct_whisper_context {
@@ -759,6 +818,7 @@ func (a *App) listenToKeyboard() {
 
 		// Tell UI to shrink and show processing spinner
 		runtime.EventsEmit(a.ctx, "recording-state", "processing")
+		go a.restoreSystemAudio()
 
 		// Keep accepting samples briefly after key release to capture trailing speech.
 		go func() {
@@ -899,6 +959,7 @@ func (a *App) listenToKeyboard() {
 				a.mutex.Unlock()
 
 				if wasRecording {
+					go a.restoreSystemAudio()
 					deviceOps <- func() {
 						if device != nil {
 							if err := device.Stop(); err != nil {
@@ -1018,6 +1079,9 @@ func (a *App) listenToKeyboard() {
 
 				a.streamingWG.Add(1)
 				go a.backgroundTranscriptionLoop()
+				if cfg.AudioDuckingEnabled {
+					a.duckSystemAudio()
+				}
 
 				// Show the window WITHOUT stealing focus
 				go showWindowNoActivate()

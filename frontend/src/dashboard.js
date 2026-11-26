@@ -84,6 +84,15 @@ export function computeStats(records = []) {
 let cachedRecords = [];
 let cachedStats = null;
 let homeSearchBound = false;
+let cardMenuGlobalBound = false;
+
+function closeAllCardMenus() {
+  document.querySelectorAll('.card-menu.open').forEach(menu => {
+    menu.classList.remove('open');
+    const card = menu.closest('.history-card');
+    if (card) card.classList.remove('menu-open');
+  });
+}
 
 export async function loadDashboard(targetSection) {
   const list = document.getElementById('historyList');
@@ -365,8 +374,30 @@ export function renderHome(records, stats, searchQuery = '') {
       <div class="card-controls">
         <button class="control-btn-circle play-btn-circle" title="Play recording">${PLAY_SVG}</button>
         <button class="control-btn-circle copy-btn-circle" title="Copy transcript" style="${!r.transcription ? 'opacity: 0.3; pointer-events: none;' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-        <button class="control-btn-circle edit-btn-circle" title="Edit transcript"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
-        <button class="control-btn-circle delete-btn-circle" title="Delete dictation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        <div class="card-menu-wrap">
+          <button class="control-btn-circle more-btn-circle" title="More actions" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          </button>
+          <div class="card-menu" role="menu">
+            <button class="card-menu-item retranscribe-menu-item" role="menuitem" ${!r.filename ? 'disabled' : ''}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Re-transcribe</span>
+            </button>
+            <button class="card-menu-item refine-menu-item" role="menuitem" ${!(r.raw_transcription || r.transcription) ? 'disabled' : ''}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.5L18.5 9l-4.6 1.5L12 15l-1.9-4.5L5.5 9l4.6-1.5L12 3z"/><path d="M5 18l.8 1.8L7.5 20.5l-1.7.7L5 23l-.8-1.8-1.7-.7 1.7-.7L5 18z"/></svg>
+              <span>Re-refine with AI</span>
+            </button>
+            <button class="card-menu-item edit-menu-item" role="menuitem">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <span>Edit transcript</span>
+            </button>
+            <div class="card-menu-divider"></div>
+            <button class="card-menu-item danger delete-menu-item" role="menuitem">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -399,9 +430,88 @@ export function renderHome(records, stats, searchQuery = '') {
         };
       }
 
-      const editBtn = row.querySelector('.edit-btn-circle');
+      if (!cardMenuGlobalBound) {
+        cardMenuGlobalBound = true;
+        document.addEventListener('click', (e) => {
+          if (!e.target.closest('.card-menu-wrap')) {
+            closeAllCardMenus();
+          }
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') closeAllCardMenus();
+        });
+      }
+
+      const moreBtn = row.querySelector('.more-btn-circle');
+      const cardMenu = row.querySelector('.card-menu');
+      if (moreBtn && cardMenu) {
+        moreBtn.onclick = (e) => {
+          e.stopPropagation();
+          const willOpen = !cardMenu.classList.contains('open');
+          closeAllCardMenus();
+          if (willOpen) {
+            cardMenu.classList.add('open');
+            row.classList.add('menu-open');
+            moreBtn.setAttribute('aria-expanded', 'true');
+          } else {
+            moreBtn.setAttribute('aria-expanded', 'false');
+          }
+        };
+      }
+
+      const retranscribeBtn = row.querySelector('.retranscribe-menu-item');
+      if (retranscribeBtn && r.filename) {
+        retranscribeBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (retranscribeBtn.classList.contains('is-busy')) return;
+          closeAllCardMenus();
+          moreBtn?.classList.add('is-busy');
+          retranscribeBtn.classList.add('is-busy');
+          retranscribeBtn.disabled = true;
+          try {
+            await window.go.main.SettingsApp.RetranscribeRecording(r.id);
+            showToast('Re-transcribed with active model', 'success');
+            await loadDashboard();
+          } catch (err) {
+            console.error('Failed to re-transcribe recording:', err);
+            showToast('Re-transcribe failed: ' + err, 'error');
+          } finally {
+            moreBtn?.classList.remove('is-busy');
+            retranscribeBtn.classList.remove('is-busy');
+            retranscribeBtn.disabled = false;
+          }
+        };
+      }
+
+      const refineBtn = row.querySelector('.refine-menu-item');
+      if (refineBtn && (r.raw_transcription || r.transcription)) {
+        refineBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (refineBtn.classList.contains('is-busy')) return;
+          closeAllCardMenus();
+          moreBtn?.classList.add('is-busy');
+          refineBtn.classList.add('is-busy');
+          refineBtn.disabled = true;
+          try {
+            await window.go.main.SettingsApp.RefineRecording(r.id);
+            showToast('Transcript refined with AI', 'success');
+            await loadDashboard();
+          } catch (err) {
+            console.error('Failed to refine recording:', err);
+            showToast('Refine failed: ' + err, 'error');
+          } finally {
+            moreBtn?.classList.remove('is-busy');
+            refineBtn.classList.remove('is-busy');
+            refineBtn.disabled = false;
+          }
+        };
+      }
+
+      const editBtn = row.querySelector('.edit-menu-item');
       if (editBtn) {
-        editBtn.onclick = () => {
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          closeAllCardMenus();
           row.classList.add('editing');
           const textToEdit = r.transcription || r.raw_transcription || '';
           cardCenter.innerHTML = `
@@ -436,9 +546,11 @@ export function renderHome(records, stats, searchQuery = '') {
         };
       }
 
-      const deleteBtn = row.querySelector('.delete-btn-circle');
+      const deleteBtn = row.querySelector('.delete-menu-item');
       if (deleteBtn) {
-        deleteBtn.onclick = () => {
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          closeAllCardMenus();
           showCustomConfirm({
             title: 'Delete Recording?',
             message: 'Are you sure you want to permanently delete this dictation? This will also remove the audio file.',

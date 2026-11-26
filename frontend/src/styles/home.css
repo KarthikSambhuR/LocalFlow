@@ -258,9 +258,108 @@
 
 .history-card:hover .card-controls,
 .history-card.playing .card-controls,
-.history-card.editing .card-controls {
+.history-card.editing .card-controls,
+.history-card.menu-open .card-controls {
   opacity: 1;
   transform: translateX(0);
+}
+
+.history-card.menu-open {
+  position: relative;
+  z-index: 25;
+}
+
+.card-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.card-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 186px;
+  padding: 6px;
+  background: rgba(18, 20, 26, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.96);
+  transform-origin: top right;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 30;
+}
+
+.card-menu.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+[data-theme="light"] .card-menu {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.card-menu-item svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  opacity: 0.78;
+}
+
+.card-menu-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] .card-menu-item:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.card-menu-item:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.card-menu-item.danger {
+  color: #f87171;
+}
+
+.card-menu-item.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+}
+
+.card-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+  opacity: 0.7;
 }
 
 /* Styled control buttons */
@@ -299,6 +398,21 @@
 .delete-btn-circle:hover {
   color: #ef4444 !important;
   background: rgba(239, 68, 68, 0.15) !important;
+}
+
+.control-btn-circle.is-busy {
+  opacity: 0.75;
+  pointer-events: none;
+  color: var(--accent);
+}
+
+.control-btn-circle.is-busy svg {
+  animation: lf-spin 0.9s linear infinite;
+}
+
+@keyframes lf-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 

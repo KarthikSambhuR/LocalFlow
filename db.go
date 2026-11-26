@@ -395,6 +395,25 @@ func DeleteRecording(id int) error {
 	return err
 }
 
+// GetRecordingByID fetches a single recording by its ID.
+func GetRecordingByID(id int) (Recording, error) {
+	var r Recording
+	if db == nil {
+		return r, sql.ErrConnDone
+	}
+	err := db.QueryRow(
+		`SELECT id, filename, timestamp, duration_ms, transcription, COALESCE(raw_transcription, '') as raw_transcription, word_count, transcription_time_us FROM recordings WHERE id = ?`,
+		id,
+	).Scan(&r.ID, &r.Filename, &r.Timestamp, &r.DurationMs, &r.Transcription, &r.RawTranscription, &r.WordCount, &r.TranscriptionTime)
+	if err != nil {
+		return r, err
+	}
+	if r.WordCount == 0 && r.Transcription != "" {
+		r.WordCount = len(strings.Fields(r.Transcription))
+	}
+	return r, nil
+}
+
 // UpdateRecording updates the transcription text and word count for a recording and its analytics entry.
 func UpdateRecording(id int, newText string) error {
 	if db == nil {
@@ -408,6 +427,25 @@ func UpdateRecording(id int, newText string) error {
 	wc := len(strings.Fields(newText))
 	_, _ = db.Exec(`UPDATE analytics SET word_count = ? WHERE timestamp = ?`, wc, timestamp)
 	_, err = db.Exec(`UPDATE recordings SET transcription = ?, word_count = ? WHERE id = ?`, newText, wc, id)
+	return err
+}
+
+// UpdateRecordingResult updates raw_transcription, transcription, word_count, and transcription_time_us for a recording.
+func UpdateRecordingResult(id int, rawText string, finalText string, transcriptionTimeUs int64) error {
+	if db == nil {
+		return sql.ErrConnDone
+	}
+	var timestamp string
+	err := db.QueryRow(`SELECT timestamp FROM recordings WHERE id = ?`, id).Scan(&timestamp)
+	if err != nil {
+		return err
+	}
+	wc := len(strings.Fields(finalText))
+	_, _ = db.Exec(`UPDATE analytics SET word_count = ? WHERE timestamp = ?`, wc, timestamp)
+	_, err = db.Exec(
+		`UPDATE recordings SET raw_transcription = ?, transcription = ?, word_count = ?, transcription_time_us = ? WHERE id = ?`,
+		rawText, finalText, wc, transcriptionTimeUs, id,
+	)
 	return err
 }
 

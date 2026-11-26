@@ -102,3 +102,47 @@ func saveAudioBufferToWavPath(samples []float32, filename string) error {
 
 	return os.WriteFile(filename, buf, 0644)
 }
+
+// loadAudioFromCache reads a 16-bit PCM WAV file from audioCacheDir and returns normalized float32 samples.
+func loadAudioFromCache(filename string) ([]float32, error) {
+	if filename == "" {
+		return nil, fmt.Errorf("no audio file associated with this recording")
+	}
+	fullPath := filepath.Join(audioCacheDir, filepath.Base(filename))
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("audio file is no longer available in cache")
+	}
+	if len(data) < 44 || string(data[0:4]) != "RIFF" || string(data[8:12]) != "WAVE" {
+		return nil, fmt.Errorf("invalid WAV file format")
+	}
+
+	offset := 12
+	for offset+8 <= len(data) {
+		chunkID := string(data[offset : offset+4])
+		chunkSize := int(binary.LittleEndian.Uint32(data[offset+4 : offset+8]))
+		offset += 8
+		if chunkID == "data" {
+			end := offset + chunkSize
+			if end > len(data) {
+				end = len(data)
+			}
+			pcm := data[offset:end]
+			numSamples := len(pcm) / 2
+			if numSamples == 0 {
+				return nil, fmt.Errorf("audio file contains no samples")
+			}
+			samples := make([]float32, numSamples)
+			for i := 0; i < numSamples; i++ {
+				s := int16(binary.LittleEndian.Uint16(pcm[i*2 : i*2+2]))
+				samples[i] = float32(s) / 32768.0
+			}
+			return samples, nil
+		}
+		if chunkSize%2 == 1 {
+			chunkSize++
+		}
+		offset += chunkSize
+	}
+	return nil, fmt.Errorf("WAV data chunk not found")
+}

@@ -73,6 +73,7 @@ type Config struct {
 	PhoneticDictEnabled        bool    `json:"phonetic_dict_enabled"`
 	AppContextEnabled          bool    `json:"app_context_enabled"`
 	LivePreviewEnabled         bool    `json:"live_preview_enabled"`
+	AudioDuckingEnabled        bool    `json:"audio_ducking_enabled"`
 	ManglishEnabled            bool    `json:"manglish_enabled"`
 	ManglishExample1           string  `json:"manglish_example_1"`
 	ManglishExample2           string  `json:"manglish_example_2"`
@@ -121,6 +122,7 @@ func loadConfig() Config {
 		PhoneticDictEnabled:        true,
 		AppContextEnabled:          true,
 		LivePreviewEnabled:         true,
+		AudioDuckingEnabled:        false,
 		ManglishEnabled:            false,
 		ManglishExample1:           "Hello, sukhamano enth cheyyunnu?",
 		ManglishExample2:           "Enik naale varaan pattilla.",

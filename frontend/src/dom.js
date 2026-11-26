@@ -619,6 +619,17 @@ settingsModal.innerHTML = `
                 <span class="toggle-track"></span>
               </label>
             </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Lower Volume While Recording</span>
+                <span class="setting-desc">Automatically duck system audio during dictation and restore it on release</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="audioDuckingToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
           </div>
         </div>
 
