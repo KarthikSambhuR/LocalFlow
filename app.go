@@ -122,6 +122,7 @@ type App struct {
 	llmLastFailedKey        string
 	routingDecided          bool
 	useConformer            bool
+	activeAppCtx            AppContextInfo
 }
 
 var globalApp *App
@@ -1010,6 +1011,7 @@ func (a *App) listenToKeyboard() {
 				a.interimTranscripts = make([]string, 0)
 				a.routingDecided = false
 				a.useConformer = false
+				a.activeAppCtx = DetectActiveAppContext()
 				a.streamingActive = true
 				a.overlayGen.Add(1)
 				a.mutex.Unlock()
@@ -1737,6 +1739,18 @@ func (a *App) transcribe() {
 	// rawResult holds the unmodified Whisper output; result may be overwritten by LLM.
 	rawResult := result
 
+	a.mutex.Lock()
+	activeAppCtx := a.activeAppCtx
+	a.mutex.Unlock()
+	appContextHint := ""
+	effectiveDict := dictWords
+	if cfg.AppContextEnabled {
+		appContextHint = activeAppCtx.PromptHint
+		if domainWords := DomainDictionaryWords(activeAppCtx.Category); len(domainWords) > 0 {
+			effectiveDict = MergeDictionaryWords(dictWords, domainWords)
+		}
+	}
+
 	isGemmaAudioSTT := isGemmaAudioSTTModel(cfg.ActiveModel)
 	var llmTimeUs int64
 	if isGemmaAudioSTT && result != "" {
@@ -1746,7 +1760,7 @@ func (a *App) transcribe() {
 		if port > 0 {
 			llmStart := time.Now()
 			url := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", port)
-			prompt := buildGemmaAudioConsolidationPrompt(cfg, dictWords, result)
+			prompt := buildGemmaAudioConsolidationPrompt(cfg, effectiveDict, result) + appContextHint
 			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
 			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {
@@ -1780,7 +1794,7 @@ func (a *App) transcribe() {
 			isGemma := strings.Contains(strings.ToLower(cfg.LLMActiveModel), "gemma")
 			manglishEnabled := cfg.ManglishEnabled && !isSarvam
 			onlyMalayalam := isConformer && (isGemma || isSarvam) && !manglishEnabled
-			prompt := getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, isConformer && manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5, result)
+			prompt := getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, effectiveDict, translitMappings, isConformer && manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5, result) + appContextHint
 			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
 			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {

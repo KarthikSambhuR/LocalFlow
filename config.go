@@ -71,6 +71,7 @@ type Config struct {
 	LLMContextSize             int     `json:"llm_context_size"`
 	LLMEnableThinking          bool    `json:"llm_enable_thinking"`
 	PhoneticDictEnabled        bool    `json:"phonetic_dict_enabled"`
+	AppContextEnabled          bool    `json:"app_context_enabled"`
 	ManglishEnabled            bool    `json:"manglish_enabled"`
 	ManglishExample1           string  `json:"manglish_example_1"`
 	ManglishExample2           string  `json:"manglish_example_2"`
@@ -117,6 +118,7 @@ func loadConfig() Config {
 		LLMContextSize:             4096,
 		LLMEnableThinking:          false,
 		PhoneticDictEnabled:        true,
+		AppContextEnabled:          true,
 		ManglishEnabled:            false,
 		ManglishExample1:           "Hello, sukhamano enth cheyyunnu?",
 		ManglishExample2:           "Enik naale varaan pattilla.",

@@ -701,6 +701,17 @@ settingsModal.innerHTML = `
               </label>
             </div>
 
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">App-Aware Context</span>
+                <span class="setting-desc">Adapt refinement for IDEs, terminals, design tools, and browser tabs</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="appContextToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
             <div class="setting-row llm-choice-setting" id="llmThinkingSelection">
               <div class="setting-info">
                 <span class="setting-title">Reasoning Steps</span>

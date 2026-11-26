@@ -125,6 +125,7 @@ export async function setupLLM() {
   const thinkingToggle = document.getElementById('llmThinkingToggle');
   const manglishToggle = document.getElementById('llmManglishToggle');
   const phoneticDictToggle = document.getElementById('phoneticDictToggle');
+  const appContextToggle = document.getElementById('appContextToggle');
 
   const updateSubsettingsVisibility = async () => {
     const show = toggle.checked;
@@ -168,6 +169,9 @@ export async function setupLLM() {
     if (phoneticDictToggle) {
       phoneticDictToggle.checked = cfg.phonetic_dict_enabled !== false;
     }
+    if (appContextToggle) {
+      appContextToggle.checked = cfg.app_context_enabled !== false;
+    }
   }
 
   await updateSubsettingsVisibility();
@@ -199,6 +203,14 @@ export async function setupLLM() {
     phoneticDictToggle.addEventListener('change', () => {
       if (window.go?.main?.SettingsApp) {
         window.go.main.SettingsApp.SetPhoneticDictEnabled(phoneticDictToggle.checked);
+      }
+    });
+  }
+
+  if (appContextToggle) {
+    appContextToggle.addEventListener('change', () => {
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetAppContextEnabled(appContextToggle.checked);
       }
     });
   }

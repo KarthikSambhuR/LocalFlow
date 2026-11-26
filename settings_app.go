@@ -1305,6 +1305,12 @@ func (s *SettingsApp) SetPhoneticDictEnabled(enabled bool) {
 	saveConfig(cfg)
 }
 
+func (s *SettingsApp) SetAppContextEnabled(enabled bool) {
+	cfg := loadConfig()
+	cfg.AppContextEnabled = enabled
+	saveConfig(cfg)
+}
+
 func (s *SettingsApp) SetGemmaAudioLanguage(language string) {
 	cfg := loadConfig()
 	if strings.TrimSpace(language) == "" {
