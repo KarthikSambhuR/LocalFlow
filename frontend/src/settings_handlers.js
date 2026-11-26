@@ -1,3 +1,4 @@
+import { MODE_FRAMES, paintFrame, resolvePreset } from 'thinking-orbs/engine';
 import { state } from './state.js';
 import { loadDashboard, showCustomConfirm } from './dashboard.js';
 import { escapeHtml, showToast } from './ui_utils.js';
@@ -10,9 +11,27 @@ import hfLogo from './assets/images/hf-logo.png';
 import cactusLogo from './assets/images/cactus-logo.jpeg';
 
 
+export function renderOrbPreview() {
+  const orbPreview = document.getElementById('pillPreviewOrbCanvas');
+  if (!orbPreview) return;
+  const size = 26;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  orbPreview.width = Math.round(size * dpr);
+  orbPreview.height = Math.round(size * dpr);
+  const ctx = orbPreview.getContext('2d');
+  if (!ctx) return;
+  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const preset = resolvePreset('composing', 20);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+  paintFrame(ctx, MODE_FRAMES[preset.mode](size, 0.6, preset.opts), dark);
+}
+
 export async function setupPillStylePicker() {
   const picker = document.getElementById('pillStylePicker');
   if (!picker) return;
+
+  renderOrbPreview();
 
   const cards = picker.querySelectorAll('.pill-style-card');
   const setActive = (style) => {
@@ -105,6 +124,7 @@ export async function setupLLM() {
 
   const thinkingToggle = document.getElementById('llmThinkingToggle');
   const manglishToggle = document.getElementById('llmManglishToggle');
+  const phoneticDictToggle = document.getElementById('phoneticDictToggle');
 
   const updateSubsettingsVisibility = async () => {
     const show = toggle.checked;
@@ -145,6 +165,9 @@ export async function setupLLM() {
     if (manglishToggle) {
       manglishToggle.checked = cfg.manglish_enabled || false;
     }
+    if (phoneticDictToggle) {
+      phoneticDictToggle.checked = cfg.phonetic_dict_enabled !== false;
+    }
   }
 
   await updateSubsettingsVisibility();
@@ -168,6 +191,14 @@ export async function setupLLM() {
     manglishToggle.addEventListener('change', () => {
       if (window.go?.main?.SettingsApp) {
         window.go.main.SettingsApp.SetManglishEnabled(manglishToggle.checked);
+      }
+    });
+  }
+
+  if (phoneticDictToggle) {
+    phoneticDictToggle.addEventListener('change', () => {
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetPhoneticDictEnabled(phoneticDictToggle.checked);
       }
     });
   }
@@ -713,21 +744,21 @@ const MODEL_FAMILIES_DEF = [
     provider: 'OpenAI',
     iconKey: 'openai',
     iconClass: 'provider-openai',
-    description: 'Speech-to-text with English, Malayalam, and multilingual variants.',
+    description: 'Reliable speech-to-text for English, Malayalam, and 99+ languages.',
     variantMatcher: (m) => m.model_type === 'whisper' && (m.id.startsWith('tiny') || m.id.startsWith('base') || m.id.startsWith('small') || m.id.startsWith('medium') || m.id.startsWith('large') || m.id.startsWith('adalat-')),
     variants: [
-      { label: 'Tiny (EN)', id: 'tiny' },
-      { label: 'Base (EN)', id: 'base' },
-      { label: 'Small (EN)', id: 'small' },
-      { label: 'Medium (EN)', id: 'medium' },
-      { label: 'Turbo (EN)', id: 'large-turbo' },
-      { label: 'Tiny (Multi)', id: 'tiny-multilingual' },
-      { label: 'Base (Multi)', id: 'base-multilingual' },
-      { label: 'Small (Multi)', id: 'small-multilingual' },
-      { label: 'Medium R-MFT', id: 'adalat-medium-ml-rmft' },
-      { label: 'Medium High-LR', id: 'adalat-medium-ml-high-lr' },
-      { label: 'Small High-LR', id: 'adalat-small-ml-high-lr' },
-      { label: 'Small R-MFT', id: 'adalat-small-ml-rmft' },
+      { label: 'Fastest (EN)', id: 'tiny' },
+      { label: 'Light (EN)', id: 'base' },
+      { label: 'Balanced (EN)', id: 'small' },
+      { label: 'Accurate (EN)', id: 'medium' },
+      { label: 'Best Quality (EN)', id: 'large-turbo' },
+      { label: 'Fastest (Multi)', id: 'tiny-multilingual' },
+      { label: 'Light (Multi)', id: 'base-multilingual' },
+      { label: 'Balanced (Multi)', id: 'small-multilingual' },
+      { label: 'Malayalam Pro', id: 'adalat-medium-ml-rmft' },
+      { label: 'Malayalam Plus', id: 'adalat-medium-ml-high-lr' },
+      { label: 'Malayalam Light', id: 'adalat-small-ml-high-lr' },
+      { label: 'Malayalam Balanced', id: 'adalat-small-ml-rmft' },
     ]
   },
   {
@@ -737,10 +768,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Cactus Compute',
     iconKey: 'cactus',
     iconClass: 'provider-cactus',
-    description: 'Ultra-compact 16.9 MB 2-bit quantized ASR model powered by Needle.',
+    description: 'Ultra-lightweight speech recognition that runs fast on any computer.',
     variantMatcher: (m) => m.id === 'cactus-whistle',
     variants: [
-      { label: 'Whistle (Multi)', id: 'cactus-whistle' }
+      { label: 'Standard', id: 'cactus-whistle' }
     ]
   },
   {
@@ -750,11 +781,11 @@ const MODEL_FAMILIES_DEF = [
     provider: 'AI4Bharat',
     iconKey: 'indic',
     iconClass: 'provider-indic',
-    description: 'Malayalam speech recognition built on ONNX.',
+    description: 'Dedicated Malayalam speech-to-text model.',
     variantMatcher: (m) => m.id.startsWith('indic-conformer'),
     variants: [
-      { label: '120M INT8 (Fast)', id: 'indic-conformer-120m-int8' },
-      { label: '120M FP32 (Full)', id: 'indic-conformer-120m-fp32' }
+      { label: 'Fast', id: 'indic-conformer-120m-int8' },
+      { label: 'High Accuracy', id: 'indic-conformer-120m-fp32' }
     ]
   },
   {
@@ -764,10 +795,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Google',
     iconKey: 'google',
     iconClass: 'provider-google',
-    description: 'Direct audio-to-text transcription using Gemma 4 E2B mmproj.',
+    description: 'Listens directly to your voice for high-accuracy English and Malayalam transcription.',
     variantMatcher: (m) => m.id === 'gemma4-e2b-audio',
     variants: [
-      { label: 'mmproj BF16', id: 'gemma4-e2b-audio' }
+      { label: 'Standard', id: 'gemma4-e2b-audio' }
     ]
   },
   {
@@ -777,10 +808,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Superwhisper',
     iconKey: 'superwhisper',
     iconClass: 'provider-super',
-    description: 'Specialized normalizer for filler words, stutters and numbers.',
+    description: 'Removes filler words, stutters, and formats numbers cleanly.',
     variantMatcher: (m) => m.id === 's1-mini',
     variants: [
-      { label: '0.6B Q4_K_M', id: 's1-mini' }
+      { label: 'Standard', id: 's1-mini' }
     ]
   },
   {
@@ -790,10 +821,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Google',
     iconKey: 'google',
     iconClass: 'provider-google',
-    description: 'High-intelligence reasoning and grammar refinement.',
+    description: 'Polishes grammar, punctuation, and tone with strong reasoning.',
     variantMatcher: (m) => m.id === 'gemma4-e2b',
     variants: [
-      { label: 'E2B Q4_K_XL', id: 'gemma4-e2b' }
+      { label: 'Standard', id: 'gemma4-e2b' }
     ]
   },
   {
@@ -803,10 +834,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Alibaba',
     iconKey: 'qwen',
     iconClass: 'provider-qwen',
-    description: 'Ultra-fast and lightweight LLM for real-time formatting.',
+    description: 'Quickly formats and cleans up your text in real time.',
     variantMatcher: (m) => m.id === 'qwen3-0.6b',
     variants: [
-      { label: '0.6B Q4_K_XL', id: 'qwen3-0.6b' }
+      { label: 'Standard', id: 'qwen3-0.6b' }
     ]
   },
   {
@@ -816,10 +847,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'HuggingFace',
     iconKey: 'hf',
     iconClass: 'provider-hf',
-    description: 'Compact 135M model running on CPU with minimal RAM.',
+    description: 'Tiny text cleaner that uses very little memory.',
     variantMatcher: (m) => m.id === 'smollm2-135m',
     variants: [
-      { label: '135M Q8_0', id: 'smollm2-135m' }
+      { label: 'Standard', id: 'smollm2-135m' }
     ]
   },
   {
@@ -829,10 +860,10 @@ const MODEL_FAMILIES_DEF = [
     provider: 'Sarvam AI',
     iconKey: 'sarvam',
     iconClass: 'provider-sarvam',
-    description: 'Bilingual English and Malayalam text refinement.',
+    description: 'Polishes English and Malayalam text together.',
     variantMatcher: (m) => m.id === 'sarvam-1-3b',
     variants: [
-      { label: '1 3B Q4_K_M', id: 'sarvam-1-3b' }
+      { label: 'Standard', id: 'sarvam-1-3b' }
     ]
   }
 ];
@@ -847,6 +878,98 @@ function whisperVariantCategory(variant, model) {
   if (model?.language === 'malayalam' || variant.id.startsWith('adalat-')) return 'malayalam';
   if (model?.language === 'english' || variant.id.endsWith('.en') || variant.label.includes('(EN)')) return 'en';
   return 'multi';
+}
+
+const ICON_BOLT = `<svg class="model-meta-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+const ICON_ACCURACY = `<svg class="model-meta-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>`;
+const ICON_DISK = `<svg class="model-meta-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>`;
+const ICON_CHECK = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const ICON_TRASH = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+
+function formatModelSize(model) {
+  const mb = Number(model?.size_mb || 0);
+  if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb > 0) return `${Math.round(mb)} MB`;
+  return model?.parameters || '';
+}
+
+function getSpeedBadgeHtml(model) {
+  const raw = `${model?.speed_label || ''} ${model?.speed_description || ''}`.toLowerCase();
+  let bolts = 1;
+  let label = 'Slower';
+  if (/ultra|instant|0\.08|compact|lightweight/.test(raw)) {
+    bolts = 3;
+    label = 'Very Fast';
+  } else if (/fast|2-4x|4x|real-?time|balanced|medium/.test(raw)) {
+    bolts = 2;
+    label = 'Fast';
+  }
+  const icons = `<span class="bolt-group">${ICON_BOLT.repeat(bolts)}</span>`;
+  return `<span class="model-meta-item" title="Speed: ${label}"><span>Speed</span>${icons}</span>`;
+}
+
+function getAccuracyBadgeHtml(model) {
+  const id = (model?.id || '').toLowerCase();
+  const raw = `${model?.speed_label || ''} ${model?.speed_description || ''}`.toLowerCase();
+  let level = 2;
+  let label = 'Good';
+  if (/gemma|large|medium|fp32|sarvam|adalat-medium/.test(id) || /accurate|high|best|reasoning|bilingual/.test(raw)) {
+    level = 3;
+    label = 'High';
+  } else if (/tiny|135m|whistle/.test(id)) {
+    level = 1;
+    label = 'Basic';
+  }
+  const icons = `<span class="bolt-group">${ICON_ACCURACY.repeat(level)}</span>`;
+  return `<span class="model-meta-item" title="Accuracy: ${label}"><span>Accuracy</span>${icons}</span>`;
+}
+
+function getLanguageLabel(model) {
+  if (!model) return '';
+  if (model.language === 'english' || model.id?.endsWith('.en')) return 'English';
+  if (model.language === 'malayalam' || model.id?.startsWith('adalat-') || model.id?.startsWith('indic-conformer')) return 'Malayalam';
+  if (model.id === 'sarvam-1-3b' || model.id === 'gemma4-e2b-audio') return 'English & Malayalam';
+  if (model.model_type === 'llm') return 'Text Refinement';
+  return 'Multilingual';
+}
+
+function renderModelMetaHtml(model) {
+  const sizeStr = formatModelSize(model);
+  const langLabel = getLanguageLabel(model);
+  return `
+    ${sizeStr ? `<span class="model-meta-item" title="${escapeHtml(model.filename || '')}">${ICON_DISK}<span>${sizeStr}</span></span>` : ''}
+    ${getSpeedBadgeHtml(model)}
+    ${getAccuracyBadgeHtml(model)}
+    ${langLabel ? `<span class="model-meta-item model-lang-text">${langLabel}</span>` : ''}
+    ${model.disabled_reason ? `<span class="model-meta-item model-unavailable-pill" title="${escapeHtml(model.disabled_reason)}">Unavailable</span>` : ''}
+  `;
+}
+
+function renderModelActionsHtml(model) {
+  if (model.is_downloading) {
+    return `
+      <div class="model-progress-container" style="min-width: 140px;">
+        <div class="model-progress-bar-bg">
+          <div class="model-progress-bar-fill" id="bar-${model.id}" style="width: ${model.download_progress}%"></div>
+        </div>
+        <div class="model-progress-text" id="text-${model.id}">Downloading... ${model.download_progress}%</div>
+      </div>
+    `;
+  }
+  if (model.is_disabled) {
+    return `<button class="kbd-btn model-action-btn" disabled title="${escapeHtml(model.disabled_reason || 'This model is unavailable.')}">Unavailable</button>`;
+  }
+  if (model.is_downloaded) {
+    return `
+      ${model.is_active
+        ? `<span class="badge model-active-badge">${ICON_CHECK}<span>Active</span></span>`
+        : `<button class="kbd-btn activate-btn model-action-btn" data-id="${model.id}">Use This</button>`}
+      ${!model.is_active
+        ? `<button class="kbd-btn delete-btn model-action-btn danger icon-only" data-filename="${model.filename}" title="Delete model" aria-label="Delete model">${ICON_TRASH}</button>`
+        : ''}
+    `;
+  }
+  return `<button class="kbd-btn download-btn model-action-btn" data-id="${model.id}">Download</button>`;
 }
 
 const GEMMA_AUDIO_LANGUAGES = [
@@ -962,32 +1085,13 @@ export async function setupModelsSettings() {
         const currentModel = modelMap[selectedId] || modelMap[visibleVariants[0].id];
         if (!currentModel) return null;
 
-        const statusText = currentModel.is_active ? 'Active' : currentModel.is_disabled ? 'Unavailable' : currentModel.is_downloaded ? 'Downloaded' : 'Available';
-        const statusClass = currentModel.is_active ? 'active' : currentModel.is_disabled ? 'unavailable' : currentModel.is_downloaded ? 'downloaded' : 'available';
+        const statusText = currentModel.is_active ? 'Active' : currentModel.is_disabled ? 'Unavailable' : '';
+        const statusClass = currentModel.is_active ? 'active' : currentModel.is_disabled ? 'unavailable' : '';
 
-        let actionHtml = '';
-        if (currentModel.is_downloading) {
-          actionHtml = `
-            <div class="model-progress-container" style="min-width: 140px;">
-              <div class="model-progress-bar-bg">
-                <div class="model-progress-bar-fill" id="bar-${currentModel.id}" style="width: ${currentModel.download_progress}%"></div>
-              </div>
-              <div class="model-progress-text" id="text-${currentModel.id}">Downloading... ${currentModel.download_progress}%</div>
-            </div>
-          `;
-        } else if (currentModel.is_disabled) {
-          actionHtml = `<button class="kbd-btn model-action-btn" disabled title="${escapeHtml(currentModel.disabled_reason || 'This model is unavailable.')}">Unavailable</button>`;
-        } else if (currentModel.is_downloaded) {
-          actionHtml = `
-            ${currentModel.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" data-id="${currentModel.id}">Activate</button>`}
-            ${!currentModel.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${currentModel.filename}">Delete</button>` : ''}
-          `;
-        } else {
-          actionHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${currentModel.id}">Download</button>`;
-        }
+        const actionHtml = renderModelActionsHtml(currentModel);
 
         const card = document.createElement('div');
-        card.className = 'model-family-card';
+        card.className = `model-family-card${mode === 'available' ? ' compact' : ''}${currentModel.is_active ? ' is-active-card' : ''}`;
 
         // 2-layer category row if applicable
         let layer1Html = '';
@@ -1032,15 +1136,15 @@ export async function setupModelsSettings() {
         const gemmaLang = cfg?.gemma_audio_language || 'auto';
         const gemmaManglish = cfg?.gemma_audio_manglish || false;
         const gemmaOptionsHtml = (fam.familyId === 'gemma4-audio' && mode === 'downloaded') ? `
-          <div class="model-variant-toolbar" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 16px; align-items: center;">
+          <div class="gemma-options-row" style="padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: flex-start;">
             <div class="model-variant-selector-row" style="margin: 0;">
-              <span class="model-variant-selector-label">Language</span>
+              <span class="model-variant-selector-label" style="min-width: auto;">Language</span>
               <select id="gemmaAudioLangSelect" style="background: var(--bg-elevated, #1a1a1a); color: var(--text-primary, #fff); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; outline: none;">
                 ${GEMMA_AUDIO_LANGUAGES.map(l => `<option value="${escapeHtml(l.value)}" ${gemmaLang === l.value ? 'selected' : ''}>${escapeHtml(l.label)}</option>`).join('')}
               </select>
             </div>
             <div class="model-variant-selector-row" style="margin: 0; gap: 10px;">
-              <span class="model-variant-selector-label" title="Write Malayalam speech in Latin/English script (Manglish)">Manglish</span>
+              <span class="model-variant-selector-label" style="min-width: auto;" title="Write Malayalam speech in Latin/English script (Manglish)">Manglish</span>
               <label class="toggle-switch" title="Write Malayalam speech in Latin/English script (Manglish)">
                 <input type="checkbox" id="gemmaAudioManglishToggle" ${gemmaManglish ? 'checked' : ''}>
                 <span class="toggle-track"></span>
@@ -1059,7 +1163,7 @@ export async function setupModelsSettings() {
                 <div class="model-family-name-row">
                   <span class="model-family-name">${fam.name}</span>
                   <span class="model-family-provider-tag">${fam.provider}</span>
-                  <span class="model-status-pill ${statusClass}">${statusText}</span>
+                  <span class="model-status-pill ${statusClass}" style="${statusText ? '' : 'display: none;'}">${statusText}</span>
                 </div>
                 <div class="model-family-desc">${fam.description}</div>
               </div>
@@ -1067,19 +1171,12 @@ export async function setupModelsSettings() {
           </div>
 
           <div class="model-variant-selector-wrapper">
-            <div class="model-variant-toolbar">
-              ${layer1Html}
-              ${layer2Html}
-            </div>
+            ${(layer1Html || layer2Html) ? `<div class="model-variant-toolbar">${layer1Html}${layer2Html}</div>` : ''}
             ${gemmaOptionsHtml}
 
             <div class="model-variant-details-bar">
               <div class="model-variant-meta">
-                <span class="model-variant-pill">${currentModel.parameters || `${currentModel.size_mb} MB`}</span>
-                <span class="model-variant-pill">${currentModel.speed_label}</span>
-                <span class="model-variant-pill">${currentModel.speed_description}</span>
-                ${currentModel.disabled_reason ? `<span class="model-variant-pill" title="${escapeHtml(currentModel.disabled_reason)}">Unavailable</span>` : ''}
-                <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${currentModel.filename}</span>
+                ${renderModelMetaHtml(currentModel)}
               </div>
               <div class="model-variant-actions">
                 ${actionHtml}
@@ -1108,13 +1205,15 @@ export async function setupModelsSettings() {
           const model = modelMap[selId] || modelMap[vis[0].id];
           if (!model) return;
 
-          // Update pill
+          // Update card active highlight & pill
+          card.classList.toggle('is-active-card', Boolean(model.is_active));
           const pill = card.querySelector('.model-status-pill');
           if (pill) {
-            const sText = model.is_active ? 'Active' : model.is_disabled ? 'Unavailable' : model.is_downloaded ? 'Downloaded' : 'Available';
-            const sClass = model.is_active ? 'active' : model.is_disabled ? 'unavailable' : model.is_downloaded ? 'downloaded' : 'available';
+            const sText = model.is_active ? 'Active' : model.is_disabled ? 'Unavailable' : '';
+            const sClass = model.is_active ? 'active' : model.is_disabled ? 'unavailable' : '';
             pill.className = `model-status-pill ${sClass}`;
             pill.textContent = sText;
+            pill.style.display = sText ? '' : 'none';
           }
 
           // Update Layer 1 buttons active state
@@ -1151,40 +1250,14 @@ export async function setupModelsSettings() {
           const metaContainer = card.querySelector('.model-variant-meta');
           if (metaContainer) {
             metaContainer.style.opacity = '0.5';
-            metaContainer.innerHTML = `
-              <span class="model-variant-pill">${model.parameters || `${model.size_mb} MB`}</span>
-              <span class="model-variant-pill">${model.speed_label}</span>
-              <span class="model-variant-pill">${model.speed_description}</span>
-              ${model.disabled_reason ? `<span class="model-variant-pill" title="${escapeHtml(model.disabled_reason)}">Unavailable</span>` : ''}
-              <span style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${model.filename}</span>
-            `;
+            metaContainer.innerHTML = renderModelMetaHtml(model);
             requestAnimationFrame(() => { metaContainer.style.opacity = '1'; });
           }
 
           // Update actions
           const actionsContainer = card.querySelector('.model-variant-actions');
           if (actionsContainer) {
-            let actHtml = '';
-            if (model.is_downloading) {
-              actHtml = `
-                <div class="model-progress-container" style="min-width: 140px;">
-                  <div class="model-progress-bar-bg">
-                    <div class="model-progress-bar-fill" id="bar-${model.id}" style="width: ${model.download_progress}%"></div>
-                  </div>
-                  <div class="model-progress-text" id="text-${model.id}">Downloading... ${model.download_progress}%</div>
-                </div>
-              `;
-            } else if (model.is_disabled) {
-              actHtml = `<button class="kbd-btn model-action-btn" disabled title="${escapeHtml(model.disabled_reason || 'This model is unavailable.')}">Unavailable</button>`;
-            } else if (model.is_downloaded) {
-              actHtml = `
-                ${model.is_active ? `<span class="badge" style="background: var(--accent); color: #090909; font-weight: 800; padding: 6px 14px;">Active</span>` : `<button class="kbd-btn activate-btn model-action-btn" data-id="${model.id}">Activate</button>`}
-                ${!model.is_active ? `<button class="kbd-btn delete-btn model-action-btn danger" data-filename="${model.filename}">Delete</button>` : ''}
-              `;
-            } else {
-              actHtml = `<button class="kbd-btn download-btn model-action-btn" data-id="${model.id}">Download</button>`;
-            }
-            actionsContainer.innerHTML = actHtml;
+            actionsContainer.innerHTML = renderModelActionsHtml(model);
             bindActionButtons();
           }
         };

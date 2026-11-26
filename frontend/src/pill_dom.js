@@ -9,9 +9,11 @@ export function mountPillDom() {
   moduleNode.className = 'module style-bars';
   moduleNode.id = 'module';
 
-  const ring = document.createElement('div');
-  ring.className = 'processing-ring';
-  moduleNode.appendChild(ring);
+  const processingOrb = document.createElement('canvas');
+  processingOrb.className = 'processing-orb-canvas';
+  processingOrb.setAttribute('role', 'img');
+  processingOrb.setAttribute('aria-label', 'Thinking…');
+  moduleNode.appendChild(processingOrb);
 
   // 1. Classic 9-bar visualizer
   const visualizer = document.createElement('div');
@@ -48,20 +50,17 @@ export function mountPillDom() {
   const wavePath = waveWrap.querySelector('.wave-path');
   moduleNode.appendChild(waveWrap);
 
-  // 4. Organic multi-ring audio bubble visualizer (morphs with voice & breathes on processing)
+  // 4. Thinking Orb visualizer (listening while recording, solving while processing)
   const bubbleViz = document.createElement('div');
   bubbleViz.className = 'bubble-visualizer';
-  bubbleViz.innerHTML = `
-    <svg viewBox="0 0 48 48" width="48" height="48" fill="none">
-      <path class="bubble-wave-ring bubble-ring-outer" stroke="rgba(255,255,255,0.35)" stroke-width="1.1"/>
-      <path class="bubble-wave-ring bubble-ring-mid" stroke="rgba(255,255,255,0.65)" stroke-width="1.3"/>
-      <path class="bubble-wave-ring bubble-ring-inner" stroke="#ffffff" stroke-width="1.5"/>
-    </svg>
-  `;
-  const bubbleRings = Array.from(bubbleViz.querySelectorAll('.bubble-wave-ring'));
+  const bubbleCanvas = document.createElement('canvas');
+  bubbleCanvas.className = 'bubble-orb-canvas';
+  bubbleCanvas.setAttribute('role', 'img');
+  bubbleCanvas.setAttribute('aria-label', 'Thinking orb visualizer');
+  bubbleViz.appendChild(bubbleCanvas);
   moduleNode.appendChild(bubbleViz);
 
   root.appendChild(moduleNode);
 
-  return { moduleNode, bars, spectrumBars, wavePath, bubbleRings };
+  return { moduleNode, bars, spectrumBars, wavePath, bubbleCanvas, processingOrb };
 }

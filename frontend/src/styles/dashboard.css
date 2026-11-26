@@ -320,7 +320,7 @@
 }
 
 .content-header {
-  padding: 48px 48px 20px;
+  padding: 40px 48px 12px;
 }
 
 .section-title {
@@ -332,7 +332,7 @@
 
 .section {
   flex: 1;
-  padding: 0 48px 48px;
+  padding: 12px 48px 48px;
   overflow-y: auto;
   overflow-x: hidden;
   display: none;

@@ -95,10 +95,6 @@ settingsModal.innerHTML = `
         <span class="crumb-sep">/</span>
         <span class="section-title">Home</span>
       </div>
-      <div class="header-status-pill" id="headerStatusPill" title="Active transcription engine">
-        <span class="header-status-dot"></span>
-        <span id="headerStatusText">Ready</span>
-      </div>
     </div>
     <div class="section" id="sec-home">
       <div class="home-layout">
@@ -694,6 +690,17 @@ settingsModal.innerHTML = `
               </label>
             </div>
 
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Phonetic Dictionary Matching</span>
+                <span class="setting-desc">Automatically fix misheard custom words and names phonetically (also works without LLM)</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="phoneticDictToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
             <div class="setting-row llm-choice-setting" id="llmThinkingSelection">
               <div class="setting-info">
                 <span class="setting-title">Reasoning Steps</span>
@@ -880,13 +887,9 @@ settingsModal.innerHTML = `
                 </button>
                 <button type="button" class="pill-style-card" data-style="bubble">
                   <div class="pill-preview pill-preview-bubble">
-                    <svg viewBox="0 0 28 28" width="26" height="26" fill="none">
-                      <path d="M14 3 C18 2.5, 22 6, 24 10 C25.5 14, 23 19, 20 22 C16 25, 11 24.5, 7 22 C4 19, 3 14, 4.5 9.5 C6 5.5, 10 3.5, 14 3 Z" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
-                      <path d="M14 6 C17 6.5, 20 8.5, 21 12 C22 15.5, 19.5 19.5, 16 21 C12.5 22, 9 20, 7.5 17 C6 13.5, 7.5 9, 10.5 7 C12 6, 13 5.8, 14 6 Z" stroke="rgba(255,255,255,0.75)" stroke-width="1.1"/>
-                      <circle cx="14" cy="14" r="4" stroke="#ffffff" stroke-width="1.2"/>
-                    </svg>
+                    <canvas id="pillPreviewOrbCanvas" width="26" height="26" style="width: 26px; height: 26px; display: block;"></canvas>
                   </div>
-                  <span class="pill-style-name">Audio Bubble</span>
+                  <span class="pill-style-name">Thinking Orb</span>
                 </button>
               </div>
             </div>

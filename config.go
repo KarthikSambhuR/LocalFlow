@@ -70,6 +70,7 @@ type Config struct {
 	LLMTone                    string  `json:"llm_tone"`
 	LLMContextSize             int     `json:"llm_context_size"`
 	LLMEnableThinking          bool    `json:"llm_enable_thinking"`
+	PhoneticDictEnabled        bool    `json:"phonetic_dict_enabled"`
 	ManglishEnabled            bool    `json:"manglish_enabled"`
 	ManglishExample1           string  `json:"manglish_example_1"`
 	ManglishExample2           string  `json:"manglish_example_2"`
@@ -106,7 +107,7 @@ func loadConfig() Config {
 		TranscriptionRetentionDays: 30,
 		ActiveMicrophone:           "Default",
 		DataFolder:                 "Default",
-		ActiveModel:                "ggml-tiny.en.bin",
+		ActiveModel:                "whistle.cact",
 		ProcessingEngine:           "cpu",
 		SelectedGPU:                "Default",
 		LLMEnabled:                 false,
@@ -115,6 +116,7 @@ func loadConfig() Config {
 		LLMTone:                    "auto",
 		LLMContextSize:             4096,
 		LLMEnableThinking:          false,
+		PhoneticDictEnabled:        true,
 		ManglishEnabled:            false,
 		ManglishExample1:           "Hello, sukhamano enth cheyyunnu?",
 		ManglishExample2:           "Enik naale varaan pattilla.",
@@ -164,7 +166,7 @@ func loadConfig() Config {
 		return defaultCfg
 	}
 
-	var cfg Config
+	cfg := defaultCfg
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return defaultCfg
 	}
@@ -191,7 +193,7 @@ func loadConfig() Config {
 		cfg.DataFolder = "Default"
 	}
 	if cfg.ActiveModel == "" {
-		cfg.ActiveModel = "ggml-tiny.en.bin"
+		cfg.ActiveModel = "whistle.cact"
 	}
 	if cfg.ProcessingEngine != "vulkan" {
 		cfg.ProcessingEngine = "cpu"

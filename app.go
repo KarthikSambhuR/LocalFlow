@@ -106,6 +106,7 @@ type App struct {
 	loadedModelPath         string
 	loadedEngine            string
 	loadedGPU               string
+	whisperLastFailedKey    string
 	llmCmd                  *exec.Cmd
 	transcribedSamplesCount int
 	interimTranscripts      []string
@@ -1420,8 +1421,14 @@ func (a *App) ensureWhisperLoaded(cfg Config, activeModel string) bool {
 		}
 	}
 
-	if a.loadedModelPath == targetPath && a.loadedEngine == engine && a.loadedGPU == cfg.SelectedGPU && a.whisperCtx != nil {
+	attemptKey := targetPath + "|" + engine + "|" + cfg.SelectedGPU
+	if a.loadedModelPath == targetPath && a.loadedGPU == cfg.SelectedGPU && a.whisperCtx != nil &&
+		(a.loadedEngine == engine || a.whisperLastFailedKey == attemptKey) {
 		return true
+	}
+
+	if a.whisperLastFailedKey == attemptKey {
+		return false
 	}
 
 	fmt.Printf("Loading Whisper model: %s with %s engine (GPU: %s)...\n", targetPath, engine, cfg.SelectedGPU)
@@ -1449,16 +1456,30 @@ func (a *App) ensureWhisperLoaded(cfg Config, activeModel string) bool {
 	}
 	params.gpu_device = C.int(gpuIndex)
 	a.whisperCtx = C.whisper_init_from_file_with_params(modelPathC, params)
-	if a.whisperCtx == nil {
-		fmt.Printf("Error initializing Whisper model from %s with %s engine\n", targetPath, engine)
-		return false
-	} else {
-		a.loadedModelPath = targetPath
-		a.loadedEngine = engine
-		a.loadedGPU = cfg.SelectedGPU
-		fmt.Printf("Successfully loaded Whisper model: %s with %s engine (GPU: %s)\n", targetPath, engine, cfg.SelectedGPU)
-		return true
+	actualEngine := engine
+	if a.whisperCtx == nil && engine == "vulkan" {
+		fmt.Printf("Error initializing Whisper model from %s with vulkan engine; falling back to CPU...\n", targetPath)
+		params.use_gpu = C.bool(false)
+		params.gpu_device = C.int(0)
+		a.whisperCtx = C.whisper_init_from_file_with_params(modelPathC, params)
+		actualEngine = "cpu"
 	}
+	if a.whisperCtx == nil {
+		fmt.Printf("Error initializing Whisper model from %s with %s engine\n", targetPath, actualEngine)
+		a.whisperLastFailedKey = attemptKey
+		return false
+	}
+
+	if actualEngine != engine {
+		a.whisperLastFailedKey = attemptKey
+	} else {
+		a.whisperLastFailedKey = ""
+	}
+	a.loadedModelPath = targetPath
+	a.loadedEngine = actualEngine
+	a.loadedGPU = cfg.SelectedGPU
+	fmt.Printf("Successfully loaded Whisper model: %s with %s engine (GPU: %s)\n", targetPath, actualEngine, cfg.SelectedGPU)
+	return true
 }
 
 func (a *App) ensureActiveModel() {
@@ -1468,7 +1489,7 @@ func (a *App) ensureActiveModel() {
 	cfg := loadConfig()
 	activeModel := cfg.ActiveModel
 	if activeModel == "" {
-		activeModel = "ggml-tiny.en.bin"
+		activeModel = "whistle.cact"
 	}
 
 	if isGemmaAudioSTTModel(activeModel) {
@@ -1730,10 +1751,19 @@ func (a *App) transcribe() {
 			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {
 				fmt.Printf("Gemma consolidation failed: %v. Using joined chunks.\n", err)
+				if cfg.PhoneticDictEnabled {
+					result = ApplyPhoneticDictionary(result, dictWords)
+				}
 			} else {
 				fmt.Println("Gemma consolidation succeeded.")
-				result = refinedText
+				if cfg.PhoneticDictEnabled {
+					result = ApplyExactDictionaryPolish(refinedText, dictWords)
+				} else {
+					result = refinedText
+				}
 			}
+		} else if cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+			result = ApplyPhoneticDictionary(result, dictWords)
 		}
 	} else if !isBlank && !whisperFailed && cfg.LLMEnabled {
 		runtime.EventsEmit(a.ctx, "recording-state", "refining")
@@ -1750,18 +1780,30 @@ func (a *App) transcribe() {
 			isGemma := strings.Contains(strings.ToLower(cfg.LLMActiveModel), "gemma")
 			manglishEnabled := cfg.ManglishEnabled && !isSarvam
 			onlyMalayalam := isConformer && (isGemma || isSarvam) && !manglishEnabled
-			prompt := getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, isConformer && manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5)
+			prompt := getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, isConformer && manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5, result)
 			refinedText, err := refineTextWithLLM(result, url, prompt, cfg.LLMEnableThinking)
 			llmTimeUs = time.Since(llmStart).Microseconds()
 			if err != nil {
 				fmt.Printf("LLM Refinement failed: %v. Using raw transcription.\n", err)
+				if cfg.PhoneticDictEnabled {
+					result = ApplyPhoneticDictionary(result, dictWords)
+				}
 			} else {
 				fmt.Println("LLM Refinement succeeded.")
-				result = refinedText
+				if cfg.PhoneticDictEnabled {
+					result = ApplyExactDictionaryPolish(refinedText, dictWords)
+				} else {
+					result = refinedText
+				}
 			}
 		} else {
 			fmt.Println("LLM Refinement failed: LLM server port not allocated. Using raw transcription.")
+			if cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+				result = ApplyPhoneticDictionary(result, dictWords)
+			}
 		}
+	} else if !isBlank && !whisperFailed && cfg.PhoneticDictEnabled && len(dictWords) > 0 {
+		result = ApplyPhoneticDictionary(result, dictWords)
 	}
 
 	if isBlank {
@@ -1859,7 +1901,11 @@ type LLMStreamChunk struct {
 	} `json:"choices"`
 }
 
-func getSystemPrompt(mode string, tone string, dictWords []string, translitMappings []WordMapping, convertToManglish bool, onlyMalayalam bool, ex1, ex2, ex3, ex4, ex5 string) string {
+func getSystemPrompt(mode string, tone string, dictWords []string, translitMappings []WordMapping, convertToManglish bool, onlyMalayalam bool, ex1, ex2, ex3, ex4, ex5 string, rawTextOpt ...string) string {
+	rawText := ""
+	if len(rawTextOpt) > 0 {
+		rawText = rawTextOpt[0]
+	}
 	mode = normalizeLLMRefinementMode(mode)
 	tone = normalizeLLMTone(tone)
 
@@ -1980,10 +2026,7 @@ Assistant: അവൻ അവിടെ പോയിട്ടുണ്ടെന്�
 		toneInstruction = "Make the wording polished, clear, and workplace-appropriate, preferring precise, neutral phrasing without making it stiff, ornate, or more formal than necessary."
 	}
 
-	var dictInstruction string
-	if len(dictWords) > 0 {
-		dictInstruction = fmt.Sprintf("\nHere is a list of custom vocabulary and spelling preferences (names, technical jargon, acronyms) that the user frequently dictates: %s. Prefer using these words when correcting phonetic or spelling errors, and do not treat them as spelling mistakes.", strings.Join(dictWords, ", "))
-	}
+	dictInstruction := FormatDictionaryLLMInstruction(rawText, dictWords)
 
 	var translitInstruction string
 	if len(translitMappings) > 0 {
@@ -2599,9 +2642,22 @@ func (a *App) transcribeChunk(chunk []float32) string {
 	langC := C.CString(whisperLanguageCode(cfg.ActiveModel))
 	wParams.language = langC
 
+	var initialPromptC *C.char
+	if cfg.PhoneticDictEnabled {
+		if dictWords, err := GetDictionaryWords(); err == nil && len(dictWords) > 0 {
+			if promptStr := BuildWhisperInitialPrompt(dictWords, 20); promptStr != "" {
+				initialPromptC = C.CString(promptStr)
+				wParams.initial_prompt = initialPromptC
+			}
+		}
+	}
+
 	if code := C.whisper_full(a.whisperCtx, wParams, (*C.float)(unsafe.Pointer(&whisperBuf[0])), C.int(len(whisperBuf))); code != 0 {
 		fmt.Println("Background Whisper chunk transcription failed with code:", int(code))
 		C.free(unsafe.Pointer(langC))
+		if initialPromptC != nil {
+			C.free(unsafe.Pointer(initialPromptC))
+		}
 		return ""
 	}
 
@@ -2611,6 +2667,9 @@ func (a *App) transcribeChunk(chunk []float32) string {
 		result += C.GoString(C.whisper_full_get_segment_text(a.whisperCtx, C.int(i)))
 	}
 	C.free(unsafe.Pointer(langC))
+	if initialPromptC != nil {
+		C.free(unsafe.Pointer(initialPromptC))
+	}
 	return cleanSoundTags(result)
 }
 
@@ -2749,7 +2808,7 @@ func buildGemmaAudioConsolidationPrompt(cfg Config, dictWords []string, rawResul
 	if cfg.LLMEnabled {
 		translitMappings, _ := GetTransliterations()
 		onlyMalayalam := (strings.EqualFold(lang, "Malayalam") || containsMalayalam(rawResult)) && !manglishEnabled
-		return getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5)
+		return getSystemPrompt(cfg.LLMRefinementMode, cfg.LLMTone, dictWords, translitMappings, manglishEnabled, onlyMalayalam, cfg.ManglishExample1, cfg.ManglishExample2, cfg.ManglishExample3, cfg.ManglishExample4, cfg.ManglishExample5, rawResult)
 	}
 
 	var langInstr string

@@ -5,6 +5,7 @@
 @import './styles/insights.css';
 @import './styles/settings.css';
 @import './styles/components.css';
+@import './styles/light.css';
 
 @font-face {
   font-family: 'Urbanist';
@@ -13,12 +14,12 @@
   font-style: normal;
 }
 :root {
-  /* Rich Obsidian + Cobalt Blue depth hierarchy (Antigravity / T3 Code) */
-  --bg-app: #08090B;
-  --bg-sidebar: #0C0D10;
-  --bg-card: #131418;
-  --bg-card-hover: #191B20;
-  --bg-elevated: #17191E;
+  /* Rich Obsidian depth hierarchy */
+  --bg-app: #060709;
+  --bg-sidebar: #090A0D;
+  --bg-card: #101115;
+  --bg-card-hover: #16181D;
+  --bg-elevated: #14161B;
   --text-primary: #F3F4F6;
   --text-secondary: rgba(243, 244, 246, 0.66);
   --text-muted: rgba(243, 244, 246, 0.42);
@@ -37,20 +38,20 @@
 }
 
 [data-theme="light"] {
-  --bg-app: #F6F7F9;
-  --bg-sidebar: #ECEEF2;
+  --bg-app: #F5F6F8;
+  --bg-sidebar: #EBEEF3;
   --bg-card: #FFFFFF;
-  --bg-card-hover: #F2F4F8;
+  --bg-card-hover: #F8F9FB;
   --bg-elevated: #FFFFFF;
-  --text-primary: #0F1115;
-  --text-secondary: rgba(15, 17, 21, 0.68);
-  --text-muted: rgba(15, 17, 21, 0.45);
-  --accent: #18181B;
-  --accent-soft: rgba(24, 24, 27, 0.08);
-  --border: rgba(15, 17, 21, 0.08);
-  --border-active: rgba(15, 17, 21, 0.18);
-  --specular: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --depth-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  --accent: #0F172A;
+  --accent-soft: rgba(15, 23, 42, 0.07);
+  --border: rgba(15, 23, 42, 0.09);
+  --border-active: rgba(15, 23, 42, 0.22);
+  --specular: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --depth-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.04);
   --shadow-glow: none;
   --play-hover-text: #FFFFFF;
 }

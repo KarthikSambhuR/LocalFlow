@@ -669,7 +669,7 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 	cfg := loadConfig()
 	activeFilename := cfg.ActiveModel
 	if activeFilename == "" {
-		activeFilename = "ggml-tiny.en.bin"
+		activeFilename = "whistle.cact"
 	}
 
 	modelsDir := s.getModelsDir()
@@ -1179,25 +1179,25 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 		modelsDir := filepath.Join(dataDir, "models")
 		_ = os.MkdirAll(modelsDir, 0755)
 
-		// Download Whisper Tiny Model (Urbanist font is already bundled in frontend/public/fonts)
-		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 5, "Downloading default Whisper Tiny model (75 MB)...")
+		// Download Cactus Whistle Model (Urbanist font is already bundled in frontend/public/fonts)
+		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 5, "Downloading default Cactus Whistle model (17 MB)...")
 
-		var tinyModel *WhisperModelInfo
+		var defaultModel *WhisperModelInfo
 		for i := range AvailableModels {
-			if AvailableModels[i].ID == "tiny" {
-				tinyModel = &AvailableModels[i]
+			if AvailableModels[i].ID == "cactus-whistle" {
+				defaultModel = &AvailableModels[i]
 				break
 			}
 		}
-		if tinyModel == nil {
+		if defaultModel == nil {
 			wailsRuntime.EventsEmit(s.ctx, "setup-error", "Model info not found")
 			return
 		}
 
-		tmpModelPath := filepath.Join(modelsDir, tinyModel.Filename+".tmp")
-		finalModelPath := filepath.Join(modelsDir, tinyModel.Filename)
+		tmpModelPath := filepath.Join(modelsDir, defaultModel.Filename+".tmp")
+		finalModelPath := filepath.Join(modelsDir, defaultModel.Filename)
 
-		resp, err := http.Get(tinyModel.URL)
+		resp, err := http.Get(defaultModel.URL)
 		if err != nil {
 			wailsRuntime.EventsEmit(s.ctx, "setup-error", fmt.Sprintf("Failed to download model: %v", err))
 			return
@@ -1227,7 +1227,7 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 			OnProgress: func(percent int, speed float64, eta time.Duration) {
 				speedStr := formatBytes(speed) + "/s"
 				etaStr := formatDuration(eta)
-				wailsRuntime.EventsEmit(s.ctx, "setup-progress", percent, fmt.Sprintf("Downloading Whisper Tiny model... %d%% (%s, ETA: %s)", percent, speedStr, etaStr))
+				wailsRuntime.EventsEmit(s.ctx, "setup-progress", percent, fmt.Sprintf("Downloading Cactus Whistle model... %d%% (%s, ETA: %s)", percent, speedStr, etaStr))
 			},
 		}
 
@@ -1244,8 +1244,8 @@ func (s *SettingsApp) DownloadEssentialAssets() {
 			return
 		}
 
-		// Automatically set the downloaded Tiny model as the active model in the config
-		cfg.ActiveModel = tinyModel.Filename
+		// Automatically set the downloaded Cactus Whistle model as the active model in the config
+		cfg.ActiveModel = defaultModel.Filename
 		_ = saveConfig(cfg)
 
 		wailsRuntime.EventsEmit(s.ctx, "setup-progress", 100, "Downloads complete!")
@@ -1296,6 +1296,12 @@ func (s *SettingsApp) SetLLMContextSize(size int) error {
 func (s *SettingsApp) SetManglishEnabled(enabled bool) {
 	cfg := loadConfig()
 	cfg.ManglishEnabled = enabled
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetPhoneticDictEnabled(enabled bool) {
+	cfg := loadConfig()
+	cfg.PhoneticDictEnabled = enabled
 	saveConfig(cfg)
 }
 

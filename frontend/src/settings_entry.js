@@ -21,7 +21,8 @@ import {
   setupManglishPersonalization,
   setupBilingualRouting,
   setupModelsSettings,
-  setupPillStylePicker
+  setupPillStylePicker,
+  renderOrbPreview
 } from './settings_handlers.js';
 import { setupMeetingsTab } from './meetings_handler.js';
 
@@ -133,6 +134,7 @@ function setupTheme() {
       const val = item.getAttribute('data-value');
       localStorage.setItem('localflow_theme', val);
       document.documentElement.setAttribute('data-theme', val);
+      renderOrbPreview();
       label.textContent = val === 'light' ? 'Light Mode' : 'Dark Mode';
       items.forEach(i => i.classList.toggle('active', i === item));
       dropdown.classList.remove('open');
@@ -191,17 +193,6 @@ function setupKeyboardShortcuts(switchSection) {
   });
 }
 
-async function updateHeaderStatusPill() {
-  const txt = document.getElementById('headerStatusText');
-  if (!txt || !window.go?.main?.SettingsApp) return;
-  try {
-    const cfg = await window.go.main.SettingsApp.GetConfig();
-    const model = (cfg.active_model || 'tiny.en').replace(/^ggml-/, '').replace(/\.(bin|gguf|onnx|cact)$/i, '');
-    const engine = cfg.processing_engine === 'vulkan' ? 'Vulkan GPU' : 'CPU';
-    txt.textContent = `${model} • ${engine}`;
-  } catch (_) {}
-}
-
 export async function initSettingsApp() {
   setupTheme();
   setupWindowTitlebar();
@@ -237,7 +228,6 @@ export async function initSettingsApp() {
 
   navItems.forEach(item => item.addEventListener('click', () => switchSection(item.getAttribute('data-section'))));
   setupKeyboardShortcuts(switchSection);
-  updateHeaderStatusPill();
 
   settingsOverlay.classList.add('active');
   const route = await window.go.main.SettingsApp.GetInitialRoute();
