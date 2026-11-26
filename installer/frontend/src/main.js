@@ -56,7 +56,7 @@ function renderWelcome() {
   container.className = 'screen';
   container.innerHTML = `
     <div>
-      <h1>Install LocalFlow v1.5.0</h1>
+      <h1>Install LocalFlow v1.6.0</h1>
       <p class="description">
         Offline speech-to-text dictation, meeting transcription, and local AI refinement.
       </p>
@@ -249,7 +249,7 @@ function renderFinished() {
       <div class="checkmark-circle"><div class="checkmark"></div></div>
     </div>
     <h1 style="text-align: center; margin-bottom: 6px;">Setup Complete</h1>
-    <p class="description" style="text-align: center;">LocalFlow v1.5.0 is ready to use.</p>
+    <p class="description" style="text-align: center;">LocalFlow v1.6.0 is ready to use.</p>
 
     <div style="display: flex; justify-content: center; margin: 12px 0;">
       <label class="checkbox-label" id="launch-lbl"></label>
