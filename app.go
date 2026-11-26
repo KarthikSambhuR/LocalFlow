@@ -114,6 +114,7 @@ type App struct {
 	llmMutex                sync.Mutex
 	llmSyncInProgress       atomic.Bool
 	llmPort                 int
+	overlayGen              atomic.Uint64
 	runningLLMConfig        Config
 	llmRetryAfter           time.Time
 	llmConsecutiveFailures  int
@@ -914,11 +915,7 @@ func (a *App) listenToKeyboard() {
 
 				if wasRecording {
 					runtime.EventsEmit(a.ctx, "recording-done")
-					go func() {
-						time.Sleep(650 * time.Millisecond)
-						runtime.WindowHide(a.ctx)
-						hideOverlayWindow()
-					}()
+					a.scheduleOverlayHide(1800 * time.Millisecond)
 				}
 				continue
 			}
@@ -1013,6 +1010,7 @@ func (a *App) listenToKeyboard() {
 				a.routingDecided = false
 				a.useConformer = false
 				a.streamingActive = true
+				a.overlayGen.Add(1)
 				a.mutex.Unlock()
 
 				a.streamingWG.Add(1)
@@ -1631,9 +1629,7 @@ func (a *App) transcribe() {
 
 		fmt.Println("No audio captured for transcription")
 		runtime.EventsEmit(a.ctx, "recording-done")
-		time.Sleep(250 * time.Millisecond)
-		runtime.WindowHide(a.ctx)
-		hideOverlayWindow()
+		a.scheduleOverlayHide(1800 * time.Millisecond)
 		return
 	}
 
@@ -1793,9 +1789,30 @@ func (a *App) transcribe() {
 	}
 
 	runtime.EventsEmit(a.ctx, "recording-done")
-	time.Sleep(300 * time.Millisecond)
-	runtime.WindowHide(a.ctx)
-	hideOverlayWindow()
+	a.scheduleOverlayHide(1800 * time.Millisecond)
+}
+
+func (a *App) scheduleOverlayHide(fallbackDelay time.Duration) {
+	gen := a.overlayGen.Load()
+	ch := make(chan struct{})
+	var once sync.Once
+	unsub := runtime.EventsOnce(a.ctx, "pill-hidden", func(_ ...interface{}) {
+		once.Do(func() { close(ch) })
+	})
+	go func() {
+		select {
+		case <-ch:
+		case <-time.After(fallbackDelay):
+			if unsub != nil {
+				unsub()
+			}
+		}
+		if a.overlayGen.Load() != gen {
+			return
+		}
+		runtime.WindowHide(a.ctx)
+		hideOverlayWindow()
+	}()
 }
 
 func GetGPUDevicesList() []string {
