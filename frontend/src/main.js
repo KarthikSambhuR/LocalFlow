@@ -22,6 +22,8 @@ let spectrumBars = [];
 let wavePath = null;
 let bubbleCanvas = null;
 let processingOrbCanvas = null;
+let previewPill = null;
+let previewText = null;
 
 let currentPillStyle = 'bars';
 const spectrumTargets = new Array(SPECTRUM_COUNT).fill(3);
@@ -307,8 +309,14 @@ function clearHideTimers() {
   }
 }
 
+function clearLivePreview() {
+  if (previewPill) previewPill.classList.remove('visible');
+  if (previewText) previewText.textContent = '';
+}
+
 function showModule() {
   clearHideTimers();
+  clearLivePreview();
   state.isActive = true;
   state.isProcessing = false;
   moduleNode.classList.remove('processing', 'refining', 'loading-model');
@@ -318,6 +326,7 @@ function showModule() {
 
 function performHide() {
   clearHideTimers();
+  clearLivePreview();
   state.isActive = false;
   state.isProcessing = false;
   moduleNode.classList.remove('active', 'processing', 'refining', 'loading-model');
@@ -418,6 +427,17 @@ function setupWails() {
   window.runtime.EventsOn('pill-style', (style) => {
     applyPillStyle(style);
   });
+  window.runtime.EventsOn('live-preview', (text) => {
+    if (!previewPill || !previewText) return;
+    const clean = (text || '').trim();
+    if (!clean) {
+      clearLivePreview();
+      return;
+    }
+    previewText.textContent = clean;
+    previewPill.classList.add('visible');
+    previewText.scrollLeft = previewText.scrollWidth;
+  });
 }
 
 async function init() {
@@ -438,6 +458,8 @@ async function init() {
     wavePath = pill.wavePath;
     bubbleCanvas = pill.bubbleCanvas;
     processingOrbCanvas = pill.processingOrb;
+    previewPill = pill.previewPill;
+    previewText = pill.previewText;
 
     if (window.go?.main?.App?.GetPillStyle) {
       try {

@@ -650,6 +650,17 @@ kbd {
   padding: 3px;
 }
 
+.provider-nvidia {
+  background: #76B900;
+  padding: 0;
+}
+
+.provider-moondream {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  padding: 5px;
+}
+
 .model-family-title-wrap {
   display: flex;
   flex-direction: column;

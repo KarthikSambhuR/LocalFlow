@@ -62,5 +62,13 @@ export function mountPillDom() {
 
   root.appendChild(moduleNode);
 
-  return { moduleNode, bars, spectrumBars, wavePath, bubbleCanvas, processingOrb };
+  const previewPill = document.createElement('div');
+  previewPill.className = 'live-preview-pill';
+  previewPill.id = 'livePreviewPill';
+  const previewText = document.createElement('span');
+  previewText.className = 'live-preview-text';
+  previewPill.appendChild(previewText);
+  root.appendChild(previewPill);
+
+  return { moduleNode, bars, spectrumBars, wavePath, bubbleCanvas, processingOrb, previewPill, previewText };
 }

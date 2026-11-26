@@ -550,6 +550,30 @@ var AvailableModels = []WhisperModelInfo{
 		ModelType:        "whisper",
 	},
 	{
+		ID:               "parakeet-tdt-v3",
+		Name:             "NVIDIA Parakeet TDT v3 (ONNX)",
+		Filename:         "parakeet-tdt-v3",
+		URL:              "https://huggingface.co/istupakov/parakeet-tdt-0.6b-v3-onnx/resolve/main/encoder-model.int8.onnx?download=true",
+		SizeMB:           640,
+		SpeedLabel:       "Blazing Fast (ONNX)",
+		SpeedDescription: "High-accuracy 25-language TDT model",
+		Description:      "NVIDIA Parakeet TDT 0.6B v3 (INT8 ONNX). Fast transcription with built-in punctuation and capitalization.",
+		Language:         "multilingual",
+		ModelType:        "whisper",
+	},
+	{
+		ID:               "parakeet-redux",
+		Name:             "Parakeet Redux (1.58-bit ONNX)",
+		Filename:         "parakeet-redux",
+		URL:              "https://huggingface.co/eschmidbauer/parakeet-redux-onnx/resolve/main/encoder-model.onnx?download=true",
+		SizeMB:           398,
+		SpeedLabel:       "Ultra Fast (ONNX)",
+		SpeedDescription: "1.58-bit ternary quantized TDT model",
+		Description:      "Moondream Parakeet Redux (1.58-bit ternary ONNX export of Parakeet TDT v3). Smaller footprint and faster CPU inference.",
+		Language:         "multilingual",
+		ModelType:        "whisper",
+	},
+	{
 		ID:               "smollm2-135m",
 		Name:             "SmolLM2 135M (Refinement)",
 		Filename:         "SmolLM2-135M-Instruct-Q8_0.gguf",
@@ -684,7 +708,9 @@ func (s *SettingsApp) GetModelsList() []ModelStatus {
 		pathInLocal := filepath.Join("models", m.Filename)
 
 		isDownloaded := false
-		if m.ID == "indic-conformer-120m-int8" || m.ID == "indic-conformer-120m-fp32" {
+		if IsParakeetActive(m.ID) {
+			isDownloaded = IsParakeetModelDownloaded(modelsDir, m.ID)
+		} else if m.ID == "indic-conformer-120m-int8" || m.ID == "indic-conformer-120m-fp32" {
 			tokenizerPath := filepath.Join(modelsDir, "tokenizer.model")
 			modelPathCustom := filepath.Join(modelsDir, m.Filename)
 			modelPathLocal := filepath.Join("models", m.Filename)
@@ -888,6 +914,81 @@ func (s *SettingsApp) DownloadModel(id string) {
 		modelsDir := s.getModelsDir()
 		_ = os.MkdirAll(modelsDir, 0755)
 
+		if IsParakeetActive(id) {
+			dirName, files := ParakeetModelFiles(id)
+			targetDir := filepath.Join(modelsDir, dirName)
+			if err := os.MkdirAll(targetDir, 0755); err != nil {
+				wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+				return
+			}
+			var totalApproxBytes int64
+			for _, f := range files {
+				totalApproxBytes += f.ApproxMB * 1024 * 1024
+			}
+			var downloadedSoFar int64
+			for _, f := range files {
+				destPath := filepath.Join(targetDir, f.Filename)
+				if st, err := os.Stat(destPath); err == nil && st.Size() > 0 {
+					downloadedSoFar += st.Size()
+					continue
+				}
+				tmpFile := destPath + ".tmp"
+				resp, err := http.Get(f.URL)
+				if err != nil {
+					wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+					return
+				}
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, fmt.Sprintf("HTTP %d downloading %s", resp.StatusCode, f.Filename))
+					return
+				}
+				out, err := os.Create(tmpFile)
+				if err != nil {
+					resp.Body.Close()
+					wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+					return
+				}
+				fileLen := resp.ContentLength
+				if fileLen <= 0 {
+					fileLen = f.ApproxMB * 1024 * 1024
+				}
+				startTime := time.Now()
+				counter := &WriteCounter{
+					ContentLen: uint64(totalApproxBytes),
+					StartTime:  startTime,
+					LastUpdate: startTime,
+					OnProgress: func(percent int, speed float64, eta time.Duration) {
+						// Compute overall percent across all files
+						overall := int((downloadedSoFar * 100) / totalApproxBytes) + (percent*int(fileLen))/int(totalApproxBytes)
+						if overall > 99 {
+							overall = 99
+						}
+						downloadLock.Lock()
+						downloadProgress[id] = overall
+						downloadLock.Unlock()
+						wailsRuntime.EventsEmit(s.ctx, "model-download-progress", id, overall, formatBytes(speed)+"/s", formatDuration(eta))
+					},
+				}
+				_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+				out.Close()
+				resp.Body.Close()
+				if err != nil {
+					_ = os.Remove(tmpFile)
+					wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+					return
+				}
+				if err := os.Rename(tmpFile, destPath); err != nil {
+					_ = os.Remove(tmpFile)
+					wailsRuntime.EventsEmit(s.ctx, "model-download-error", id, err.Error())
+					return
+				}
+				downloadedSoFar += fileLen
+			}
+			wailsRuntime.EventsEmit(s.ctx, "model-download-complete", id)
+			return
+		}
+
 		if id == "indic-conformer-120m-int8" || id == "indic-conformer-120m-fp32" {
 			tokenizerPath := filepath.Join(modelsDir, "tokenizer.model")
 			if _, err := os.Stat(tokenizerPath); err != nil {
@@ -1087,7 +1188,12 @@ func (s *SettingsApp) DeleteModel(filename string) error {
 		return fmt.Errorf("model file not found on disk")
 	}
 
-	err := os.Remove(pathToDelete)
+	var err error
+	if IsParakeetActive(filename) {
+		err = os.RemoveAll(pathToDelete)
+	} else {
+		err = os.Remove(pathToDelete)
+	}
 	if err != nil {
 		return err
 	}
@@ -1308,6 +1414,12 @@ func (s *SettingsApp) SetPhoneticDictEnabled(enabled bool) {
 func (s *SettingsApp) SetAppContextEnabled(enabled bool) {
 	cfg := loadConfig()
 	cfg.AppContextEnabled = enabled
+	saveConfig(cfg)
+}
+
+func (s *SettingsApp) SetLivePreviewEnabled(enabled bool) {
+	cfg := loadConfig()
+	cfg.LivePreviewEnabled = enabled
 	saveConfig(cfg)
 }
 

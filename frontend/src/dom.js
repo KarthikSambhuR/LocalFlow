@@ -712,6 +712,17 @@ settingsModal.innerHTML = `
               </label>
             </div>
 
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-title">Live Ghost Text Preview</span>
+                <span class="setting-desc">Show a live floating transcript preview above the pill while you speak</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="livePreviewToggle">
+                <span class="toggle-track"></span>
+              </label>
+            </div>
+
             <div class="setting-row llm-choice-setting" id="llmThinkingSelection">
               <div class="setting-info">
                 <span class="setting-title">Reasoning Steps</span>

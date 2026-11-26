@@ -72,6 +72,7 @@ type Config struct {
 	LLMEnableThinking          bool    `json:"llm_enable_thinking"`
 	PhoneticDictEnabled        bool    `json:"phonetic_dict_enabled"`
 	AppContextEnabled          bool    `json:"app_context_enabled"`
+	LivePreviewEnabled         bool    `json:"live_preview_enabled"`
 	ManglishEnabled            bool    `json:"manglish_enabled"`
 	ManglishExample1           string  `json:"manglish_example_1"`
 	ManglishExample2           string  `json:"manglish_example_2"`
@@ -119,6 +120,7 @@ func loadConfig() Config {
 		LLMEnableThinking:          false,
 		PhoneticDictEnabled:        true,
 		AppContextEnabled:          true,
+		LivePreviewEnabled:         true,
 		ManglishEnabled:            false,
 		ManglishExample1:           "Hello, sukhamano enth cheyyunnu?",
 		ManglishExample2:           "Enik naale varaan pattilla.",

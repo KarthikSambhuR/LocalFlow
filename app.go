@@ -1506,11 +1506,33 @@ func (a *App) ensureActiveModel() {
 				a.whisperCtx = nil
 			}
 			FreeConformerSessions()
+			FreeParakeetSessions()
 			if err := LoadNeedleWhistle(whistlePath); err != nil {
 				fmt.Printf("[Needle Whistle] Error loading Whistle model: %v\n", err)
 			} else {
 				a.loadedModelPath = activeModel
 			}
+		}
+		return
+	}
+
+	if IsParakeetActive(activeModel) {
+		parakeetDir := ResolveParakeetModelDir(cfg, activeModel)
+		if a.loadedModelPath == activeModel && a.loadedEngine == cfg.ProcessingEngine && a.loadedGPU == cfg.SelectedGPU {
+			return
+		}
+		if a.whisperCtx != nil {
+			C.whisper_free(a.whisperCtx)
+			a.whisperCtx = nil
+		}
+		FreeConformerSessions()
+		if err := LoadParakeetSessions(parakeetDir, activeModel); err != nil {
+			fmt.Printf("[Parakeet] Error loading model %s: %v\n", activeModel, err)
+			a.loadedModelPath = ""
+		} else {
+			a.loadedModelPath = activeModel
+			a.loadedEngine = cfg.ProcessingEngine
+			a.loadedGPU = cfg.SelectedGPU
 		}
 		return
 	}
@@ -1551,6 +1573,7 @@ func (a *App) ensureActiveModel() {
 	}
 
 	FreeConformerSessions()
+	FreeParakeetSessions()
 	a.ensureWhisperLoaded(cfg, activeModel)
 }
 
@@ -2570,11 +2593,28 @@ func (a *App) backgroundTranscriptionLoop() {
 						if text != "" {
 							a.mutex.Lock()
 							a.interimTranscripts = append(a.interimTranscripts, text)
+							joined := strings.Join(a.interimTranscripts, " ")
 							a.mutex.Unlock()
+							if cfg.LivePreviewEnabled {
+								runtime.EventsEmit(a.ctx, "live-preview", joined)
+							}
 						}
 					} else {
 						a.mutex.Unlock()
 					}
+				}
+			}
+		} else if cfg.LivePreviewEnabled && len(untranscribedSamples) >= 8000 && !isGemmaAudioSTTModel(cfg.ActiveModel) {
+			// Live ghost-text preview while speaking (skip heavy Gemma audio model during live loop)
+			partial := cleanSoundTags(a.transcribeChunk(untranscribedSamples))
+			a.mutex.Lock()
+			stillActive := a.streamingActive
+			committed := strings.Join(a.interimTranscripts, " ")
+			a.mutex.Unlock()
+			if stillActive {
+				preview := strings.TrimSpace(strings.TrimSpace(committed + " " + partial))
+				if preview != "" {
+					runtime.EventsEmit(a.ctx, "live-preview", preview)
 				}
 			}
 		}
@@ -2608,6 +2648,20 @@ func (a *App) transcribeChunk(chunk []float32) string {
 		text, err := a.transcribeAudioWithGemma(whisperBuf)
 		if err != nil {
 			fmt.Println("Background Gemma chunk transcription failed:", err)
+			return ""
+		}
+		return text
+	}
+
+	if IsParakeetActive(cfg.ActiveModel) {
+		parakeetDir := ResolveParakeetModelDir(cfg, cfg.ActiveModel)
+		if err := LoadParakeetSessions(parakeetDir, cfg.ActiveModel); err != nil {
+			fmt.Printf("[Parakeet] Load error: %v\n", err)
+			return ""
+		}
+		text, err := TranscribeParakeet(whisperBuf)
+		if err != nil {
+			fmt.Println("[Parakeet] Chunk transcription failed:", err)
 			return ""
 		}
 		return text

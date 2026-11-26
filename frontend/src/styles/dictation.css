@@ -181,3 +181,50 @@ html, body {
 [data-theme="light"] .module.loading-model .wave-path {
   stroke: #f5a623;
 }
+
+/* Live Ghost Text Floating Preview Pill */
+.live-preview-pill {
+  position: fixed;
+  bottom: 142px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  max-width: min(480px, 82vw);
+  padding: 6px 14px;
+  background: rgba(10, 11, 14, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: rgba(244, 244, 245, 0.92);
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2147483646;
+  transition: opacity 0.18s ease, transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.live-preview-pill.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.live-preview-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  max-width: 100%;
+}
+
+[data-theme="light"] .live-preview-pill {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #0F172A;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}

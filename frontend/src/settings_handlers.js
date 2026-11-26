@@ -9,6 +9,8 @@ import superwhisperLogo from './assets/images/superwhisper-logo.png';
 import qwenLogo from './assets/images/qwen-logo.png';
 import hfLogo from './assets/images/hf-logo.png';
 import cactusLogo from './assets/images/cactus-logo.jpeg';
+import nvidiaLogo from './assets/images/nvidia-logo.png';
+import moondreamLogo from './assets/images/moondream-logo.png';
 
 
 export function renderOrbPreview() {
@@ -126,6 +128,7 @@ export async function setupLLM() {
   const manglishToggle = document.getElementById('llmManglishToggle');
   const phoneticDictToggle = document.getElementById('phoneticDictToggle');
   const appContextToggle = document.getElementById('appContextToggle');
+  const livePreviewToggle = document.getElementById('livePreviewToggle');
 
   const updateSubsettingsVisibility = async () => {
     const show = toggle.checked;
@@ -172,6 +175,9 @@ export async function setupLLM() {
     if (appContextToggle) {
       appContextToggle.checked = cfg.app_context_enabled !== false;
     }
+    if (livePreviewToggle) {
+      livePreviewToggle.checked = cfg.live_preview_enabled !== false;
+    }
   }
 
   await updateSubsettingsVisibility();
@@ -211,6 +217,14 @@ export async function setupLLM() {
     appContextToggle.addEventListener('change', () => {
       if (window.go?.main?.SettingsApp) {
         window.go.main.SettingsApp.SetAppContextEnabled(appContextToggle.checked);
+      }
+    });
+  }
+
+  if (livePreviewToggle) {
+    livePreviewToggle.addEventListener('change', () => {
+      if (window.go?.main?.SettingsApp) {
+        window.go.main.SettingsApp.SetLivePreviewEnabled(livePreviewToggle.checked);
       }
     });
   }
@@ -744,7 +758,9 @@ const MODEL_FAMILY_ICONS = {
   superwhisper: `<img src="${superwhisperLogo}" alt="Superwhisper" class="brand-logo-img" />`,
   qwen: `<img src="${qwenLogo}" alt="Qwen" class="brand-logo-img" style="object-fit: contain; padding: 2px;" />`,
   hf: `<img src="${hfLogo}" alt="Hugging Face" class="brand-logo-img" style="object-fit: contain; padding: 1px;" />`,
-  sarvam: `<img src="${sarvamLogo}" alt="Sarvam AI" class="brand-logo-img" style="object-fit: cover; border-radius: 6px;" />`
+  sarvam: `<img src="${sarvamLogo}" alt="Sarvam AI" class="brand-logo-img" style="object-fit: cover; border-radius: 6px;" />`,
+  nvidia: `<img src="${nvidiaLogo}" alt="NVIDIA" class="brand-logo-img" style="object-fit: cover;" />`,
+  moondream: `<img src="${moondreamLogo}" alt="Moondream" class="brand-logo-img" style="object-fit: contain;" />`
 };
 
 // Family Definitions that group models together
@@ -784,6 +800,32 @@ const MODEL_FAMILIES_DEF = [
     variantMatcher: (m) => m.id === 'cactus-whistle',
     variants: [
       { label: 'Standard', id: 'cactus-whistle' }
+    ]
+  },
+  {
+    familyId: 'parakeet-tdt',
+    type: 'whisper',
+    name: 'NVIDIA Parakeet TDT v3',
+    provider: 'NVIDIA',
+    iconKey: 'nvidia',
+    iconClass: 'provider-nvidia',
+    description: 'Fast, high-accuracy multilingual speech recognition with built-in punctuation.',
+    variantMatcher: (m) => m.id === 'parakeet-tdt-v3',
+    variants: [
+      { label: 'Standard', id: 'parakeet-tdt-v3' }
+    ]
+  },
+  {
+    familyId: 'parakeet-redux',
+    type: 'whisper',
+    name: 'Parakeet Redux',
+    provider: 'Moondream',
+    iconKey: 'moondream',
+    iconClass: 'provider-moondream',
+    description: 'Ultra-compressed 1.58-bit Parakeet TDT for faster CPU dictation with low memory.',
+    variantMatcher: (m) => m.id === 'parakeet-redux',
+    variants: [
+      { label: 'Standard', id: 'parakeet-redux' }
     ]
   },
   {
