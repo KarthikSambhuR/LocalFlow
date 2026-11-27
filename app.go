@@ -791,7 +791,7 @@ func (a *App) listenToKeyboard() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	const keyReleaseDebounce = 75 * time.Millisecond
+	const keyReleaseDebounce = 120 * time.Millisecond
 	const trailingAudioWindow = 400 * time.Millisecond
 	var releaseTimer *time.Timer
 	var releaseCh <-chan time.Time
@@ -1039,13 +1039,13 @@ func (a *App) listenToKeyboard() {
 				if isSameHotkeyKey(ev.rawcode, currentKey1Rawcode) {
 					if ev.down {
 						lCtrlPressed = true
-					} else {
+					} else if !isUnsuppressedHotkeyKeyPhysicallyDown(currentKey1Rawcode) {
 						lCtrlPressed = false
 					}
 				} else if isSameHotkeyKey(ev.rawcode, currentKey2Rawcode) {
 					if ev.down {
 						lWinPressed = true
-					} else {
+					} else if !isUnsuppressedHotkeyKeyPhysicallyDown(currentKey2Rawcode) {
 						lWinPressed = false
 					}
 				}
@@ -1306,6 +1306,27 @@ func isCtrlRawcode(rawcode uint16) bool {
 
 func isWinRawcode(rawcode uint16) bool {
 	return rawcode == vkLWin || rawcode == vkRWin
+}
+
+var procGetAsyncKeyState = user32.NewProc("GetAsyncKeyState")
+
+func isVirtualKeyDown(vk uint16) bool {
+	ret, _, _ := procGetAsyncKeyState.Call(uintptr(vk))
+	return (uint16(ret) & 0x8000) != 0
+}
+
+// isUnsuppressedHotkeyKeyPhysicallyDown checks Windows's async key state for
+// hotkey keys that are NOT suppressed by startSuppressingKeyboardHook (such as
+// Ctrl). Suppressed Win keys are excluded because GetAsyncKeyState never sees
+// them as down.
+func isUnsuppressedHotkeyKeyPhysicallyDown(configured uint16) bool {
+	if isWinRawcode(configured) {
+		return false
+	}
+	if isCtrlRawcode(configured) {
+		return isVirtualKeyDown(vkLControl) || isVirtualKeyDown(vkRControl)
+	}
+	return isVirtualKeyDown(configured)
 }
 
 func isSameHotkeyKey(rawcode uint16, configured uint16) bool {
